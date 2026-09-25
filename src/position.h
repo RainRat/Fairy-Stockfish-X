@@ -310,6 +310,7 @@ struct StateInfoCopied {
   int    pointsCount[COLOR_NB];
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
+  Bitboard promotionDeferred = Bitboard(0);
   Bitboard edgeInsertLocks[COLOR_NB];
   Square castlingKingSquare[COLOR_NB];
   int castlingRightsMask[SQUARE_NB];
@@ -1172,6 +1173,7 @@ private:
     }
   };
   MultiLegMoveInfo resolve_multileg_move(Move m) const;
+  bool lion_capture_legal(Move m, const MultiLegMoveInfo& multilegInfo, bool isCapture) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
                              const SimulatedMoveInfo* simulated) const;
@@ -3127,7 +3129,7 @@ inline EnclosingRule Position::flip_enclosed_pieces() const {
 inline Value Position::stalemate_value(int ply) const {
   assert(var != nullptr);
   // Check for checkmate of pseudo-royal pieces
-  if (pseudo_royal_types())
+  if (pseudo_royal_types() && !allow_checks())
   {
       Bitboard pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
       Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
@@ -5886,6 +5888,16 @@ inline Position::PromotionStatus Position::move_promotion_status(Piece mover, Sq
       return status;
   if (!multileg_promotion_zone(us, pt, from, to) || !promotion_allowed(us, promoTo))
       return status;
+  if (var->promotionDeclineRule)
+  {
+      Bitboard zone = promotion_zone(us, pt);
+      bool inFrom = bool(zone & from);
+      bool inTo = bool(zone & to);
+      bool entered = !inFrom && inTo;
+      bool deferredCapture = inFrom && inTo && isCapture && bool(st->promotionDeferred & from);
+      if (!entered && !deferredCapture)
+          return status;
+  }
   if (piece_promotion_on_capture() && !isCapture)
       return status;
   status.allowed = true;

@@ -314,6 +314,7 @@ class TestPublicAPI(unittest.TestCase):
         self.assertNotIn("pieceTypesByRank", info["promotion"])
         self.assertEqual(info["promotion"]["promotedPieceTypes"], {})
         self.assertEqual(info["promotion"]["captureDemotedPieceTypes"], {})
+        self.assertFalse(info["promotion"]["declineRule"])
 
         janggi_info = json.loads(sf.variant_info("janggi"))
         self.assertIn("e2", janggi_info["board"]["diagonalLines"])
@@ -405,6 +406,56 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(sf.game_result("lion-api-adjudication", fen, []), sf.VALUE_NONE)
         self.assertEqual(sf.has_insufficient_material("chess", "7k/8/8/8/8/8/8/K7 w - - 0 1", []),
                          (True, True))
+
+    def test_multiple_pseudo_royals_end_only_when_last_is_captured(self):
+        sf.load_variant_config(
+            "[multi-royal-capture:chess]\n"
+            "customPiece1 = a:K\n"
+            "allowChecks = true\n"
+            "pseudoRoyalTypes = ka\n"
+            "pseudoRoyalCount = 1\n"
+            "pseudoRoyalValue = loss\n"
+        )
+
+        king_and_prince = "7k/8/8/8/8/8/r7/K6A b - - 0 1"
+        prince_and_king = "7k/8/8/8/8/8/7r/K6A b - - 0 1"
+        lone_king = "7k/8/8/8/8/8/r7/K7 b - - 0 1"
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", king_and_prince,
+                                                  ["a2a1"])[0], False)
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", prince_and_king,
+                                                  ["h2h1"])[0], False)
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", lone_king,
+                                                  ["a2a1"])[0], True)
+
+        attacked_king = "1r5k/8/8/8/8/8/8/K7 w - - 0 1"
+        self.assertIn("a1b1", sf.legal_moves("multi-royal-capture", attacked_king, []))
+
+    def test_promotion_decline_persists_until_capture_or_zone_exit(self):
+        sf.load_variant_config(
+            "[promotion-decline:chess]\n"
+            "customPiece1 = a:K\n"
+            "promotionRegionWhite = *7 *8\n"
+            "promotionRegionBlack = *2 *1\n"
+            "promotionPieceTypes = q\n"
+            "promotedPieceType = a:q\n"
+            "promotionDeclineRule = true\n"
+            "mandatoryPawnPromotion = false\n"
+            "mandatoryPiecePromotion = false\n"
+        )
+        self.assertTrue(json.loads(sf.variant_info("promotion-decline"))["promotion"]["declineRule"])
+        fen = "1r5k/8/A7/8/8/8/8/K7 w - - 0 1"
+        self.assertIn("a6a7+", sf.legal_moves("promotion-decline", fen, []))
+
+        after_declining = sf.legal_moves("promotion-decline", fen, ["a6a7", "h8g8"])
+        self.assertIn("a7b7", after_declining)
+        self.assertNotIn("a7b7+", after_declining)
+
+        after_capture = sf.legal_moves("promotion-decline", fen, ["a6a7", "h8g8"])
+        self.assertIn("a7b8+", after_capture)
+
+        after_leaving_and_reentering = sf.legal_moves(
+            "promotion-decline", fen, ["a6a7", "h8g8", "a7a6", "g8h8"])
+        self.assertIn("a6a7+", after_leaving_and_reentering)
 
     def test_validation_and_fog_are_binding_values(self):
         fen = sf.start_fen("chess")

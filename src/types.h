@@ -763,7 +763,7 @@ enum Value : int {
 };
 
 #if defined(VERY_LARGE_BOARDS)
-constexpr int PIECE_TYPE_BITS = 7; // VLB variants such as Dai Shogi need more than 26 custom types.
+constexpr int PIECE_TYPE_BITS = 7; // 128 piece-type IDs; VLB boards are limited to 16x16.
 #else
 constexpr int PIECE_TYPE_BITS = 6;
 #endif
@@ -810,21 +810,35 @@ enum Piece {
 };
 
 struct PieceSet {
-  // VLB needs more than 64 piece-type bits; keep the representation portable.
   uint64_t low = 0;
+#if defined(VERY_LARGE_BOARDS)
   uint64_t high = 0;
+#endif
 
   constexpr PieceSet() = default;
   constexpr explicit PieceSet(uint64_t bits) : low(bits) {}
+#if defined(VERY_LARGE_BOARDS)
   constexpr PieceSet(uint64_t lowBits, uint64_t highBits) : low(lowBits), high(highBits) {}
-  constexpr operator bool() const { return low || high; }
+#endif
+  constexpr operator bool() const {
+#if defined(VERY_LARGE_BOARDS)
+      return low || high;
+#else
+      return low;
+#endif
+  }
   constexpr int count() const {
       int n = 0;
       for (uint64_t bits = low; bits; bits &= bits - 1) ++n;
+#if defined(VERY_LARGE_BOARDS)
       for (uint64_t bits = high; bits; bits &= bits - 1) ++n;
+#endif
       return n;
   }
 };
+#if !defined(VERY_LARGE_BOARDS)
+static_assert(sizeof(PieceSet) == sizeof(uint64_t), "standard PieceSet must stay one word");
+#endif
 
 enum RiderType : int {
   NO_RIDER = 0,
@@ -1085,21 +1099,53 @@ ENABLE_BASE_OPERATORS_ON(RiderType)
 #undef ENABLE_BIT_OPERATORS_ON
 
 constexpr PieceSet piece_set(PieceType pt) {
+#if defined(VERY_LARGE_BOARDS)
   return pt < 64 ? PieceSet(1ULL << pt) : PieceSet(0, 1ULL << (pt - 64));
+#else
+  return PieceSet(1ULL << pt);
+#endif
 }
 
 constexpr PieceSet operator~(PieceSet ps) {
+#if defined(VERY_LARGE_BOARDS)
   return PieceSet(~ps.low, PIECE_TYPE_BITS == 7 ? ~ps.high : 0);
+#else
+  return PieceSet(~ps.low);
+#endif
 }
-constexpr PieceSet operator|(PieceSet ps1, PieceSet ps2) { return PieceSet(ps1.low | ps2.low, ps1.high | ps2.high); }
+constexpr PieceSet operator|(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return PieceSet(ps1.low | ps2.low, ps1.high | ps2.high);
+#else
+  return PieceSet(ps1.low | ps2.low);
+#endif
+}
 constexpr PieceSet operator| (PieceSet ps, PieceType pt) { return ps | piece_set(pt); }
-constexpr PieceSet operator&(PieceSet ps1, PieceSet ps2) { return PieceSet(ps1.low & ps2.low, ps1.high & ps2.high); }
+constexpr PieceSet operator&(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return PieceSet(ps1.low & ps2.low, ps1.high & ps2.high);
+#else
+  return PieceSet(ps1.low & ps2.low);
+#endif
+}
 constexpr PieceSet operator& (PieceSet ps, PieceType pt) {
   return (ps.low & 1ULL) ? piece_set(pt) : ps & piece_set(pt);
 }
-constexpr PieceSet operator^(PieceSet ps1, PieceSet ps2) { return PieceSet(ps1.low ^ ps2.low, ps1.high ^ ps2.high); }
+constexpr PieceSet operator^(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return PieceSet(ps1.low ^ ps2.low, ps1.high ^ ps2.high);
+#else
+  return PieceSet(ps1.low ^ ps2.low);
+#endif
+}
 constexpr PieceSet operator^ (PieceSet ps, PieceType pt) { return ps ^ piece_set(pt); }
-constexpr bool operator==(PieceSet ps1, PieceSet ps2) { return ps1.low == ps2.low && ps1.high == ps2.high; }
+constexpr bool operator==(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return ps1.low == ps2.low && ps1.high == ps2.high;
+#else
+  return ps1.low == ps2.low;
+#endif
+}
 constexpr bool operator!=(PieceSet ps1, PieceSet ps2) { return !(ps1 == ps2); }
 inline PieceSet& operator|=(PieceSet& ps1, PieceSet ps2) { ps1 = ps1 | ps2; return ps1; }
 inline PieceSet& operator|= (PieceSet& ps, PieceType pt) { return ps |= piece_set(pt); }

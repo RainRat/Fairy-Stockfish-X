@@ -162,6 +162,7 @@ struct Variant {
   std::string startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   Bitboard mobilityRegion[COLOR_NB][PIECE_TYPE_NB] = {};
   ColorSetting<PieceTypeBitboardGroup> promotionRegion = ColorSetting<PieceTypeBitboardGroup>(Rank8BB, Rank1BB);
+  bool promotionDeclineRule = false;
   ColorSetting<Bitboard> mandatoryPromotionRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
   ColorSetting<PieceSet> promotionPawnTypes = ColorSetting<PieceSet>(piece_set(PAWN));

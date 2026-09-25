@@ -889,6 +889,7 @@ namespace Zobrist {
   constexpr int MAX_ZOBRIST_POINTS = 512;
   Key psq[PIECE_NB][SQUARE_NB];
   Key enpassant[SQUARE_NB];
+  Key promotionDeferred[SQUARE_NB];
   Key castling[CASTLING_RIGHT_NB];
   Key side, noPawns;
   Key inHand[PIECE_NB][SQUARE_NB];
@@ -1354,6 +1355,9 @@ Key Position::layout_key() const {
   for (Bitboard b = st->deadSquares; b; )
       k ^= Zobrist::dead[pop_lsb(b)];
 
+  for (Bitboard b = st->promotionDeferred; b; )
+      k ^= Zobrist::promotionDeferred[pop_lsb(b)];
+
   k ^= st->pieceStateKey;
 
   return k;
@@ -1462,6 +1466,9 @@ void Position::init() {
 
   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
       Zobrist::enpassant[s] = rng.rand<Key>();
+
+  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+      Zobrist::promotionDeferred[s] = rng.rand<Key>();
 
   for (int cr = NO_CASTLING; cr <= ANY_CASTLING; ++cr)
       Zobrist::castling[cr] = rng.rand<Key>();
@@ -3404,8 +3411,8 @@ bool Position::multileg_attacks_square(Color us, PieceType pt, Square from, Squa
   // `friendly`, matching the generic attackers_to() contract.
   if (!(occupied & from))
       return false;
-  return detail::MultiLegWalker::for_each_multileg_path(*this, us, pt, from, occupied, friendly,
-      [&](const detail::MultiLegPath& path) {
+  return detail::TwoLegWalker::for_each_multileg_path(*this, us, pt, from, occupied, friendly,
+      [&](const detail::TwoLegPath& path) {
           return path.via == target || path.to == target;
       }, target);
 }
@@ -3487,14 +3494,14 @@ Position::MultiLegMoveInfo Position::resolve_multileg_move(Move m) const {
       return info;
 
   MultiLegKind wanted = is_two_step(m) ? MultiLegKind::TWO_STEP : MultiLegKind::HOOK;
-  auto visit = [&](const detail::MultiLegPath& path) {
+  auto visit = [&](const detail::TwoLegPath& path) {
       if (path.kind != wanted || path.via != via || path.to != to)
           return false;
       info = {true, path.via, path.to, path.captures, path.transit};
       return true;
   };
-  detail::MultiLegWalker::for_each_multileg_path(*this, color_of(mover), type_of(mover), from,
-                                                 pieces(), pieces(color_of(mover)), visit);
+  detail::TwoLegWalker::for_each_multileg_path(*this, color_of(mover), type_of(mover), from,
+                                                 pieces(), pieces(color_of(mover)), visit, to, via);
   return info;
 }
 
@@ -5490,6 +5497,80 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
 
 /// Position::legal() tests whether a pseudo-legal move is legal
 
+bool Position::lion_capture_legal(Move m, const MultiLegMoveInfo& multilegInfo,
+                                  bool isCapture) const {
+  if (!var->lionCapturingRule || is_drop_move(m) || is_pass(m) || !isCapture)
+      return true;
+
+  Color us = sideToMove;
+  Color them = ~us;
+  Square from = from_sq(m);
+  Square to = to_sq(m);
+  Piece mover = piece_on(from);
+  const bool movingIsLion = mover != NO_PIECE
+                         && (var->lionMoveTypes & piece_set(type_of(mover)));
+  Bitboard lionCaptures = 0;
+  Bitboard captures = is_multileg(m) ? multilegInfo.captures : capture_squares(m);
+  while (captures)
+  {
+      Square victimSq = pop_lsb(captures);
+      Piece victim = piece_on(victimSq);
+      if (victim != NO_PIECE && color_of(victim) == them
+          && (var->lionMoveTypes & piece_set(type_of(victim))))
+          lionCaptures |= square_bb(victimSq);
+  }
+
+  if (!lionCaptures)
+      return true;
+
+  if (movingIsLion)
+  {
+      Bitboard targets = lionCaptures;
+      while (targets)
+      {
+          Square victimSq = pop_lsb(targets);
+          int distance = std::max(std::abs(int(file_of(from)) - int(file_of(victimSq))),
+                                  std::abs(int(rank_of(from)) - int(rank_of(victimSq))));
+          if (distance <= 1)
+              continue;
+
+          Bitboard occupiedWithoutLion = pieces() ^ square_bb(victimSq);
+          bool significantOtherCapture = is_multileg(m)
+                                      && victimSq == multilegInfo.to
+                                      && multilegInfo.captures_via()
+                                      && !(var->insignificantPieces
+                                           & piece_set(type_of(piece_on(multilegInfo.via))));
+          if (attackers_to(victimSq, occupiedWithoutLion, them) && !significantOtherCapture)
+              return false;
+      }
+  }
+
+  if (!movingIsLion && st->previous)
+  {
+      Bitboard previousLionCaptures = 0;
+      auto addPreviousLionCapture = [&](const ReversiblePieceOnSquare& captured) {
+          if (captured && color_of(captured.piece.piece) == us
+              && (var->lionMoveTypes & piece_set(type_of(captured.piece.piece))))
+              previousLionCaptures |= square_bb(captured.square);
+      };
+      addPreviousLionCapture(st->captured);
+      addPreviousLionCapture(st->extraCaptured);
+      Move previousMove = st->move;
+      if (previousLionCaptures && is_ok(previousMove))
+      {
+          Piece previousMover = st->promotionPawn != NO_PIECE
+                              ? st->promotionPawn : piece_on(to_sq(previousMove));
+          bool previousMoverWasLion = previousMover != NO_PIECE
+                                    && (var->lionMoveTypes
+                                        & piece_set(type_of(previousMover)));
+          if (!previousMoverWasLion && (lionCaptures & ~previousLionCaptures))
+              return false;
+      }
+  }
+
+  return true;
+}
+
 bool Position::legal(Move m) const {
   SimulatedMoveGuard guard(*this, m);
 
@@ -5519,71 +5600,8 @@ bool Position::legal(Move m) const {
                          ? (is_multileg(m) ? multilegInfo.primary_capture(from) : capture_square(m))
                          : SQ_NONE;
 
-  if (var->lionCapturingRule && !dropMove && !passMove && isCapture)
-  {
-      Piece mover = piece_on(from);
-      const bool movingIsLion = mover != NO_PIECE
-                             && (var->lionMoveTypes & piece_set(type_of(mover)));
-      Bitboard lionCaptures = 0;
-      Bitboard captures = is_multileg(m) ? multilegInfo.captures : capture_squares(m);
-      Bitboard captureTargets = captures;
-      while (captureTargets)
-      {
-          Square victimSq = pop_lsb(captureTargets);
-          Piece victim = piece_on(victimSq);
-          if (victim != NO_PIECE && color_of(victim) == them
-              && (var->lionMoveTypes & piece_set(type_of(victim))))
-              lionCaptures |= square_bb(victimSq);
-      }
-
-      if (lionCaptures)
-      {
-          if (movingIsLion)
-          {
-              Bitboard targets = lionCaptures;
-              while (targets)
-              {
-                  Square victimSq = pop_lsb(targets);
-                  int distance = std::max(std::abs(int(file_of(from)) - int(file_of(victimSq))),
-                                          std::abs(int(rank_of(from)) - int(rank_of(victimSq))));
-                  if (distance <= 1)
-                      continue;
-
-                  Bitboard occupiedWithoutLion = pieces() ^ square_bb(victimSq);
-                  bool significantOtherCapture = is_multileg(m)
-                                              && victimSq == multilegInfo.to
-                                              && multilegInfo.captures_via()
-                                              && !(var->insignificantPieces
-                                                   & piece_set(type_of(piece_on(multilegInfo.via))));
-                  if (attackers_to(victimSq, occupiedWithoutLion, them) && !significantOtherCapture)
-                      return false;
-              }
-          }
-
-          if (!movingIsLion && st->previous)
-          {
-              Bitboard previousLionCaptures = 0;
-              auto addPreviousLionCapture = [&](const ReversiblePieceOnSquare& captured) {
-                  if (captured && color_of(captured.piece.piece) == us
-                      && (var->lionMoveTypes & piece_set(type_of(captured.piece.piece))))
-                      previousLionCaptures |= square_bb(captured.square);
-              };
-              addPreviousLionCapture(st->captured);
-              addPreviousLionCapture(st->extraCaptured);
-              Move previousMove = st->move;
-              if (previousLionCaptures && is_ok(previousMove))
-              {
-                  Piece previousMover = st->promotionPawn != NO_PIECE
-                                      ? st->promotionPawn : piece_on(to_sq(previousMove));
-                  bool previousMoverWasLion = previousMover != NO_PIECE
-                                            && (var->lionMoveTypes
-                                                & piece_set(type_of(previousMover)));
-                  if (!previousMoverWasLion && (lionCaptures & ~previousLionCaptures))
-                      return false;
-              }
-          }
-      }
-  }
+  if (!lion_capture_legal(m, multilegInfo, isCapture))
+      return false;
 
   if (in_opening_self_removal_phase())
       return is_opening_self_removal_move(m);
@@ -5969,7 +5987,7 @@ bool Position::legal(Move m) const {
       if (!allow_checks() && probeRoyal != SQ_NONE
           && attackers_to_king(probeRoyal, pieces(), ~us))
           return false;
-      return (!pseudo_royal_types() || !checked_pseudo_royals(us))
+      return (allow_checks() || !pseudo_royal_types() || !checked_pseudo_royals(us))
           && (!anti_royal_types() || !checked_anti_royals(us));
   }
 
@@ -6100,7 +6118,7 @@ bool Position::legal(Move m) const {
       if (!allow_checks() && probeRoyal != SQ_NONE
           && attackers_to_king(probeRoyal, pieces(), them))
           return false;
-      return (!pseudo_royal_types() || !checked_pseudo_royals(us))
+      return (allow_checks() || !pseudo_royal_types() || !checked_pseudo_royals(us))
           && (!anti_royal_types() || !checked_anti_royals(us));
   }
 
@@ -6141,7 +6159,7 @@ bool Position::legal(Move m) const {
                           & simulated.occupiedAfterEffects;
 
   // Check for attacks to pseudo-royal pieces
-  if (pseudo_royal_types())
+  if (pseudo_royal_types() && !allow_checks())
   {
       const bool blastOnCapture = blast_on_capture(m);
       Square kto = rifleShot ? from : to;
@@ -9793,6 +9811,48 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->pieceStateKey = pieceStateKey;
   }
 
+  if (var->promotionDeclineRule)
+  {
+      Bitboard deferred = st->previous->promotionDeferred;
+      auto clearDeferred = [&](Square s) {
+          if (s != SQ_NONE)
+              deferred &= ~square_bb(s);
+      };
+      if (st->captured)
+          clearDeferred(st->captured.square);
+      if (st->extraCaptured)
+          clearDeferred(st->extraCaptured.square);
+
+      const bool movesPiece = !dropMove && !passMove && !openingSelfRemoval
+                           && !is_self_destruct(m) && !is_laser_fire(m)
+                           && !cloneMove && !pullMove && !swapMove
+                           && !stackMove && !unstackMove && !is_insert_move(m)
+                           && !pureWallMove && from != SQ_NONE;
+      if (movesPiece && pc != NO_PIECE)
+      {
+          const Bitboard zone = promotion_zone(us, type_of(pc));
+          const bool inFrom = bool(zone & from);
+          const bool inTo = bool(zone & to);
+          const bool wasDeferred = bool(st->previous->promotionDeferred & from);
+          deferred &= ~square_bb(from);
+          deferred &= ~square_bb(to);
+
+          const bool declinedEntry = !inFrom && inTo
+                                  && !is_promotion_move(m) && !is_multileg_promotion(m)
+                                  && move_promotion_status(pc, from, to, directCapture).allowed;
+          const bool remainsDeferred = wasDeferred && inFrom && inTo
+                                    && !is_promotion_move(m) && !is_multileg_promotion(m);
+          if ((declinedEntry || remainsDeferred) && piece_on(to) != NO_PIECE
+              && color_of(piece_on(to)) == us)
+              deferred |= square_bb(to);
+      }
+
+      Bitboard changed = deferred ^ st->previous->promotionDeferred;
+      while (changed)
+          k ^= Zobrist::promotionDeferred[pop_lsb(changed)];
+      st->promotionDeferred = deferred;
+  }
+
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
@@ -11020,9 +11080,14 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   {
       Color capturedColor = color_of(st->captured.piece.piece);
       PieceType capturedType = type_of(st->captured.piece.piece);
-      bool capturedRoyal = capturedType == KING;
+      // In multi-royal capture variants a physical king is only one of the
+      // remaining royal candidates. Let the pseudo-royal loss rule decide
+      // when the last candidate has been removed.
+      bool capturedRoyal = capturedType == KING
+                        && !(pseudo_royal_types() & piece_set(KING));
 
-      if (!capturedRoyal && king_type() != NO_PIECE_TYPE && capturedType == king_type())
+      if (!capturedRoyal && !(pseudo_royal_types() & piece_set(capturedType))
+          && king_type() != NO_PIECE_TYPE && capturedType == king_type())
       {
           // If the variant does not use physical KING pieces, capturing the
           // king_type() piece is itself a direct royal capture.

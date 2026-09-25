@@ -946,6 +946,18 @@ namespace {
                 promotionTargets |= jumpCaptures;
             pawnPromotions = promotionTargets & promotion_zone;
         }
+        if (pos.variant()->promotionDeclineRule && (promotion_zone & from))
+        {
+            if (pos.state()->promotionDeferred & from)
+            {
+                b2 &= captureSquares | jumpCaptures;
+                pawnPromotions &= captureSquares | jumpCaptures;
+            }
+            else
+            {
+                b2 = pawnPromotions = 0;
+            }
+        }
         Bitboard pushMoves = 0;
         if (pos.pushing_strength(Pt) > 0)
         {
@@ -1219,8 +1231,8 @@ namespace {
                 directTargets = 0;
             const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
                                      && pt == pos.royal_piece_type(Us);
-            detail::MultiLegWalker::for_each_multileg_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
-                [&](const detail::MultiLegPath& path) {
+            detail::TwoLegWalker::for_each_multileg_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
+                [&](const detail::TwoLegPath& path) {
                     bool capVia = bool(path.captures & path.via);
                     bool capTo = path.to != from && bool(path.captures & path.to);
                     bool direct = (!capVia || path.via == path.to)

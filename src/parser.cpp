@@ -1790,6 +1790,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("toroidal", v->toroidal);
     parse_attribute("startFen", v->startFen);
     parse_color_setting("promotionRegion", v->promotionRegion);
+    parse_attribute("promotionDeclineRule", v->promotionDeclineRule);
     parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
     // Take the first promotionPawnTypes as the main promotionPawnType
     if (!parse_color_setting_first_piece("promotionPawnTypes", v->mainPromotionPawnType, v)) return false;
