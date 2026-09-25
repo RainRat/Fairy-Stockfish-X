@@ -17,7 +17,7 @@ trap cleanup EXIT
 cat >"$HOOK_INI" <<'EOF'
 [test-hook]
 king = -
-customPiece1 = h:0
+customPiece1 = h:R
 hookMoves = h:R-R
 startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
 immobile = -
@@ -145,6 +145,9 @@ immobile = -
 castling = false
 doubleStep = false
 
+[test-lion-blocked-jump:test-lion]
+startFen = 8/8/8/4LL2/4L3/8/8/8 w - - 0 1
+
 # Horned Falcon: Bishop (B), sideways/backward slides (sRbR), forward jump 2
 # (fD), forward step 1 (fW), forward two-step (N>N,N>S).
 [test-horned-falcon]
@@ -187,10 +190,10 @@ immobile = -
 castling = false
 doubleStep = false
 
-# Hook mover (single capture): rook legs with a bend, at most one capture.
+# Hook mover (single capture): rook movement plus an optional turn, at most one capture.
 [test-hook]
 king = -
-customPiece1 = h:0
+customPiece1 = h:R
 hookMoves = h:R-R
 startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
 immobile = -
@@ -385,6 +388,11 @@ assert_contains "$out" "^e4d5c6: 1$"
 assert_not_contains "$out" "^e4f4f5:"
 assert_not_contains "$out" "^e4e5f5:"
 
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion-blocked-jump \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4f6: 1$"
+
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
   "position startpos moves e4d5e4
 d")
@@ -438,6 +446,7 @@ out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
 go perft 1")
 assert_contains "$out" "^e4e5d5: 1$"
 assert_contains "$out" "^e4e8f8: 1$"
+assert_contains "$out" "^e4e8: 1$"
 assert_not_contains "$out" "^e4d5e4:"
 assert_not_contains "$out" "^e4d4c4:"
 assert_not_contains "$out" "^e4d4e4:"

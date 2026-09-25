@@ -1372,8 +1372,8 @@ constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_
 constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
 #endif
 
-// Kept as a source-compatible name for move-encoding tests and tools.
-constexpr uint64_t MultiLegFlag = ExtendedSpecialFlag;
+// Named alias used by move-encoding tests and tools.
+constexpr uint64_t TwoLegFlag = ExtendedSpecialFlag;
 
 inline bool has_extended_special_payload(Move m) {
   return type_of(m) == SPECIAL && bool(move_bits(m) & ExtendedSpecialFlag);
@@ -1390,50 +1390,50 @@ inline bool is_promotion_move(Move m) {
   return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
 }
 
-// Multi-leg special moves use SPECIAL's upper payload for the via square and
+// Two-leg special moves use SPECIAL's upper payload for the via square and
 // subtype. Keep their encoding beside the other packed Move helpers.
-enum MultiLegSubtype : int {
-  MULTILEG_SUBTYPE_NONE = 0,
-  MULTILEG_SUBTYPE_TWO_STEP = 1,
-  MULTILEG_SUBTYPE_TWO_STEP_PROMOTION = 2,
-  MULTILEG_SUBTYPE_HOOK = 3,
-  MULTILEG_SUBTYPE_HOOK_PROMOTION = 4,
+enum TwoLegSubtype : int {
+  TWO_LEG_SUBTYPE_NONE = 0,
+  TWO_LEG_SUBTYPE_TWO_STEP = 1,
+  TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION = 2,
+  TWO_LEG_SUBTYPE_HOOK = 3,
+  TWO_LEG_SUBTYPE_HOOK_PROMOTION = 4,
 };
 
-inline MultiLegSubtype multileg_subtype(Move m) {
+inline TwoLegSubtype two_leg_subtype(Move m) {
   if (!has_extended_special_payload(m))
-      return MULTILEG_SUBTYPE_NONE;
+      return TWO_LEG_SUBTYPE_NONE;
   int sub = (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
-  return sub >= MULTILEG_SUBTYPE_TWO_STEP && sub <= MULTILEG_SUBTYPE_HOOK_PROMOTION
-       ? MultiLegSubtype(sub) : MULTILEG_SUBTYPE_NONE;
+  return sub >= TWO_LEG_SUBTYPE_TWO_STEP && sub <= TWO_LEG_SUBTYPE_HOOK_PROMOTION
+       ? TwoLegSubtype(sub) : TWO_LEG_SUBTYPE_NONE;
 }
 
 inline bool is_two_step(Move m) {
-  MultiLegSubtype sub = multileg_subtype(m);
-  return sub == MULTILEG_SUBTYPE_TWO_STEP || sub == MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
+  TwoLegSubtype sub = two_leg_subtype(m);
+  return sub == TWO_LEG_SUBTYPE_TWO_STEP || sub == TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION;
 }
 
 inline bool two_step_promotes(Move m) {
-  return multileg_subtype(m) == MULTILEG_SUBTYPE_TWO_STEP_PROMOTION;
+  return two_leg_subtype(m) == TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION;
 }
 
 inline bool is_hook(Move m) {
-  MultiLegSubtype sub = multileg_subtype(m);
-  return sub == MULTILEG_SUBTYPE_HOOK || sub == MULTILEG_SUBTYPE_HOOK_PROMOTION;
+  TwoLegSubtype sub = two_leg_subtype(m);
+  return sub == TWO_LEG_SUBTYPE_HOOK || sub == TWO_LEG_SUBTYPE_HOOK_PROMOTION;
 }
 
 inline bool hook_promotes(Move m) {
-  return multileg_subtype(m) == MULTILEG_SUBTYPE_HOOK_PROMOTION;
+  return two_leg_subtype(m) == TWO_LEG_SUBTYPE_HOOK_PROMOTION;
 }
 
-inline bool is_multileg(Move m) { return is_two_step(m) || is_hook(m); }
-inline bool is_multileg_promotion(Move m) { return two_step_promotes(m) || hook_promotes(m); }
+inline bool is_two_leg(Move m) { return is_two_step(m) || is_hook(m); }
+inline bool is_two_leg_promotion(Move m) { return two_step_promotes(m) || hook_promotes(m); }
 inline bool is_any_promotion(Move m) {
-  return is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || is_multileg_promotion(m);
+  return is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || is_two_leg_promotion(m);
 }
 
 inline Square via_sq(Move m) {
-  assert(is_multileg(m));
+  assert(is_two_leg(m));
   return special_payload_square(m);
 }
 
@@ -1441,7 +1441,7 @@ constexpr Move make_two_step(Square from, Square via, Square to, bool promotes =
   return Move(
       ExtendedSpecialFlag
     + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? MULTILEG_SUBTYPE_TWO_STEP_PROMOTION : MULTILEG_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION : TWO_LEG_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
     + (static_cast<uint64_t>(from) << SQUARE_BITS)
     + static_cast<uint64_t>(to)
@@ -1452,15 +1452,15 @@ constexpr Move make_hook(Square from, Square via, Square to, bool promotes = fal
   return Move(
       ExtendedSpecialFlag
     + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? MULTILEG_SUBTYPE_HOOK_PROMOTION : MULTILEG_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_HOOK_PROMOTION : TWO_LEG_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
     + static_cast<uint64_t>(SPECIAL)
     + (static_cast<uint64_t>(from) << SQUARE_BITS)
     + static_cast<uint64_t>(to)
   );
 }
 
-static_assert(int(MULTILEG_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
-              "Multi-leg subtypes must fit the SPECIAL subtype field");
+static_assert(int(TWO_LEG_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
+              "Two-leg subtypes must fit the SPECIAL subtype field");
 
 // Extended SPECIAL payloads share upper bits with gating; keep the generic
 // marker above both valid gating values and the payload square.

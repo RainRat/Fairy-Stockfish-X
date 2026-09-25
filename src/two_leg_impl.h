@@ -1,9 +1,9 @@
-/* Internal multi-leg path enumeration. */
-#ifndef MULTILEG_IMPL_H_INCLUDED
-#define MULTILEG_IMPL_H_INCLUDED
+/* Internal two-leg path enumeration. */
+#ifndef TWO_LEG_IMPL_H_INCLUDED
+#define TWO_LEG_IMPL_H_INCLUDED
 
 #include "position.h"
-#include "multileg.h"
+#include "two_leg.h"
 
 #include <algorithm>
 #include <array>
@@ -11,14 +11,6 @@
 #include <utility>
 
 namespace Stockfish::detail {
-
-struct TwoLegPath {
-  MultiLegKind kind = MultiLegKind::TWO_STEP;
-  Square via = SQ_NONE;
-  Square to = SQ_NONE;
-  Bitboard captures = 0;
-  Bitboard transit = 0;
-};
 
 struct TwoLegWalker {
 
@@ -48,8 +40,8 @@ struct TwoLegWalker {
   while (remaining)
   {
       int pair_idx = int(pop_lsb(remaining));
-      int d1 = multileg_pair_first(pair_idx);
-      int d2 = multileg_pair_second(pair_idx);
+      int d1 = two_leg_pair_first(pair_idx);
+      int d2 = two_leg_pair_second(pair_idx);
       Square via;
       if (!step_destination(pos, from, KingDirections[d1], via))
           continue;
@@ -72,7 +64,7 @@ struct TwoLegWalker {
           continue;
       seen[seenCount++] = key;
       TwoLegPath path;
-      path.kind = MultiLegKind::TWO_STEP;
+      path.kind = TwoLegKind::TWO_STEP;
       path.via = via;
       path.to = to;
       path.captures = (square_bb(via) | square_bb(to)) & occupied & ~square_bb(from);
@@ -99,8 +91,8 @@ struct TwoLegWalker {
   while (remaining)
   {
       int pair_idx = int(pop_lsb(remaining));
-      int d1 = multileg_pair_first(pair_idx);
-      int d2 = multileg_pair_second(pair_idx);
+      int d1 = two_leg_pair_first(pair_idx);
+      int d2 = two_leg_pair_second(pair_idx);
       int cap1steps = range1 ? range1 : SQUARE_NB;
       Square bend = from;
       Bitboard firstTransit = 0;
@@ -123,7 +115,7 @@ struct TwoLegWalker {
           if (cap1)
           {
               TwoLegPath path;
-              path.kind = MultiLegKind::HOOK;
+              path.kind = TwoLegKind::HOOK;
               path.via = bend;
               path.to = bend;
               path.captures = square_bb(bend);
@@ -189,7 +181,7 @@ struct TwoLegWalker {
               if (cap1 && cap2 && captureLimit < 2)
                   break;
               TwoLegPath path;
-              path.kind = MultiLegKind::HOOK;
+              path.kind = TwoLegKind::HOOK;
               path.via = bend;
               path.to = to;
               path.captures = (cap1 ? square_bb(bend) : Bitboard(0))
@@ -208,7 +200,7 @@ struct TwoLegWalker {
 }
 
   template<typename Visit>
-  static bool for_each_multileg_path(const Position& pos, Color us, PieceType pt, Square from,
+  static bool for_each_two_leg_path(const Position& pos, Color us, PieceType pt, Square from,
                                      Bitboard occupied, Bitboard friendly, Visit&& visit,
                                      Square target = SQ_NONE, Square viaTarget = SQ_NONE) {
       const Variant* rules = pos.variant();
@@ -223,4 +215,4 @@ struct TwoLegWalker {
 
 } // namespace Stockfish::detail
 
-#endif // MULTILEG_IMPL_H_INCLUDED
+#endif // TWO_LEG_IMPL_H_INCLUDED

@@ -316,7 +316,7 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     Square from = from_sq(m);
     Square to = to_sq(m);
 
-    if (is_multileg(m))
+    if (is_two_leg(m))
     {
         san = square(pos, from, n) + square(pos, via_sq(m), n) + square(pos, to, n);
         if (is_any_promotion(m))
@@ -450,7 +450,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         || pos.variant()->connectRegion1[c]
         || pos.variant()->connectRegion2[c]
         || pos.variant()->connectRegion3[c]
-        || pos.has_multileg_moves())
+        || pos.has_two_leg_moves())
         return false;
 
     // Precalculate if any promotion pawn types have pieces

@@ -104,7 +104,7 @@ startFen = 2k5/8/8/8/8/7p/P7/4K3 w - - 0 1
 castling = false
 startFen = 7k/6P1/8/8/8/8/8/7K w - - 0 1
 
-[multileg-discovered-check:chess]
+[two-leg-discovered-check:chess]
 customPiece1 = h:0
 hookMoves = h:R-R
 castling = false
@@ -353,10 +353,10 @@ static FSX_NOINLINE void test_discovered_quiet_check() {
     assert(MoveList<QUIET_CHECKS>(pos).contains(discovered));
 }
 
-static FSX_NOINLINE void test_multileg_discovered_quiet_check() {
+static FSX_NOINLINE void test_two_leg_discovered_quiet_check() {
     StateInfo st{};
     Position pos;
-    pos.set(variants.get("multileg-discovered-check"),
+    pos.set(variants.get("two-leg-discovered-check"),
             "8/8/8/8/3k4/8/N7/HP5K w - - 0 1", false, &st, nullptr);
 
     const Move discovered = make<NORMAL>(SQ_A2, SQ_C3);
@@ -379,8 +379,8 @@ int main(int argc, char** argv) {
             test_non_laser_quiet_checks_are_checks();
         if (!which || !std::strcmp(which, "discovered"))
             test_discovered_quiet_check();
-        if (!which || !std::strcmp(which, "multileg-discovered"))
-            test_multileg_discovered_quiet_check();
+        if (!which || !std::strcmp(which, "two-leg-discovered"))
+            test_two_leg_discovered_quiet_check();
         if (!which || !std::strcmp(which, "pairdrop"))
             test_pairdrop();
         if (!which || !std::strcmp(which, "probe-nodes"))

@@ -1333,7 +1333,8 @@ moves_loop: // When in check, search starts from here
               // Capture history based pruning when the move doesn't give check
               if (   !givesCheck
                   && lmrDepth < 1
-                  && !pos.see_pruning_unreliable(move)
+                  && (!(pos.see_pruning_unreliable() || pos.has_two_leg_moves())
+                      || !pos.see_pruning_unreliable(move))
                   && captureHistory[movedPiece][to_sq(move)][captured_type(pos, move)] < 0)
                   continue;
 
@@ -1860,7 +1861,8 @@ moves_loop: // When in check, search starts from here
       // Futility pruning and moveCount pruning
       if (    bestValue > VALUE_TB_LOSS_IN_MAX_PLY
           && !givesCheck
-          && !pos.see_pruning_unreliable(move)
+          && (!(pos.see_pruning_unreliable() || pos.has_two_leg_moves())
+              || !pos.see_pruning_unreliable(move))
           && !(   pos.extinction_value(~pos.side_to_move()) == -VALUE_MATE
                && victim != NO_PIECE
                && (pos.extinction_piece_types(~pos.side_to_move()) & type_of(victim)))

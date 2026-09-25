@@ -402,7 +402,7 @@ static void test_gating_special_collision() {
             Move m = make_gating<SPECIAL>(SQ_E2, SQ_E4, pt, Square(gate));
             assert(!is_two_step(m));
             assert(is_gating(m));
-            assert(multileg_subtype(m) == MULTILEG_SUBTYPE_NONE);
+            assert(two_leg_subtype(m) == TWO_LEG_SUBTYPE_NONE);
         }
     }
     for (int via = 0; via <= int(SQ_MAX); ++via) {
@@ -413,17 +413,17 @@ static void test_gating_special_collision() {
     }
 }
 
-static void test_multileg_tt_move_roundtrip() {
+static void test_two_leg_tt_move_roundtrip() {
 #if defined(LARGEBOARDS)
     Move move = make_two_step(SQ_E4, SQ_E5, SQ_E6);
-    assert(move_bits(move) & MultiLegFlag);
+    assert(move_bits(move) & TwoLegFlag);
     TTEntry entry{};
     entry.save(0, VALUE_ZERO, false, BOUND_EXACT, DEPTH_OFFSET + 1, move, VALUE_ZERO);
     assert(entry.move() == move);
 #endif
 }
 
-static void test_must_drop_evasion_to_multileg_check() {
+static void test_must_drop_evasion_to_two_leg_check() {
     StateInfo st{};
     Position pos;
     // The hook on d4 checks the king on g6 along a bent ray. A blast drop
@@ -837,7 +837,7 @@ static void test_hook_transit_does_not_promote() {
     assert(!MoveList<LEGAL>(pos).contains(notCrossing));
 }
 
-static void test_quiet_multileg_promotion_is_tactical() {
+static void test_quiet_two_leg_promotion_is_tactical() {
     StateInfo st{};
     Position pos;
     // A quiet (victimless) two-step promotion must appear in the CAPTURES
@@ -944,11 +944,11 @@ static void test_blast_via_capture() {
     assert(pos.piece_on(SQ_E4) == make_piece(WHITE, CUSTOM_PIECE_1));
 }
 
-static void test_multileg_special_subtype_isolation() {
+static void test_two_leg_special_subtype_isolation() {
     StateInfo st{};
     Position pos;
     // A clone-capable piece using two-step movement must not decode as a
-    // clone: multi-leg moves reuse SPECIAL with a subtype, while clones are
+    // clone: two-leg moves reuse SPECIAL with a subtype, while clones are
     // plain SPECIAL moves.
     pos.set(variants.get("test-clone-lion"),
             "4k3/8/8/8/4L3/8/8/4K3 w - - 0 1", false, &st, nullptr);
@@ -956,7 +956,7 @@ static void test_multileg_special_subtype_isolation() {
     assert(pos.pseudo_legal(m_multi));
     assert(!pos.is_clone_move(m_multi));
 
-    // An igui multi-leg move (from == to) must not decode as opening
+    // An igui two-leg move (from == to) must not decode as opening
     // self-removal, which is also a plain SPECIAL from == to move.
     pos.set(variants.get("test-opening-lion"),
             "4k3/8/8/8/4L3/8/8/4K3 w - - 0 1", false, &st, nullptr);
@@ -970,7 +970,7 @@ static void test_hook_royal_attacks() {
     StateInfo st{};
     Position pos;
     // The h:0 hook piece has no Betza movement, so every attack below must
-    // come from the shared multi-leg attack model, not ordinary rays.
+    // come from the shared two-leg attack model, not ordinary rays.
 
     // Bend capture: white hook e4 attacks black king on e5 (bend).
     pos.set(variants.get("test-hook-state"),
@@ -1022,7 +1022,7 @@ static void test_hook_royal_attacks() {
     assert(pos.legal(make<NORMAL>(SQ_A2, SQ_A3)));
 }
 
-static void test_blast_capture_evasion_to_multileg_check() {
+static void test_blast_capture_evasion_to_two_leg_check() {
     StateInfo st{};
     Position pos;
     // Capturing d4's pawn blasts the hook checking e6's king from e4.
@@ -1074,15 +1074,15 @@ int main() {
     test_stack_piece_transforms_and_undo();
     test_castling_preserves_piece_state();
     test_gating_special_collision();
-    test_multileg_tt_move_roundtrip();
-    test_must_drop_evasion_to_multileg_check();
+    test_two_leg_tt_move_roundtrip();
+    test_must_drop_evasion_to_two_leg_check();
     test_two_step_state_transitions();
     test_two_step_promotions();
     test_two_step_promotion_ignores_morph();
     test_two_step_double_capture_rejects_ambiguous_effects();
     test_two_step_piece_specific_promotion_zone();
     test_two_step_via_capture_restrictions();
-    test_quiet_multileg_promotion_is_tactical();
+    test_quiet_two_leg_promotion_is_tactical();
     test_igui_clears_not_moved();
     test_narrow_board_direction_alias();
     test_blast_via_capture();
@@ -1093,9 +1093,9 @@ int main() {
     test_hook_transit_does_not_promote();
     test_capture_ordering_squares_and_recapture();
     test_two_step_vs_jump();
-    test_multileg_special_subtype_isolation();
+    test_two_leg_special_subtype_isolation();
     test_hook_royal_attacks();
-    test_blast_capture_evasion_to_multileg_check();
+    test_blast_capture_evasion_to_two_leg_check();
     test_via_only_capture_effects();
     return 0;
 }

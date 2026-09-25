@@ -539,7 +539,7 @@ customPiece1 = h:0
 hookMoves = h:B2-R
 castling = false
 
-[bad-multileg-mandatory-demotion:chess]
+[bad-two-leg-mandatory-demotion:chess]
 customPiece1 = h:0
 hookMoves = h:R-R
 mandatoryPiecePromotion = true

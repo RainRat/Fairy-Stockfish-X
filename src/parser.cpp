@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "apiutil.h"
-#include "multileg.h"
+#include "two_leg.h"
 #include "parser.h"
 #include "piece.h"
 #include "types.h"
@@ -241,7 +241,7 @@ namespace {
         std::string s;
         for (char c : token)
             s += char(std::tolower(static_cast<unsigned char>(c)));
-        // Index order matches KingDirections; see king_step_name in multileg.h.
+        // Index order matches KingDirections; see king_step_name in two_leg.h.
         for (int i = 0; i < 8; ++i)
         {
             std::string name = king_step_name(i);
@@ -338,7 +338,7 @@ namespace {
                     }
                     for (int d1 = d1_start; d1 <= d1_end; ++d1)
                         for (int d2 = d2_start; d2 <= d2_end; ++d2)
-                            mask |= multileg_direction_pair_bit(d1, d2);
+                            mask |= two_leg_direction_pair_bit(d1, d2);
                 }
                 parsed[pt].relative = mask;
             }
@@ -449,7 +449,7 @@ namespace {
                     for (int d2 = 0; d2 < 8; ++d2)
                         if ((bits2 & (1 << d2))
                             && (!sameGeometry || (d2 - d1 + 8) % 8 == 2 || (d2 - d1 + 8) % 8 == 6))
-                            mask |= multileg_direction_pair_bit(d1, d2);
+                            mask |= two_leg_direction_pair_bit(d1, d2);
             if (!mask)
                 return fail("Hook legs have no valid direction pairs", rawSpec);
             parsed[pt].directions.relative = mask;
@@ -2867,17 +2867,17 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     const bool hasHookMoves = std::any_of(std::begin(v->hookMoves), std::end(v->hookMoves),
                                           [](const HookMoveSpec& spec) { return spec.directions.relative != 0; });
 
-    PieceSet multilegPieceTypes = NO_PIECE_SET;
+    PieceSet twoLegPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
         if (v->twoStepMoves[pt].relative || v->hookMoves[pt].directions.relative)
-            multilegPieceTypes |= piece_set(pt);
-    bool hasDemotingMultiLegPiece = false;
+            twoLegPieceTypes |= piece_set(pt);
+    bool hasDemotingTwoLegPiece = false;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
         if (v->promotedPieceType[pt] != NO_PIECE_TYPE
-            && (multilegPieceTypes & v->promotedPieceType[pt]))
-            hasDemotingMultiLegPiece = true;
+            && (twoLegPieceTypes & v->promotedPieceType[pt]))
+            hasDemotingTwoLegPiece = true;
 
-    if (hasDemotingMultiLegPiece && v->pieceDemotion
+    if (hasDemotingTwoLegPiece && v->pieceDemotion
         && (v->mandatoryPiecePromotion.get(WHITE) || v->mandatoryPiecePromotion.get(BLACK)))
     {
         if (DoCheck)
