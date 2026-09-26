@@ -23,11 +23,11 @@ startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
 immobile = -
 castling = false
 
-[test-hook-double]
+[test-hook-bent]
 king = -
 customPiece1 = h:0
-hookMoves = h:R-R:2
-startFen = 8/8/8/4hh2/4H3/8/8/8 w - - 0 1
+hookMoves = h:R-R
+startFen = 8/8/8/5h2/4H3/8/8/8 w - - 0 1
 immobile = -
 castling = false
 
@@ -39,10 +39,10 @@ startFen = 8/8/8/8/3hH3/8/8/8 w - - 0 1
 immobile = -
 castling = false
 
-[test-hook-double-first-capture]
+[test-hook-first-capture-stops]
 king = -
-customPiece1 = h:0
-hookMoves = h:R-R:2
+customPiece1 = h:R
+hookMoves = h:R-R
 startFen = 8/8/8/3H4/3hH3/8/8/8 w - - 0 1
 immobile = -
 castling = false
@@ -57,9 +57,9 @@ castling = false
 
 [test-hook-bend-mobility:chess]
 customPiece1 = h:0
-hookMoves = h:R-R:2
+hookMoves = h:R-R
 mobilityRegionWhiteCustomPiece1 = d5
-startFen = 8/8/8/8/2Hk4/8/8/7K b - - 0 1
+startFen = 8/8/8/3k4/2H5/8/8/7K b - - 0 1
 castling = false
 
 [test-royal-route:chess]
@@ -125,6 +125,28 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
 [wazir-chess:chess]
 king = w:W
 startFen = W6w/QQ6/8/8/8/8/8/8 w
+
+# Promotion-decline boundaries: leaving-zone captures re-offer promotion;
+# pawns get a last-rank non-capture retry.
+[test-decline-leave-capture:chess]
+customPiece1 = a:R
+promotedPieceType = a:q
+promotionRegionWhite = *7 *8
+promotionRegionBlack = *2 *1
+promotionDeclineRule = true
+mandatoryPawnPromotion = false
+mandatoryPiecePromotion = false
+castling = false
+doubleStep = false
+
+[test-decline-pawn-last-rank:chess]
+promotionRegionWhite = *7 *8
+promotionRegionBlack = *2 *1
+promotionDeclineRule = true
+mandatoryPawnPromotion = false
+mandatoryPiecePromotion = false
+castling = false
+doubleStep = false
 
 [pawn-explicit-initial:fairy]
 customPiece1 = p:iW
@@ -202,12 +224,12 @@ immobile = -
 castling = false
 doubleStep = false
 
-# Hook mover (double capture): same legs, both-leg captures allowed.
-[test-hook-double]
+# Hook mover bent-path only: straight captures belong to the Betza rider.
+[test-hook-bent]
 king = -
 customPiece1 = h:0
-hookMoves = h:R-R:2
-startFen = 8/8/8/4hh2/4H3/8/8/8 w - - 0 1
+hookMoves = h:R-R
+startFen = 8/8/8/5h2/4H3/8/8/8 w - - 0 1
 immobile = -
 castling = false
 doubleStep = false
@@ -458,11 +480,12 @@ assert_not_contains "$out" "^e4d4c4:"
 assert_not_contains "$out" "^e4d4e4:"
 assert_not_contains "$out" "^e4d4d8:"
 
-# A default single-capture hook ends immediately when its bend captures.
+# Bent-path only: with no Betza movement, a hook gets no straight capture
+# (e4d4d4 absent) and cannot turn after a first-leg capture (e4d4d5 absent).
 out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-capture \
   "position startpos
 go perft 1")
-assert_contains "$out" "^e4d4d4: 1$"
+assert_not_contains "$out" "^e4d4d4:"
 assert_not_contains "$out" "^e4d4d5:"
 
 out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
@@ -470,16 +493,20 @@ out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
 d")
 assert_contains_literal "$out" "Fen: 8/8/8/3H4/8/8/8/8 b - - 0 1"
 
-out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-double \
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-bent \
   "position startpos
 go perft 1")
 assert_contains "$out" "^e4e5f5: 1$"
-assert_not_contains "$out" "^e4e5e4:"
+assert_not_contains "$out" "^e4e5e6:"
 
-out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-double-first-capture \
+# A hook cannot capture on the first leg and then turn: it must stop.
+# Straight captures still work through the ordinary Betza rider.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-first-capture-stops \
   "position startpos
 go perft 1")
-assert_contains "$out" "^e4d4d4: 1$"
+assert_contains "$out" "^e4d4: 1$"
+assert_not_contains "$out" "^e4d4d4:"
+assert_not_contains "$out" "^e4d4d5:"
 
 out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-overlap \
   "position startpos
@@ -488,8 +515,8 @@ assert_contains "$out" "^e4d4: 1$"
 assert_not_contains "$out" "^e4d4d4:"
 assert_not_contains "$out" "^e4e5e7:"
 
-# A captured royal on a hook bend is attacked when a legal continuation ends
-# inside the mover's mobility region, even if the bend itself is outside it.
+# A hook gives check with a bent capture even when the bend itself is outside
+# the mover's mobility region, as long as the capture ends inside it.
 out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-bend-mobility \
   "position startpos
 d")
@@ -501,5 +528,17 @@ out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-royal-route \
   "position startpos
 go perft 1")
 assert_contains "$out" "^e4d5e6: 1$"
+
+# A declined Chu promotion can be taken on a capture starting in-zone and ending outside.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-leave-capture \
+  "position fen 7k/8/1A6/1p6/8/8/8/K7 w - - 0 1 moves b6b7 h8g8
+go perft 1")
+assert_contains "$out" "^b7b5+: 1$"
+
+# A declined pawn gets a last-rank non-capture retry.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-pawn-last-rank \
+  "position fen 7k/8/P7/8/8/8/8/K7 w - - 0 1 moves a6a7 h8g8
+go perft 1")
+assert_contains "$out" "^a7a8q: 1$"
 
 echo "movegen regressions passed"

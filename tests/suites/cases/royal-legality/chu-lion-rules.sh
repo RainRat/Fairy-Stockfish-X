@@ -18,7 +18,10 @@ castling = false
 twoStepMoves = l:*
 lionMoveTypes = l
 lionCapturingRule = true
-insignificantPieces = p
+lionInsignificantPieces = p
+
+[chu-okazaki-test:chu-test]
+lionOkazakiRule = true
 
 [chu-promo-test:chu-test]
 customPiece2 = a:KAD
@@ -56,6 +59,22 @@ assert_not_contains "${out}" '^a1b2c3: 1$'
 # A non-Lion cannot immediately trade a Lion after a non-Lion took its Lion.
 out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-test <<'UCI'
 position fen 8/8/8/8/4l3/8/1L6/1r2R3 b - - 0 1 moves b1b2
+go perft 1
+UCI
+)
+assert_not_contains "${out}" '^e1e4: 1$'
+
+# Okazaki exception: the same counter-strike is allowed when the target is unprotected.
+out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-okazaki-test <<'UCI'
+position fen 8/8/8/8/4l3/8/1L6/1r2R3 b - - 0 1 moves b1b2
+go perft 1
+UCI
+)
+assert_contains "${out}" '^e1e4: 1$'
+
+# Okazaki does not allow retaliation against a protected Lion.
+out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-okazaki-test <<'UCI'
+position fen 8/8/8/4r3/4l3/8/1L6/1r2R3 b - - 0 1 moves b1b2
 go perft 1
 UCI
 )

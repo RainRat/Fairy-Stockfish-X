@@ -1062,6 +1062,15 @@ public:
   // For generated or otherwise validated moves; two-leg paths need no re-walk.
   Bitboard capture_squares_unchecked(Move m) const;
   bool matches_recapture_square(Move m, Square s) const;
+  // Generic capture summary for move ordering: Position owns victim
+  // knowledge (ordinary, en passant, locust, two-leg, effects).
+  struct CaptureSummary {
+      int value = 0;
+      PieceType highestType = NO_PIECE_TYPE;
+      int points = 0;
+      int count = 0;
+  };
+  CaptureSummary capture_summary(Move m) const;
   // Direct victim squares: ordinary and jump captures follow capture_square(),
   // while two-leg moves may report both the bend and destination victims.
   Square secondary_drop_square(Move m) const;
@@ -5887,8 +5896,15 @@ inline Position::PromotionStatus Position::move_promotion_status(Piece mover, Sq
       bool inFrom = bool(zone & from);
       bool inTo = bool(zone & to);
       bool entered = !inFrom && inTo;
-      bool deferredCapture = inFrom && inTo && isCapture && bool(st->promotionDeferred & from);
-      if (!entered && !deferredCapture)
+      // Chu/Dai: after declining on entry, a capture starting in-zone
+      // re-offers promotion even when the move leaves the zone.
+      bool deferredCapture = inFrom && isCapture && bool(st->promotionDeferred & from);
+      // Pawns reaching the last rank get a final non-capture opportunity.
+      bool lastRankRetry = !isCapture && bool(st->promotionDeferred & from)
+                        && (var->promotionPawnTypes.get(us) & piece_set(pt))
+                        && ((us == WHITE && rank_of(to) == max_rank())
+                            || (us == BLACK && rank_of(to) == RANK_1));
+      if (!entered && !deferredCapture && !lastRankRetry)
           return status;
   }
   if (piece_promotion_on_capture() && !isCapture)
@@ -5955,6 +5971,66 @@ inline Piece Position::captured_piece(Move m) const {
       return NO_PIECE;
   Square cs = capture_square(m);
   return is_ok(cs) ? piece_on(cs) : NO_PIECE;
+}
+
+inline Position::CaptureSummary Position::capture_summary(Move m) const {
+  CaptureSummary out;
+  auto points_for = [&](Piece captured) {
+      if (!points_counting() || captured == NO_PIECE)
+          return 0;
+      int pts = var->piecePoints[type_of(captured)];
+      int signedPts = 0;
+      switch (points_rule_captures())
+      {
+          case POINTS_US:        signedPts =  pts; break;
+          case POINTS_THEM:      signedPts = -pts; break;
+          case POINTS_OWNER:     signedPts =  color_of(captured) == side_to_move() ? pts : -pts; break;
+          case POINTS_NON_OWNER: signedPts =  color_of(captured) == side_to_move() ? -pts : pts; break;
+          case POINTS_NONE:      signedPts = 0; break;
+      }
+      if (points_goal() > 0)
+      {
+          if (points_goal_value() < VALUE_ZERO)
+              signedPts = -signedPts;
+          else if (points_goal_value() == VALUE_ZERO)
+              signedPts = 0;
+      }
+      return 20 * signedPts;
+  };
+  if (!is_two_leg(m))
+  {
+      Piece captured = captured_piece(m);
+      Piece victim = captured != NO_PIECE ? captured : piece_on(to_sq(m));
+      out.value = int(PieceValue[MG][victim]);
+      out.highestType = type_of(victim);
+      out.points = points_for(captured);
+      out.count = captured != NO_PIECE ? 1 : 0;
+      return out;
+  }
+  out.highestType = NO_PIECE_TYPE;
+  int best = 0;
+  Bitboard caps = capture_squares_unchecked(m);
+  while (caps)
+  {
+      Piece p = piece_on(pop_lsb(caps));
+      if (p == NO_PIECE)
+          continue;
+      ++out.count;
+      out.value += int(PieceValue[MG][p]);
+      out.points += points_for(p);
+      int v = int(PieceValue[MG][p]);
+      if (v > best)
+      {
+          best = v;
+          out.highestType = type_of(p);
+      }
+  }
+  if (!out.count)
+  {
+      Piece fallback = piece_on(to_sq(m));
+      out.highestType = type_of(fallback);
+  }
+  return out;
 }
 
 inline std::string Position::piece_to_partner() const {

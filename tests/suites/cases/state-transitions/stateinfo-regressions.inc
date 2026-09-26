@@ -164,11 +164,6 @@ castling = false
 [test-hook-blast-state:test-hook-state]
 blastOnCapture = true
 
-[test-hook-double-state:chess]
-customPiece1 = h:0
-hookMoves = h:R-R:2
-castling = false
-
 [test-hook-two-boards:chess]
 customPiece1 = h:0
 hookMoves = h:R-R
@@ -737,26 +732,32 @@ static void test_hook_state_transitions() {
     StateInfo st{};
     Position pos;
     // Hook rook legs (R-R): bend must be on a rook ray, transit rays empty,
-    // sliders cannot jump over pieces.
-    // White hook e4, black rooks e5/f5.
-    pos.set(variants.get("test-hook-double-state"),
-            "4k3/8/8/4rr2/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
+    // sliders cannot jump over pieces. Bent-path only: straight moves belong
+    // to the ordinary Betza component.
+    // White hook e4, black rooks e5/f5. The white king stands off the
+    // e-file so the hook is not pinned by the e5 rook.
+    pos.set(variants.get("test-hook-state"),
+            "4k3/8/8/4rr2/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
 
-    // Double capture around a 90-degree turn with :2 allowed.
-    Move m_double = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
+    // Single bent capture around a 90-degree turn.
+    Move m_double = make_hook(SQ_E4, SQ_F4, SQ_F5, false);
     assert(pos.legal(m_double));
     const Key origKey = pos.key();
     const Key origMatKey = pos.state()->materialKey;
     StateInfo next{};
     pos.do_move(m_double, next);
-    assert(pos.piece_on(SQ_E5) == NO_PIECE);
+    assert(pos.piece_on(SQ_E5) == B_ROOK);
     assert(pos.piece_on(SQ_F5) == make_piece(WHITE, CUSTOM_PIECE_1));
-    assert(pos.count<ROOK>(BLACK) == 0);
+    assert(pos.count<ROOK>(BLACK) == 1);
     pos.undo_move(m_double);
     assert(pos.key() == origKey);
     assert(pos.state()->materialKey == origMatKey);
     assert(pos.piece_on(SQ_E5) == B_ROOK);
     assert(pos.piece_on(SQ_F5) == B_ROOK);
+
+    // Double capture is illegal: hooks stop on capture.
+    Move m_both = make_hook(SQ_E4, SQ_E5, SQ_F5, false);
+    assert(!pos.legal(m_both));
 
     // Cannot jump over the e6 rook: e4->e5->e7 is not pseudo-legal.
     // (Path geometry is validated in pseudo_legal(), not legal().)
@@ -772,7 +773,7 @@ static void test_hook_state_transitions() {
 static void test_hook_capture_limits() {
     StateInfo st{};
     Position pos;
-    // Same geometry under :1: the double is illegal, singles stay legal.
+    // Hooks are single-capture: the double is illegal, singles stay legal.
     // Kings stand off the e-file so captures are judged on limits alone.
     pos.set(variants.get("test-hook-state"),
             "7k/8/8/4rr2/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
@@ -798,7 +799,10 @@ static void test_single_hook_capture_transfer() {
     StateInfo st{};
     Position pos;
     pos.set(variants.get("test-hook-two-boards"), "7k/8/8/4p3/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
-    Move capture = make_hook(SQ_E4, SQ_E5, SQ_E5, false);
+    // Bent single capture e4-e5-f5 is illegal here (f5 empty); use e4-f4-f5
+    // with the pawn moved to f5.
+    pos.set(variants.get("test-hook-two-boards"), "7k/8/8/5p2/4H3/8/8/K7 w - - 0 1", false, &st, nullptr);
+    Move capture = make_hook(SQ_E4, SQ_F4, SQ_F5, false);
     assert(pos.legal(capture));
     StateInfo next{};
     pos.do_move(capture, next);
@@ -971,13 +975,14 @@ static void test_hook_royal_attacks() {
     Position pos;
     // The h:0 hook piece has no Betza movement, so every attack below must
     // come from the shared two-leg attack model, not ordinary rays.
+    // Bent-path only: straight adjacent attacks are NOT hook attacks.
 
-    // Bend capture: white hook e4 attacks black king on e5 (bend).
+    // No bend capture: white hook e4 does not attack the adjacent black king.
     pos.set(variants.get("test-hook-state"),
             "8/8/8/4k3/4H3/8/8/4K3 b - - 0 1", false, &st, nullptr);
-    assert(pos.evasion_checkers());
-    assert(pos.requires_full_evasion_generation());
-    // King takes the checker.
+    assert(!pos.evasion_checkers());
+    assert(!pos.requires_full_evasion_generation());
+    // King takes the adjacent hook.
     assert(pos.legal(make<NORMAL>(SQ_E5, SQ_E4)));
 
     // Final-leg capture: white hook e4 turns at e5 and attacks f5.
@@ -994,7 +999,8 @@ static void test_hook_royal_attacks() {
     assert(pos.requires_full_evasion_generation());
     assert(!pos.legal(make<NORMAL>(SQ_D5, SQ_D6)));
 
-    // Via royal capture is rejected like a final-square king capture.
+    // Capturing a royal on the bend is rejected: the hook must stop on
+    // capture and cannot turn onto f5.
     pos.set(variants.get("test-hook-state"),
             "8/8/8/4k3/4H3/8/8/4K3 w - - 0 1", false, &st, nullptr);
     assert(!pos.legal(make_hook(SQ_E4, SQ_E5, SQ_F5, false)));
@@ -1013,34 +1019,35 @@ static void test_hook_royal_attacks() {
     assert(pos.legal(m_nonking_check));
     assert(pos.gives_check(m_nonking_check));
 
-    // Non-king move exposing the king to a hook attack is illegal: Be2f3
-    // vacates e2, opening e4-e3-e1 onto the white king.
+    // Non-king move exposing the king to a bent hook attack is illegal:
+    // Bd2 vacates the d-file, opening the d5-d1-e1 bend onto the white king.
+    // (The d5-e5-e1 bend stays blocked by the e2 pawn.)
     pos.set(variants.get("test-hook-state"),
-            "4k3/8/8/8/4h3/8/P3B3/4K3 w - - 0 1", false, &st, nullptr);
+            "k7/8/8/3h4/8/8/P2BP3/4K3 w - - 0 1", false, &st, nullptr);
     assert(!pos.evasion_checkers());
-    assert(!pos.legal(make<NORMAL>(SQ_E2, SQ_F3)));
+    assert(!pos.legal(make<NORMAL>(SQ_D2, SQ_E3)));
     assert(pos.legal(make<NORMAL>(SQ_A2, SQ_A3)));
 }
 
 static void test_blast_capture_evasion_to_two_leg_check() {
     StateInfo st{};
     Position pos;
-    // Capturing d4's pawn blasts the hook checking e6's king from e4.
-    // This capture neither takes the checker nor lands on a conventional
-    // interposition square, so checked-position capture queries need full
-    // legal move generation.
+    // Capturing d4's pawn blasts the hook checking g6's king from e4
+    // (bent via g4). This capture neither takes the checker nor lands on a
+    // conventional interposition square, so checked-position capture queries
+    // need full legal move generation.
     pos.set(variants.get("test-hook-blast-state"),
-            "k7/8/4K3/8/3ph3/3R4/8/8 w - - 0 1", false, &st, nullptr);
+            "k7/8/6K1/8/3ph3/3R4/8/8 w - - 0 1", false, &st, nullptr);
     Move m = make<NORMAL>(SQ_D3, SQ_D4);
     assert(pos.evasion_checkers());
     assert(pos.legal(m));
     assert(pos.has_capture());
 
-    // A hook captures beside an ordinary rook checker; the blast removes the
-    // checker even though the move neither captures it nor interposes.
+    // A hook captures the checking rook around the corner; the blast clears
+    // the neighboring pawn as well.
     pos.set(variants.get("test-hook-blast-state"),
             "7k/8/8/8/8/8/pH6/r6K w - - 0 1", false, &st, nullptr);
-    Move hookCapture = make_hook(SQ_B2, SQ_A2, SQ_A2, false);
+    Move hookCapture = make_hook(SQ_B2, SQ_B1, SQ_A1, false);
     assert(pos.evasion_checkers());
     assert(pos.legal(hookCapture));
     assert(MoveList<LEGAL>(pos).contains(hookCapture));

@@ -17,7 +17,7 @@
 */
 
 #include "apiutil.h"
-#include "two_leg.h"
+#include "direction_pair.h"
 
 #include <iomanip>
 
@@ -254,8 +254,7 @@ std::string hook_moves_json(const Variant& v) {
             std::ostringstream spec;
             spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoves[i].directions.relative)
                  << ",\"firstRange\":" << v.hookMoves[i].firstRange
-                 << ",\"secondRange\":" << v.hookMoves[i].secondRange
-                 << ",\"captureLimit\":" << v.hookMoves[i].captureLimit << '}';
+                 << ",\"secondRange\":" << v.hookMoves[i].secondRange << '}';
             field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(), spec.str());
         }
     out << '}';
