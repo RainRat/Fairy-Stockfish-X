@@ -5542,7 +5542,7 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
           bool significantOtherCapture = is_two_leg(m)
                                       && victimSq == twoLegInfo.to
                                       && twoLegInfo.captures_via()
-                                      && !(var->insignificantPieces
+                                      && !(var->lionInsignificantPieces
                                            & piece_set(type_of(piece_on(twoLegInfo.via))));
           if (attackers_to(victimSq, occupiedWithoutLion, them) && !significantOtherCapture)
               return false;
@@ -5567,8 +5567,28 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
           bool previousMoverWasLion = previousMover != NO_PIECE
                                     && (var->lionMoveTypes
                                         & piece_set(type_of(previousMover)));
+          // Okazaki rule: retaliation is allowed when the target lion is unprotected.
           if (!previousMoverWasLion && (lionCaptures & ~previousLionCaptures))
-              return false;
+          {
+              bool okazakiAllowed = false;
+              if (var->lionOkazakiRule)
+              {
+                  okazakiAllowed = true;
+                  Bitboard targets = lionCaptures & ~previousLionCaptures;
+                  while (targets)
+                  {
+                      Square targetSq = pop_lsb(targets);
+                      // Unprotected = no defender of the target's owner.
+                      if (attackers_to(targetSq, pieces(), them))
+                      {
+                          okazakiAllowed = false;
+                          break;
+                      }
+                  }
+              }
+              if (!okazakiAllowed)
+                  return false;
+          }
       }
   }
 

@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "apiutil.h"
-#include "two_leg.h"
+#include "direction_pair.h"
 #include "parser.h"
 #include "piece.h"
 #include "types.h"
@@ -422,18 +422,11 @@ namespace {
                 continue;
             }
 
-            // Optional :1|:2 capture-limit suffix (default: 1).
+            // Hooks are single-capture bent paths; no :1|:2 suffix.
             std::string legsPart = rawSpec;
-            int limit = 1;
             size_t colon = rawSpec.rfind(':');
             if (colon != std::string::npos)
-            {
-                std::string tail = trim(rawSpec.substr(colon + 1));
-                if (tail != "1" && tail != "2")
-                    return fail("Invalid hook capture limit (expected :1 or :2)", rawSpec);
-                limit = tail[0] - '0';
-                legsPart = trim(rawSpec.substr(0, colon));
-            }
+                return fail("Invalid hook capture limit (hook moves stop on capture; no :1|:2 suffix)", rawSpec);
             size_t dash = legsPart.find('-');
             if (dash == std::string::npos || legsPart.find('-', dash + 1) != std::string::npos)
                 return fail("Malformed hook legs (expected <leg1>-<leg2>)", rawSpec);
@@ -455,7 +448,6 @@ namespace {
             parsed[pt].directions.relative = mask;
             parsed[pt].firstRange = range1;
             parsed[pt].secondRange = range2;
-            parsed[pt].captureLimit = limit;
         }
         if (!sawEntry || !only_trailing_space(ss))
             return false;
@@ -1988,8 +1980,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
     }
     parse_attribute("lionMoveTypes", v->lionMoveTypes, v);
-    parse_attribute("insignificantPieces", v->insignificantPieces, v);
+    // Deprecated alias: parsed first so lionInsignificantPieces wins when both are present.
+    parse_attribute("insignificantPieces", v->lionInsignificantPieces, v);
+    if (config.find("insignificantPieces") != config.end() && DoCheck)
+        std::cerr << "insignificantPieces is deprecated; use lionInsignificantPieces." << std::endl;
+    parse_attribute("lionInsignificantPieces", v->lionInsignificantPieces, v);
     parse_attribute("lionCapturingRule", v->lionCapturingRule);
+    parse_attribute("lionOkazakiRule", v->lionOkazakiRule);
     auto it_hook = config.find("hookMoves");
     if (it_hook != config.end())
     {
@@ -2892,14 +2889,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
-    const bool hasMultiCaptureHook = std::any_of(std::begin(v->hookMoves), std::end(v->hookMoves),
-        [](const HookMoveSpec& spec) { return spec.directions.relative && spec.captureLimit > 1; });
-    // Two-step moves and :2 hooks can capture two pieces, while twoBoards
+    // Two-step moves can capture two pieces, while twoBoards
     // transfers only one captured piece to the partner board.
-    if (v->twoBoards && (hasTwoStepMoves || hasMultiCaptureHook))
+    // Hooks are single-capture and remain allowed there.
+    if (v->twoBoards && hasTwoStepMoves)
     {
         if (DoCheck)
-            std::cerr << "twoBoards is not supported with multi-capture twoStepMoves or :2 hookMoves." << std::endl;
+            std::cerr << "twoBoards is not supported with multi-capture twoStepMoves." << std::endl;
         valid = false;
     }
 

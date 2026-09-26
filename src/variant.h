@@ -50,7 +50,6 @@ struct HookMoveSpec {
   DirectionPairSpec directions;
   int firstRange = 0;
   int secondRange = 0;
-  int captureLimit = 0;
 };
 
 enum class ColorChangeTrigger {
@@ -267,10 +266,14 @@ struct Variant {
   // and reflection preserves membership, so both colors share one set.
   PieceSet twoStepPieceTypes = {};
   PieceSet lionMoveTypes = NO_PIECE_SET;
-  PieceSet insignificantPieces = NO_PIECE_SET;
+  PieceSet lionInsignificantPieces = NO_PIECE_SET;
   bool lionCapturingRule = false;
-  // Hook movers: two sliding legs with a bend (from -> bend -> to), at most
-  // One coherent geometry/range/capture-limit specification per piece type.
+  // Okazaki rule: a non-lion counter-strike is allowed when the target
+  // lion is unprotected (has no defender).
+  bool lionOkazakiRule = false;
+  // Hook movers: two sliding legs with a bend (from -> bend -> to).
+  // Bent-path only: straight movement belongs to the ordinary Betza rider.
+  // At most one capture per move; a hook must stop on capture.
   HookMoveSpec hookMoves[PIECE_TYPE_NB] = {};
   PieceSet hookPieceTypes = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;

@@ -549,7 +549,7 @@ promotedPieceType = p:h
 [bad-hook-wrapped:chess]
 king = -
 customPiece1 = h:0
-hookMoves = h:R-R:2
+hookMoves = h:R-R
 cylindrical = true
 startFen = 8/8/8/8/4H3/8/8/8 w - - 0 1
 immobile = -
@@ -561,10 +561,9 @@ customPiece1 = h:0
 hookMoves = h:R-R
 toroidal = true
 
-[bad-hook-twoboards:chess]
+[bad-hook-suffix:chess]
 customPiece1 = h:0
 hookMoves = h:R-R:2
-twoBoards = true
 
 [hook-twoboards-single:chess]
 customPiece1 = h:0
@@ -912,8 +911,8 @@ assert_contains "${bad_hook_output4}" "unknown variant 'bad-hook-wrapped'; keepi
 bad_hook_toroidal_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-toroidal" </dev/null 2>&1 || true)
 assert_contains "${bad_hook_toroidal_output}" "unknown variant 'bad-hook-toroidal'; keeping 'chess'"
 
-bad_hook_output5=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-twoboards" </dev/null 2>&1 || true)
-assert_contains "${bad_hook_output5}" "unknown variant 'bad-hook-twoboards'; keeping 'chess'"
+bad_hook_output5=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-suffix" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output5}" "unknown variant 'bad-hook-suffix'; keeping 'chess'"
 
 bad_twostep_twoboards_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-twostep-twoboards" </dev/null 2>&1 || true)
 assert_contains "${bad_twostep_twoboards_output}" "unknown variant 'bad-twostep-twoboards'; keeping 'chess'"
@@ -937,7 +936,7 @@ assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook capture lim
 assert_contains "${bad_hook_check_output}" "hookMoves - Hook legs have no valid direction pairs"
 assert_contains "${bad_hook_check_output}" "twoStepMoves - Empty direction pair in list"
 assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
-assert_contains "${bad_hook_check_output}" "twoBoards is not supported with multi-capture twoStepMoves or :2 hookMoves."
+assert_contains "${bad_hook_check_output}" "twoBoards is not supported with multi-capture twoStepMoves."
 assert_contains "${bad_hook_check_output}" "mandatoryPiecePromotion with pieceDemotion is not supported with twoStepMoves or hookMoves."
 
 run_uci "$ENGINE" "$bad_hook_ini" "hook-twoboards-single" </dev/null >/dev/null

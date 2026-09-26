@@ -82,9 +82,6 @@ struct TwoLegWalker {
   uint64_t mask = pos.variant()->hookMoves[pt].directions.byColor[us];
   if (!mask || !(pos.board_bb() & from))
       return false;
-  int captureLimit = pos.variant()->hookMoves[pt].captureLimit;
-  if (captureLimit < 1)
-      return false;
   int range1 = pos.variant()->hookMoves[pt].firstRange;
   int range2 = pos.variant()->hookMoves[pt].secondRange;
   Bitboard remaining = Bitboard(mask);
@@ -106,25 +103,12 @@ struct TwoLegWalker {
           bend = step1;
           firstTransit |= square_bb(bend);
           bool cap1 = bool(occupied & bend);
-          if (viaTarget != SQ_NONE && bend != viaTarget)
-          {
-              if (cap1)
-                  break;
-              continue;
-          }
+          // Straight movement/capture belongs to the ordinary R/B component.
+          // A hook cannot turn after capturing: it must stop.
           if (cap1)
-          {
-              TwoLegPath path;
-              path.kind = TwoLegKind::HOOK;
-              path.via = bend;
-              path.to = bend;
-              path.captures = square_bb(bend);
-              path.transit = firstTransit & ~square_bb(bend);
-              if ((pos.board_bb(us, pt) & bend) && visit(path))
-                  return true;
-              if (captureLimit == 1)
-                  break;
-          }
+              break;
+          if (viaTarget != SQ_NONE && bend != viaTarget)
+              continue;
           int cap2steps = range2 ? range2 : SQUARE_NB;
           if (target != SQ_NONE && bend != target)
           {
@@ -140,8 +124,6 @@ struct TwoLegWalker {
                       break;
                   probe = step2;
                   bool cap2 = !atOrigin && bool(occupied & probe);
-                  if (cap1 && cap2 && captureLimit < 2)
-                      break;
                   if (probe == target)
                   {
                       reachesTarget = true;
@@ -151,11 +133,7 @@ struct TwoLegWalker {
                       break;
               }
               if (!reachesTarget)
-              {
-                  if (cap1)
-                      break;
                   continue;
-              }
           }
           Square to = bend;
           Bitboard secondTransit = 0;
@@ -174,26 +152,17 @@ struct TwoLegWalker {
               to = step2;
               secondTransit |= square_bb(to);
               bool cap2 = !atOrigin && bool(occupied & to);
-              // A :1 hook may not capture on both legs; the limit lives here
-              // so generation, validation, and attack detection share it.
-              // (cap2 ends the ray either way, so skipping the emit keeps
-              // the walk identical.)
-              if (cap1 && cap2 && captureLimit < 2)
-                  break;
               TwoLegPath path;
               path.kind = TwoLegKind::HOOK;
               path.via = bend;
               path.to = to;
-              path.captures = (cap1 ? square_bb(bend) : Bitboard(0))
-                            | (cap2 ? square_bb(to) : Bitboard(0));
+              path.captures = cap2 ? square_bb(to) : Bitboard(0);
               path.transit = (firstTransit | secondTransit) & ~square_bb(to);
               if ((pos.board_bb(us, pt) & to) && visit(path))
                   return true;
               if (cap2 || atOrigin)
                   break;
           }
-          if (cap1)
-              break;
       }
   }
   return false;

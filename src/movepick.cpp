@@ -215,61 +215,11 @@ void MovePicker::score() {
       const Square gate = gate_history_square(mv);
       return gate != SQ_NONE ? (*gateHistory)[pos.side_to_move()][gate] : 0;
   };
-  auto points_capture_bonus = [&](Piece captured) {
-      if (!pos.points_counting())
-          return 0;
-      if (captured == NO_PIECE)
-          return 0;
-      int pts = pos.variant()->piecePoints[type_of(captured)];
-      int signedPts = 0;
-      switch (pos.points_rule_captures())
-      {
-          case POINTS_US:        signedPts =  pts; break;
-          case POINTS_THEM:      signedPts = -pts; break;
-          case POINTS_OWNER:     signedPts =  color_of(captured) == pos.side_to_move() ? pts : -pts; break;
-          case POINTS_NON_OWNER: signedPts =  color_of(captured) == pos.side_to_move() ? -pts : pts; break;
-          case POINTS_NONE:      signedPts = 0; break;
-      }
-      if (pos.points_goal() > 0)
-      {
-          if (pos.points_goal_value() < VALUE_ZERO)
-              signedPts = -signedPts;
-          else if (pos.points_goal_value() == VALUE_ZERO)
-              signedPts = 0;
-      }
-      return 20 * signedPts;
-  };
   auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
-      if (!is_two_leg(mv))
-      {
-          Piece captured = pos.captured_piece(mv);
-          Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(mv));
-          total = int(PieceValue[MG][victim]);
-          topType = type_of(victim);
-          points = points_capture_bonus(captured);
-          return;
-      }
-
-      total = 0;
-      topType = captured_type(pos, mv);
-      points = 0;
-      Bitboard caps = pos.capture_squares_unchecked(mv);
-      if (caps)
-      {
-          bool foundVictim = false;
-          while (caps)
-          {
-              Piece p = pos.piece_on(pop_lsb(caps));
-              if (p == NO_PIECE)
-                  continue;
-              foundVictim = true;
-              int v = int(PieceValue[MG][p]);
-              total += v;
-              points += points_capture_bonus(p);
-          }
-          if (foundVictim)
-              return;
-      }
+      Position::CaptureSummary summary = pos.capture_summary(mv);
+      total = summary.value;
+      topType = summary.highestType;
+      points = summary.points;
   };
   auto freeze_target_bonus = [&](Move mv) {
       if (!pos.potions_enabled() || !is_gating(mv))

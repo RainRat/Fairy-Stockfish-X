@@ -26,7 +26,7 @@
 #include "parser.h"
 #include "piece.h"
 #include "variant.h"
-#include "two_leg.h"
+#include "direction_pair.h"
 
 using std::string;
 
@@ -2236,18 +2236,24 @@ Variant* Variant::conclude() {
     }
 
     // Hook direction pairs are White-relative like two-step pairs; Black
-    // gets the 180-degree point reflection. Ranges and capture limits are
+    // gets the 180-degree point reflection. Ranges are
     // direction-independent and shared by both colors.
     hookPieceTypes = NO_PIECE_SET;
     for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
     {
         uint64_t mask = hookMoves[pt].directions.relative;
-        if (mask && hookMoves[pt].captureLimit >= 1)
+        if (mask)
         {
             hookPieceTypes |= piece_set(pt);
         }
         hookMoves[pt].directions.conclude();
     }
+
+    // Two-leg captures defeat single-victim SEE: force move-sensitive
+    // pruning so search consults the per-move check.
+    if ((twoStepPieceTypes || hookPieceTypes)
+        && seePruningPolicy == SeePruningPolicy::RELIABLE)
+        seePruningPolicy = SeePruningPolicy::MOVE_SENSITIVE;
 
     // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
     for (PieceSet ps = mutuallyImmuneTypes; ps; )

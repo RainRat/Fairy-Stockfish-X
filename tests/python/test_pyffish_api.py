@@ -361,12 +361,12 @@ class TestPublicAPI(unittest.TestCase):
         sf.load_variant_config(
             "[variantinfohook:chess]\n"
             "customPiece1 = h:0\n"
-            "hookMoves = h:R-sR:2\n"
+            "hookMoves = h:R-sR\n"
         )
         hook = json.loads(sf.variant_info("variantinfohook"))
         self.assertEqual(hook["movement"]["hookMoves"],
                          {"custom1": {"pairs": "N>E,N>W,S>E,S>W",
-                                      "firstRange": 0, "secondRange": 0, "captureLimit": 2}})
+                                      "firstRange": 0, "secondRange": 0}})
         self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["hookMoves"], {})
 
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
