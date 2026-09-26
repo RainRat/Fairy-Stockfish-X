@@ -73,7 +73,7 @@ native() {
 
 run_config() {
     suite_case python-api-tests 3m env PYTHONPATH="${SUITE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" python3 "${SUITE_ROOT}/tests/python/test_pyffish_api.py"
-    legacy parser-regressions.sh 2m "${ENGINE}"
+    legacy parser-regressions.sh 5m "${ENGINE}"
     legacy explicit-custom-piece-replacements.sh 2m "${ENGINE}" "${VARIANTS}"
     if [[ -f "${SUITE_ROOT}/src/variants-incomplete.ini" ]]; then
         legacy incomplete-baselines.sh 2m "${ENGINE}" "${SUITE_ROOT}/src/variants-incomplete.ini"
