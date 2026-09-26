@@ -1980,10 +1980,6 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
     }
     parse_attribute("lionMoveTypes", v->lionMoveTypes, v);
-    // Deprecated alias: parsed first so lionInsignificantPieces wins when both are present.
-    parse_attribute("insignificantPieces", v->lionInsignificantPieces, v);
-    if (config.find("insignificantPieces") != config.end() && DoCheck)
-        std::cerr << "insignificantPieces is deprecated; use lionInsignificantPieces." << std::endl;
     parse_attribute("lionInsignificantPieces", v->lionInsignificantPieces, v);
     parse_attribute("lionCapturingRule", v->lionCapturingRule);
     parse_attribute("lionOkazakiRule", v->lionOkazakiRule);
