@@ -316,7 +316,8 @@ struct StateInfoCopied {
   // enemy Lion. Empty unless the last move qualifies; read by
   // lion_capture_legal() instead of inspecting st->previous. Part of the
   // Zobrist key so identical boards with different trade restrictions hash
-  // differently. Cleared on FEN load (no previous move).
+  // differently. Serialized as the optional trailing " T:..." FEN field;
+  // absent on FEN load means no restriction.
   Bitboard lionTradeSquares = Bitboard(0);
   Bitboard edgeInsertLocks[COLOR_NB];
   Square castlingKingSquare[COLOR_NB];

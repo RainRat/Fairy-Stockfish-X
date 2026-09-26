@@ -2264,9 +2264,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   // Optional deferred-promotion field emitted by fen() (" D:sq,sq,...").
   // Only parsed for promotion-decline variants; absence means no deferred
-  // squares (backward compatible). Lion-trade restriction is intentionally
-  // not serialized: it describes the immediately preceding move, so a FEN
-  // load correctly starts with no restriction.
+  // squares (backward compatible).
   if (var->promotionDeclineRule)
   {
       ss >> std::ws;
@@ -2291,16 +2289,60 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
                   std::string sqSpec;
                   while (std::getline(squares, sqSpec, ','))
                   {
-                      Square sq = parse_fen_square(*this, sqSpec);
-                      if (!is_ok(sq) || !(board_bb() & sq))
+                      Square deferredSq = parse_fen_square(*this, sqSpec);
+                      if (!is_ok(deferredSq) || !(board_bb() & deferredSq))
                       {
                           deferredValid = false;
                           break;
                       }
-                      parsedDeferred |= square_bb(sq);
+                      parsedDeferred |= square_bb(deferredSq);
                   }
                   if (deferredValid)
                       st->promotionDeferred = parsedDeferred;
+                  else
+                      ss.setstate(std::ios::failbit);
+              }
+          }
+      }
+  }
+
+  // Optional Lion-trade field emitted by fen() (" T:sq,sq,..."). Only parsed
+  // for lion-capture variants; absence means no restriction (backward
+  // compatible, and the normal case for a fresh FEN with no preceding move).
+  if (var->lionCapturingRule)
+  {
+      ss >> std::ws;
+      if (ss.peek() == 'T')
+      {
+          char t = 0, colon = 0;
+          ss >> t;
+          if (t != 'T' || ss.peek() != ':')
+              ss.setstate(std::ios::failbit);
+          else
+          {
+              ss >> colon;
+              std::string tradeSpec;
+              ss >> tradeSpec;
+              if (tradeSpec.empty() || tradeSpec.front() == ',' || tradeSpec.back() == ',')
+                  ss.setstate(std::ios::failbit);
+              else
+              {
+                  Bitboard parsedTrade = Bitboard(0);
+                  bool tradeValid = true;
+                  std::istringstream squares(tradeSpec);
+                  std::string sqSpec;
+                  while (std::getline(squares, sqSpec, ','))
+                  {
+                      Square tradeSq = parse_fen_square(*this, sqSpec);
+                      if (!is_ok(tradeSq) || !(board_bb() & tradeSq))
+                      {
+                          tradeValid = false;
+                          break;
+                      }
+                      parsedTrade |= square_bb(tradeSq);
+                  }
+                  if (tradeValid)
+                      st->lionTradeSquares = parsedTrade;
                   else
                       ss.setstate(std::ios::failbit);
               }
@@ -3004,6 +3046,22 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       ss << " D:";
       bool first = true;
       for (Bitboard b = st->promotionDeferred; b; )
+      {
+          if (!first)
+              ss << ",";
+          first = false;
+          ss << UCI::square(*this, pop_lsb(b));
+      }
+  }
+
+  // Lion-trade restriction affects legality and is hashed, so it must survive
+  // a FEN round-trip just like deferred promotions. Emitted only when set;
+  // absence on load means no restriction.
+  if (var->lionCapturingRule && bool(st->lionTradeSquares))
+  {
+      ss << " T:";
+      bool first = true;
+      for (Bitboard b = st->lionTradeSquares; b; )
       {
           if (!first)
               ss << ",";
@@ -9970,10 +10028,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                             && bool(var->lionMoveTypes & piece_set(type_of(pc)));
       if (!moverIsLion && !dropMove && !passMove)
       {
-          auto addLionVictim = [&](const ReversiblePieceOnSquare& captured) {
-              if (captured && color_of(captured.piece.piece) == them
-                  && bool(var->lionMoveTypes & piece_set(type_of(captured.piece.piece))))
-                  newTrade |= square_bb(captured.square);
+          auto addLionVictim = [&](const ReversiblePieceOnSquare& victim) {
+              if (victim && color_of(victim.piece.piece) == them
+                  && bool(var->lionMoveTypes & piece_set(type_of(victim.piece.piece))))
+                  newTrade |= square_bb(victim.square);
           };
           addLionVictim(st->captured);
           addLionVictim(st->extraCaptured);
