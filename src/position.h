@@ -203,26 +203,42 @@ struct ReversiblePieceOnSquare {
 };
 
 struct PackedReversiblePiece {
+#if defined(VERY_LARGE_BOARDS)
   static_assert(PIECE_NB <= 256, "Packed reversible piece needs wider fields");
-
   uint32_t value = 0;
+#else
+  static_assert(PIECE_NB <= 128, "Packed reversible piece needs wider fields");
+  uint16_t value = 0;
+#endif
 
   void clear() { value = 0; }
 
   void set(Piece pc, bool isPromoted, Piece unpromotedPc = NO_PIECE) {
     assert(pc > NO_PIECE && pc < PIECE_NB);
     assert(unpromotedPc >= NO_PIECE && unpromotedPc < PIECE_NB);
-    value = uint32_t(pc)
-          | (uint32_t(unpromotedPc) << 8)
-          | (uint32_t(isPromoted) << 16);
+#if defined(VERY_LARGE_BOARDS)
+    value = uint32_t(pc) | (uint32_t(unpromotedPc) << 8) | (uint32_t(isPromoted) << 16);
+#else
+    value = uint16_t(pc) | (uint16_t(unpromotedPc) << 7) | (uint16_t(isPromoted) << 14);
+#endif
   }
 
+#if defined(VERY_LARGE_BOARDS)
   Piece piece() const { return Piece(value & 0xff); }
   Piece unpromoted() const { return Piece((value >> 8) & 0xff); }
   bool promoted() const { return bool(value & (1U << 16)); }
+#else
+  Piece piece() const { return Piece(value & 0x7f); }
+  Piece unpromoted() const { return Piece((value >> 7) & 0x7f); }
+  bool promoted() const { return bool(value & (1U << 14)); }
+#endif
   explicit operator bool() const { return value != 0; }
 };
+#if defined(VERY_LARGE_BOARDS)
 static_assert(sizeof(PackedReversiblePiece) == sizeof(uint32_t));
+#else
+static_assert(sizeof(PackedReversiblePiece) == sizeof(uint16_t));
+#endif
 
 struct InPlaceTransformState {
   ReversiblePieceOnSquare morphedFrom;
@@ -5914,9 +5930,9 @@ inline Position::PromotionStatus Position::move_promotion_status(Piece mover, Sq
       // Chu/Dai: after declining on entry, a capture starting in-zone
       // re-offers promotion even when the move leaves the zone.
       bool deferredCapture = inFrom && isCapture && bool(st->promotionDeferred & from);
-      // Pawns reaching the last rank get a final non-capture opportunity.
+      // Configured piece types can get a final non-capture opportunity.
       bool lastRankRetry = !isCapture && bool(st->promotionDeferred & from)
-                        && (var->promotionPawnTypes.get(us) & piece_set(pt))
+                        && (var->promotionDeclineFinalRankRetryTypes & piece_set(pt))
                         && ((us == WHITE && rank_of(to) == max_rank())
                             || (us == BLACK && rank_of(to) == RANK_1));
       if (!entered && !deferredCapture && !lastRankRetry)

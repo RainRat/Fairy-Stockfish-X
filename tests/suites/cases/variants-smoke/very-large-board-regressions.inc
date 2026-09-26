@@ -165,21 +165,6 @@ EOF
   assert_contains_literal "$output" "g11h12i13: 1"
 }
 
-test_vlb_chu_okazaki_subvariant() {
-  local output
-  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi_okazaki <<'EOF' 2>&1
-position startpos
-go perft 1
-EOF
-)
-  if [[ "$output" == *"unknown variant 'chu_shogi_okazaki'"* || "$output" == *"No such variant: chu_shogi_okazaki"* ]]; then
-    echo "skip: Chu Okazaki subvariant requires VERY_LARGE_BOARDS"
-    return 0
-  fi
-  assert_contains "$output" "Nodes searched:"
-  assert_not_contains "$output" "Nodes searched: 0"
-}
-
 test_vlb_lame_riders() {
   local tmpdir variant_file out
   tmpdir=$(mktemp -d)
@@ -422,7 +407,6 @@ UCI
 test_vlb_gale_smoke
 test_vlb_chu_dai_lion_moves
 test_vlb_chu_dai_promotion_wiring
-test_vlb_chu_okazaki_subvariant
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen

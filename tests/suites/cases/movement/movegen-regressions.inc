@@ -143,6 +143,7 @@ doubleStep = false
 promotionRegionWhite = *7 *8
 promotionRegionBlack = *2 *1
 promotionDeclineRule = true
+promotionDeclineFinalRankRetryTypes = p
 mandatoryPawnPromotion = false
 mandatoryPiecePromotion = false
 castling = false

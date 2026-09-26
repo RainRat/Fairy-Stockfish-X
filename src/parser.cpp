@@ -1783,6 +1783,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("startFen", v->startFen);
     parse_color_setting("promotionRegion", v->promotionRegion);
     parse_attribute("promotionDeclineRule", v->promotionDeclineRule);
+    parse_attribute("promotionDeclineFinalRankRetryTypes", v->promotionDeclineFinalRankRetryTypes, v);
     parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
     // Take the first promotionPawnTypes as the main promotionPawnType
     if (!parse_color_setting_first_piece("promotionPawnTypes", v->mainPromotionPawnType, v)) return false;
@@ -1982,7 +1983,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("lionMoveTypes", v->lionMoveTypes, v);
     parse_attribute("lionInsignificantPieces", v->lionInsignificantPieces, v);
     parse_attribute("lionCapturingRule", v->lionCapturingRule);
-    parse_attribute("lionOkazakiRule", v->lionOkazakiRule);
+    parse_attribute("lionCounterstrikeIfUnprotected", v->lionCounterstrikeIfUnprotected);
     auto it_hook = config.find("hookMoves");
     if (it_hook != config.end())
     {

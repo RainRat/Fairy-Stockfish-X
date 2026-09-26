@@ -162,6 +162,7 @@ struct Variant {
   Bitboard mobilityRegion[COLOR_NB][PIECE_TYPE_NB] = {};
   ColorSetting<PieceTypeBitboardGroup> promotionRegion = ColorSetting<PieceTypeBitboardGroup>(Rank8BB, Rank1BB);
   bool promotionDeclineRule = false;
+  PieceSet promotionDeclineFinalRankRetryTypes = NO_PIECE_SET;
   ColorSetting<Bitboard> mandatoryPromotionRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
   ColorSetting<PieceSet> promotionPawnTypes = ColorSetting<PieceSet>(piece_set(PAWN));
@@ -268,9 +269,8 @@ struct Variant {
   PieceSet lionMoveTypes = NO_PIECE_SET;
   PieceSet lionInsignificantPieces = NO_PIECE_SET;
   bool lionCapturingRule = false;
-  // Okazaki rule: a non-lion counter-strike is allowed when the target
-  // lion is unprotected (has no defender).
-  bool lionOkazakiRule = false;
+  // Allow a non-Lion counter-strike when the target Lion is unprotected.
+  bool lionCounterstrikeIfUnprotected = false;
   // Hook movers: two sliding legs with a bend (from -> bend -> to).
   // Bent-path only: straight movement belongs to the ordinary Betza rider.
   // At most one capture per move; a hook must stop on capture.

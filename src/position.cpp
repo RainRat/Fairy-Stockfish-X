@@ -5702,10 +5702,10 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
   {
       if (lionCaptures & ~st->lionTradeSquares)
       {
-          bool okazakiAllowed = false;
-          if (var->lionOkazakiRule)
+          bool counterstrikeAllowed = false;
+          if (var->lionCounterstrikeIfUnprotected)
           {
-              okazakiAllowed = true;
+              counterstrikeAllowed = true;
               Bitboard targets = lionCaptures & ~st->lionTradeSquares;
               while (targets)
               {
@@ -5713,12 +5713,12 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
                   // Unprotected = no defender of the target's owner.
                   if (attackers_to(targetSq, pieces(), them))
                   {
-                      okazakiAllowed = false;
+                      counterstrikeAllowed = false;
                       break;
                   }
               }
           }
-          if (!okazakiAllowed)
+          if (!counterstrikeAllowed)
               return false;
       }
   }

@@ -387,6 +387,7 @@ std::string variant_info_json(const std::string& name) {
     field(promotion, b, "requireInHand", boolean(v.promotionRequireInHand));
     field(promotion, b, "consumeInHand", boolean(v.promotionConsumeInHand));
     field(promotion, b, "declineRule", boolean(v.promotionDeclineRule));
+    field(promotion, b, "declineFinalRankRetryTypes", piece_set_json(v.promotionDeclineFinalRankRetryTypes));
     promotion << '}'; field(out, first, "promotion", promotion.str());
 
     std::ostringstream capture; capture << '{'; b = true;
