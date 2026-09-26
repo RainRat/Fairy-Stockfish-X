@@ -715,6 +715,9 @@ string UCI::move(const Position& pos, Move m) {
 
   if (is_two_leg(m))
   {
+      // Canonical three-square spelling from+via+to. Input is canonical-only:
+      // to_move() matches against generated legal moves, while pseudo_legal()
+      // may accept alias routes that never appear here.
       std::string s = UCI::square(pos, from) + UCI::square(pos, via_sq(m)) + UCI::square(pos, to);
       if (is_any_promotion(m))
           s += "+";

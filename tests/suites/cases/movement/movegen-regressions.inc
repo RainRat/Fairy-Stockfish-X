@@ -146,6 +146,8 @@ castling = false
 doubleStep = false
 
 [test-lion-blocked-jump:test-lion]
+# Both knight-route vias (e5, f5) are friendly L: proves the direct N jump
+# is independent of the two-step routes, which must be suppressed here.
 startFen = 8/8/8/4LL2/4L3/8/8/8 w - - 0 1
 
 # Horned Falcon: Bishop (B), sideways/backward slides (sRbR), forward jump 2
@@ -392,6 +394,10 @@ out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion-blocked-jump \
   "position startpos
 go perft 1")
 assert_contains "$out" "^e4f6: 1$"
+# Both knight-route vias (e5, f5) are friendly-occupied, so the two-step
+# spellings are blocked while the direct N jump still reaches f6.
+assert_not_contains "$out" "^e4e5f6:"
+assert_not_contains "$out" "^e4f5f6:"
 
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
   "position startpos moves e4d5e4

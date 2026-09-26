@@ -4624,7 +4624,11 @@ SimulatedMoveInfo Position::simulated_move_info(Move m, bool withEffects) const 
   else if (is_two_leg(m))
   {
       detail::TwoLegPath captures = resolve_two_leg_move(m);
-      extraCapture = captures.captures & ~square_bb(info.captureSquare);
+      // A quiet two-leg move has no primary capture square; keep all
+      // (here: no) victims as extra captures instead of masking with SQ_NONE.
+      extraCapture = captures.captures;
+      if (is_ok(info.captureSquare))
+          extraCapture &= ~square_bb(info.captureSquare);
   }
   info.rifle = rifle_capture(m) && isCapture && !info.castling;
   info.stationary = info.rifle;

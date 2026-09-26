@@ -80,6 +80,70 @@ EOF
   assert_contains_literal "$output" "f5g6h7: 1"
 }
 
+test_vlb_chu_dai_promotion_wiring() {
+  local output
+
+  # Production promotion mapping end to end: the mover promotes, and the
+  # resulting Falcon/Eagle immediately has its production two-step moves.
+  # (Quiet N>N is canonically suppressed where an ordinary slide reaches the
+  # same endpoint, so igui and double captures pin the wiring instead.)
+
+  # Chu Dragon Horse promotes to Horned Falcon (igui N>S).
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen K11/12/12/12/5D'6/12/12/12/12/12/12/11k w - - 0 1 moves f8e9+ l1k1
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu/Dai promotion wiring requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+  assert_contains_literal "$output" "e9e10e9: 1"
+
+  # Chu Drunk Knight promotes to Soaring Eagle (double capture NE>NE).
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen K11/8p3/7p4/12/5E'6/12/12/12/12/12/12/11k w - - 0 1 moves f8g9+ l1k1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "g9h10i11: 1"
+
+  # Dai Dragon Horse promotes to Horned Falcon (igui N>S).
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen K14/15/15/15/15/5D'9/15/15/15/15/15/15/15/15/k14 w - - 0 1 moves f10e11+ a1a2
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
+    echo "skip: Dai promotion wiring requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+  assert_contains_literal "$output" "e11e12e11: 1"
+
+  # Dai Drunk Knight promotes to Soaring Eagle (double capture NE>NE).
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen K14/15/8p6/7p7/15/5E'9/15/15/15/15/15/15/15/15/k14 w - - 0 1 moves f10g11+ a1a2
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "g11h12i13: 1"
+}
+
+test_vlb_chu_okazaki_subvariant() {
+  local output
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi_okazaki <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi_okazaki'"* || "$output" == *"No such variant: chu_shogi_okazaki"* ]]; then
+    echo "skip: Chu Okazaki subvariant requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+  assert_contains "$output" "Nodes searched:"
+  assert_not_contains "$output" "Nodes searched: 0"
+}
+
 test_vlb_lame_riders() {
   local tmpdir variant_file out
   tmpdir=$(mktemp -d)
@@ -315,6 +379,8 @@ UCI
 
 test_vlb_gale_smoke
 test_vlb_chu_dai_lion_moves
+test_vlb_chu_dai_promotion_wiring
+test_vlb_chu_okazaki_subvariant
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen
