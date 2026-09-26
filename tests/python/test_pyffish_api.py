@@ -517,6 +517,31 @@ class TestPublicAPI(unittest.TestCase):
         reloaded = sorted(sf.legal_moves("promotion-decline-fen", mid, []))
         self.assertEqual(reloaded, live)
 
+    def test_lion_trade_fen_roundtrip(self):
+        sf.load_variant_config(
+            "[lion-trade-fen:chess]\n"
+            "maxFile = h\n"
+            "customPiece1 = l:KAD\n"
+            "king = -\n"
+            "commoner = k\n"
+            "checking = false\n"
+            "castling = false\n"
+            "twoStepMoves = l:*\n"
+            "lionMoveTypes = l\n"
+            "lionCapturingRule = true\n"
+            "lionInsignificantPieces = p\n"
+        )
+        fen = "8/8/8/8/4l3/8/1L6/1r2R3 b - - 0 1"
+        moves = ["b1b2"]
+        live = sorted(sf.legal_moves("lion-trade-fen", fen, moves))
+        # b1xL captured a Lion: e1e4 (non-Lion takes a different Lion) is barred.
+        self.assertNotIn("e1e4", live)
+        mid = sf.get_fen("lion-trade-fen", fen, moves)
+        self.assertIn(" T:", mid)
+        reloaded = sorted(sf.legal_moves("lion-trade-fen", mid, []))
+        self.assertEqual(reloaded, live)
+        self.assertNotIn("e1e4", reloaded)
+
     def test_validation_and_fog_are_binding_values(self):
         fen = sf.start_fen("chess")
         self.assertEqual(sf.validate_fen(fen, "chess"), 1)
