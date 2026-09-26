@@ -960,8 +960,47 @@ namespace {
       return make_square(File(spec[0] - 'a'), Rank(rankNumber - 1));
   }
 
-  inline bool parse_potion_cooldowns(const std::string& content, std::array<int, 4>& parsed) {
-      // Order: white-freeze, white-jump, black-freeze, black-jump.
+  inline bool parse_optional_square_list(const Position& pos, std::istringstream& ss,
+                                             char tag, Bitboard& out) {
+      // Optional trailing FEN field (" D:sq,sq,..." / " T:sq,sq,..."). Absence
+      // means no squares (backward compatible). Returns false and sets failbit
+      // on malformed syntax; squares must be on-board occupied squares.
+      ss >> std::ws;
+      if (ss.peek() != tag)
+          return true;
+      char seen = 0, colon = 0;
+      ss >> seen;
+      if (seen != tag || ss.peek() != ':')
+      {
+          ss.setstate(std::ios::failbit);
+          return false;
+      }
+      ss >> colon;
+      std::string spec;
+      ss >> spec;
+      if (spec.empty() || spec.front() == ',' || spec.back() == ',')
+      {
+          ss.setstate(std::ios::failbit);
+          return false;
+      }
+      Bitboard parsed = Bitboard(0);
+      std::istringstream squares(spec);
+      std::string sqSpec;
+      while (std::getline(squares, sqSpec, ','))
+      {
+          Square sq = parse_fen_square(pos, sqSpec);
+          if (!is_ok(sq) || !(pos.board_bb() & sq))
+          {
+              ss.setstate(std::ios::failbit);
+              return false;
+          }
+          parsed |= square_bb(sq);
+      }
+      out = parsed;
+      return true;
+  }
+
+  inline bool parse_potion_cooldowns(const std::string& content, std::array<int, 4>& parsed) {      // Order: white-freeze, white-jump, black-freeze, black-jump.
       parsed = {0, 0, 0, 0};
 
       std::istringstream ss(content);
@@ -2266,89 +2305,13 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   // Only parsed for promotion-decline variants; absence means no deferred
   // squares (backward compatible).
   if (var->promotionDeclineRule)
-  {
-      ss >> std::ws;
-      if (ss.peek() == 'D')
-      {
-          char d = 0, colon = 0;
-          ss >> d;
-          if (d != 'D' || ss.peek() != ':')
-              ss.setstate(std::ios::failbit);
-          else
-          {
-              ss >> colon;
-              std::string deferredSpec;
-              ss >> deferredSpec;
-              if (deferredSpec.empty() || deferredSpec.front() == ',' || deferredSpec.back() == ',')
-                  ss.setstate(std::ios::failbit);
-              else
-              {
-                  Bitboard parsedDeferred = Bitboard(0);
-                  bool deferredValid = true;
-                  std::istringstream squares(deferredSpec);
-                  std::string sqSpec;
-                  while (std::getline(squares, sqSpec, ','))
-                  {
-                      Square deferredSq = parse_fen_square(*this, sqSpec);
-                      if (!is_ok(deferredSq) || !(board_bb() & deferredSq))
-                      {
-                          deferredValid = false;
-                          break;
-                      }
-                      parsedDeferred |= square_bb(deferredSq);
-                  }
-                  if (deferredValid)
-                      st->promotionDeferred = parsedDeferred;
-                  else
-                      ss.setstate(std::ios::failbit);
-              }
-          }
-      }
-  }
+      parse_optional_square_list(*this, ss, 'D', st->promotionDeferred);
 
   // Optional Lion-trade field emitted by fen() (" T:sq,sq,..."). Only parsed
   // for lion-capture variants; absence means no restriction (backward
   // compatible, and the normal case for a fresh FEN with no preceding move).
   if (var->lionCapturingRule)
-  {
-      ss >> std::ws;
-      if (ss.peek() == 'T')
-      {
-          char t = 0, colon = 0;
-          ss >> t;
-          if (t != 'T' || ss.peek() != ':')
-              ss.setstate(std::ios::failbit);
-          else
-          {
-              ss >> colon;
-              std::string tradeSpec;
-              ss >> tradeSpec;
-              if (tradeSpec.empty() || tradeSpec.front() == ',' || tradeSpec.back() == ',')
-                  ss.setstate(std::ios::failbit);
-              else
-              {
-                  Bitboard parsedTrade = Bitboard(0);
-                  bool tradeValid = true;
-                  std::istringstream squares(tradeSpec);
-                  std::string sqSpec;
-                  while (std::getline(squares, sqSpec, ','))
-                  {
-                      Square tradeSq = parse_fen_square(*this, sqSpec);
-                      if (!is_ok(tradeSq) || !(board_bb() & tradeSq))
-                      {
-                          tradeValid = false;
-                          break;
-                      }
-                      parsedTrade |= square_bb(tradeSq);
-                  }
-                  if (tradeValid)
-                      st->lionTradeSquares = parsedTrade;
-                  else
-                      ss.setstate(std::ios::failbit);
-              }
-          }
-      }
-  }
+      parse_optional_square_list(*this, ss, 'T', st->lionTradeSquares);
 
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
@@ -3037,38 +3000,26 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       }
   }
 
-  // Deferred-promotion state cannot be reconstructed from the board alone
-  // (a piece that declined promotion on entry differs from one that just
-  // arrived). Serialize it as an optional trailing field so FEN round-trips
-  // preserve the legal promotion set. Absent field means no deferred squares.
-  if (var->promotionDeclineRule && bool(st->promotionDeferred))
-  {
-      ss << " D:";
+  // Deferred-promotion and Lion-trade state cannot be reconstructed from the
+  // board alone, so serialize each as an optional trailing field (" D:...",
+  // " T:...") when set. Absence on load means no squares/restriction.
+  auto appendSquareList = [&](char tag, Bitboard squares) {
+      if (!bool(squares))
+          return;
+      ss << " " << tag << ":";
       bool first = true;
-      for (Bitboard b = st->promotionDeferred; b; )
+      for (Bitboard b = squares; b; )
       {
           if (!first)
               ss << ",";
           first = false;
           ss << UCI::square(*this, pop_lsb(b));
       }
-  }
-
-  // Lion-trade restriction affects legality and is hashed, so it must survive
-  // a FEN round-trip just like deferred promotions. Emitted only when set;
-  // absence on load means no restriction.
-  if (var->lionCapturingRule && bool(st->lionTradeSquares))
-  {
-      ss << " T:";
-      bool first = true;
-      for (Bitboard b = st->lionTradeSquares; b; )
-      {
-          if (!first)
-              ss << ",";
-          first = false;
-          ss << UCI::square(*this, pop_lsb(b));
-      }
-  }
+  };
+  if (var->promotionDeclineRule)
+      appendSquareList('D', st->promotionDeferred);
+  if (var->lionCapturingRule)
+      appendSquareList('T', st->lionTradeSquares);
 
   return ss.str();
 }

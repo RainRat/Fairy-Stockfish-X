@@ -5895,7 +5895,10 @@ inline Bitboard Position::capture_squares_unchecked(Move m) const {
   const Bitboard enemy = pieces(~sideToMove);
   Bitboard captures = 0;
 
-  if (via != from && (enemy & via))
+  // Hook paths never capture on the bend (a first-leg capture blocks the
+  // turn); only two-step paths can capture via. Checking the move kind
+  // keeps recapture matching and ordering precise for generated moves.
+  if (!is_hook(m) && via != from && (enemy & via))
       captures |= square_bb(via);
   if (to != from && to != via && (enemy & to))
       captures |= square_bb(to);

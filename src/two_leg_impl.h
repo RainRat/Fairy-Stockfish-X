@@ -52,7 +52,7 @@ struct TwoLegWalker {
       Square to;
       if (!step_destination(pos, via, KingDirections[d2], to))
           continue;
-      if (viaTarget != SQ_NONE && to != target)
+      if (target != SQ_NONE && to != target)
           continue;
       // Piece mobility constrains the completed move's endpoint; the via
       // square remains a transit/capture square.
