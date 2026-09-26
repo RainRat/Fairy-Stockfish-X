@@ -31,6 +31,14 @@ promotionRegionWhite = *1 *2 *3
 [chu-multi-test:chu-test]
 customPiece2 = h:K
 twoStepMoves = l:* h:N>N
+
+# Cub mover (king steps only, no 2-square leaps) so the straight double
+# capture cannot hide behind the direct-leap dedup or the quiet-via route
+# dedup: the via pawn capture gives b3c3d3 its own route bucket.
+[chu-xray-test:chu-test]
+customPiece2 = m:K
+twoStepMoves = l:* m:*
+lionMoveTypes = l m
 INI
 
 out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-test <<'UCI'
@@ -119,3 +127,22 @@ go perft 1
 UCI
 )
 assert_not_contains "${out}" '^a3c3: 1$'
+
+# Hidden/x-ray protector: the White cub on b3 blocks the Black rook a3 from
+# the Black Lion d3. The cub takes a pawn on c3 then the Lion (b3c3d3); after
+# b3 vacates, the rook x-rays d3, so the capture is illegal even though d3
+# looks undefended before the move.
+out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-xray-test <<'UCI'
+position fen 8/8/8/8/8/rMpl4/8/8 w - - 0 1
+go perft 1
+UCI
+)
+assert_not_contains "${out}" '^b3c3d3: 1$'
+
+# Control: without the rook the same distant Lion capture is legal.
+out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-xray-test <<'UCI'
+position fen 8/8/8/8/8/1Mpl4/8/8 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "${out}" '^b3c3d3: 1$'

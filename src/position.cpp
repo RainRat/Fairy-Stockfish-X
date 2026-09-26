@@ -890,6 +890,7 @@ namespace Zobrist {
   Key psq[PIECE_NB][SQUARE_NB];
   Key enpassant[SQUARE_NB];
   Key promotionDeferred[SQUARE_NB];
+  Key lionTrade[SQUARE_NB];
   Key castling[CASTLING_RIGHT_NB];
   Key side, noPawns;
   Key inHand[PIECE_NB][SQUARE_NB];
@@ -1526,6 +1527,9 @@ void Position::init() {
 
   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
       Zobrist::promotionDeferred[s] = rng.rand<Key>();
+
+  for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+      Zobrist::lionTrade[s] = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -2258,6 +2262,52 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
       }
   }
 
+  // Optional deferred-promotion field emitted by fen() (" D:sq,sq,...").
+  // Only parsed for promotion-decline variants; absence means no deferred
+  // squares (backward compatible). Lion-trade restriction is intentionally
+  // not serialized: it describes the immediately preceding move, so a FEN
+  // load correctly starts with no restriction.
+  if (var->promotionDeclineRule)
+  {
+      ss >> std::ws;
+      if (ss.peek() == 'D')
+      {
+          char d = 0, colon = 0;
+          ss >> d;
+          if (d != 'D' || ss.peek() != ':')
+              ss.setstate(std::ios::failbit);
+          else
+          {
+              ss >> colon;
+              std::string deferredSpec;
+              ss >> deferredSpec;
+              if (deferredSpec.empty() || deferredSpec.front() == ',' || deferredSpec.back() == ',')
+                  ss.setstate(std::ios::failbit);
+              else
+              {
+                  Bitboard parsedDeferred = Bitboard(0);
+                  bool deferredValid = true;
+                  std::istringstream squares(deferredSpec);
+                  std::string sqSpec;
+                  while (std::getline(squares, sqSpec, ','))
+                  {
+                      Square sq = parse_fen_square(*this, sqSpec);
+                      if (!is_ok(sq) || !(board_bb() & sq))
+                      {
+                          deferredValid = false;
+                          break;
+                      }
+                      parsedDeferred |= square_bb(sq);
+                  }
+                  if (deferredValid)
+                      st->promotionDeferred = parsedDeferred;
+                  else
+                      ss.setstate(std::ios::failbit);
+              }
+          }
+      }
+  }
+
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
   thisThread = th;
@@ -2518,6 +2568,12 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   if (edge_insert_opponent_ejection_lock())
       for (Color c : {WHITE, BLACK})
           xor_edge_insert_locks(si->key, c, si->edgeInsertLocks[c]);
+
+  for (Bitboard b = si->promotionDeferred; b; )
+      si->key ^= Zobrist::promotionDeferred[pop_lsb(b)];
+
+  for (Bitboard b = si->lionTradeSquares; b; )
+      si->key ^= Zobrist::lionTrade[pop_lsb(b)];
 
   si->pieceStateKey = compute_piece_state_key();
   si->key ^= si->pieceStateKey;
@@ -2936,6 +2992,23 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           else
               ss << "-";
           ss << " <" << wf << " " << wj << " " << bf << " " << bj << ">";
+      }
+  }
+
+  // Deferred-promotion state cannot be reconstructed from the board alone
+  // (a piece that declined promotion on entry differs from one that just
+  // arrived). Serialize it as an optional trailing field so FEN round-trips
+  // preserve the legal promotion set. Absent field means no deferred squares.
+  if (var->promotionDeclineRule && bool(st->promotionDeferred))
+  {
+      ss << " D:";
+      bool first = true;
+      for (Bitboard b = st->promotionDeferred; b; )
+      {
+          if (!first)
+              ss << ",";
+          first = false;
+          ss << UCI::square(*this, pop_lsb(b));
       }
   }
 
@@ -5507,8 +5580,7 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
   if (!var->lionCapturingRule || is_drop_move(m) || is_pass(m) || !isCapture)
       return true;
 
-  Color us = sideToMove;
-  Color them = ~us;
+  Color them = ~sideToMove;
   Square from = from_sq(m);
   Piece mover = piece_on(from);
   const bool movingIsLion = mover != NO_PIECE
@@ -5527,6 +5599,11 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
   if (!lionCaptures)
       return true;
 
+  // All capture squares of this move, for post-move occupancy. For ordinary
+  // moves this is the single victim square; for two-leg moves both legs.
+  const Bitboard allCaptures = is_two_leg(m) ? twoLegInfo.captures : capture_squares(m);
+  const Square to = to_sq(m);
+
   if (movingIsLion)
   {
       Bitboard targets = lionCaptures;
@@ -5538,57 +5615,53 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
           if (distance <= 1)
               continue;
 
-          Bitboard occupiedWithoutLion = pieces() ^ square_bb(victimSq);
           bool significantOtherCapture = is_two_leg(m)
                                       && victimSq == twoLegInfo.to
                                       && twoLegInfo.captures_via()
                                       && !(var->lionInsignificantPieces
                                            & piece_set(type_of(piece_on(twoLegInfo.via))));
-          if (attackers_to(victimSq, occupiedWithoutLion, them) && !significantOtherCapture)
+          // Protection holds if the victim is defended either before the
+          // capture (victim removed) or after it (mover vacated, victims
+          // removed, mover placed). The after-state matters when the moving
+          // Lion was shielding the destination square: e.g. White Lion b3,
+          // Black rook a3, Black Lion d3 -- b3c3d3 vacates b3 and uncovers
+          // the rook's x-ray on d3, so the capture is illegal.
+          Bitboard before = pieces() & ~square_bb(victimSq);
+          Bitboard after = pieces() & ~square_bb(from) & ~allCaptures;
+          if (is_ok(to))
+              after |= square_bb(to);
+          const bool protectedBefore = bool(attackers_to(victimSq, before, them));
+          const bool protectedAfter = bool(attackers_to(victimSq, after, them));
+          if ((protectedBefore || protectedAfter) && !significantOtherCapture)
               return false;
       }
   }
 
-  if (!movingIsLion && st->previous)
+  // Immediate Lion-trading restriction, read from current state (set by
+  // do_move() and hashed into the key): after a non-Lion captures an enemy
+  // Lion, a non-Lion retaliation on a different Lion square is illegal.
+  if (!movingIsLion && bool(st->lionTradeSquares))
   {
-      Bitboard previousLionCaptures = 0;
-      auto addPreviousLionCapture = [&](const ReversiblePieceOnSquare& captured) {
-          if (captured && color_of(captured.piece.piece) == us
-              && (var->lionMoveTypes & piece_set(type_of(captured.piece.piece))))
-              previousLionCaptures |= square_bb(captured.square);
-      };
-      addPreviousLionCapture(st->captured);
-      addPreviousLionCapture(st->extraCaptured);
-      Move previousMove = st->move;
-      if (previousLionCaptures && is_ok(previousMove))
+      if (lionCaptures & ~st->lionTradeSquares)
       {
-          Piece previousMover = st->promotionPawn != NO_PIECE
-                              ? st->promotionPawn : piece_on(to_sq(previousMove));
-          bool previousMoverWasLion = previousMover != NO_PIECE
-                                    && (var->lionMoveTypes
-                                        & piece_set(type_of(previousMover)));
-          // Okazaki rule: retaliation is allowed when the target lion is unprotected.
-          if (!previousMoverWasLion && (lionCaptures & ~previousLionCaptures))
+          bool okazakiAllowed = false;
+          if (var->lionOkazakiRule)
           {
-              bool okazakiAllowed = false;
-              if (var->lionOkazakiRule)
+              okazakiAllowed = true;
+              Bitboard targets = lionCaptures & ~st->lionTradeSquares;
+              while (targets)
               {
-                  okazakiAllowed = true;
-                  Bitboard targets = lionCaptures & ~previousLionCaptures;
-                  while (targets)
+                  Square targetSq = pop_lsb(targets);
+                  // Unprotected = no defender of the target's owner.
+                  if (attackers_to(targetSq, pieces(), them))
                   {
-                      Square targetSq = pop_lsb(targets);
-                      // Unprotected = no defender of the target's owner.
-                      if (attackers_to(targetSq, pieces(), them))
-                      {
-                          okazakiAllowed = false;
-                          break;
-                      }
+                      okazakiAllowed = false;
+                      break;
                   }
               }
-              if (!okazakiAllowed)
-                  return false;
           }
+          if (!okazakiAllowed)
+              return false;
       }
   }
 
@@ -5801,6 +5874,14 @@ bool Position::legal(Move m) const {
       && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
   if (is_two_leg_promotion(m)
+      && !move_promotion_status(moverPiece, from, to, isCapture).allowed)
+      return false;
+  // Ordinary shogi-style promotions go through the same shared eligibility
+  // function as two-leg promotions, so hand-constructed/TT moves cannot
+  // bypass the decline rule (entry, deferred capture, last-rank retry).
+  // Generation has a fast-path specialization of this rule in movegen.cpp;
+  // legal() is authoritative.
+  if (!is_two_leg(m) && type_of(m) == PIECE_PROMOTION && !dropMove && !passMove
       && !move_promotion_status(moverPiece, from, to, isCapture).allowed)
       return false;
   if (is_two_leg(m) && isCapture)
@@ -9877,6 +9958,39 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->promotionDeferred = deferred;
   }
 
+  // Lion-trade restriction: squares on which this move (a non-Lion move)
+  // captured an enemy Lion. Set here in do_move() so legality consumes
+  // current state and the restriction is part of the Zobrist key.
+  // (The copied-over previous value is replaced, not accumulated.)
+  if (var->lionCapturingRule)
+  {
+      Bitboard oldTrade = st->previous->lionTradeSquares;
+      Bitboard newTrade = Bitboard(0);
+      const bool moverIsLion = pc != NO_PIECE
+                            && bool(var->lionMoveTypes & piece_set(type_of(pc)));
+      if (!moverIsLion && !dropMove && !passMove)
+      {
+          auto addLionVictim = [&](const ReversiblePieceOnSquare& captured) {
+              if (captured && color_of(captured.piece.piece) == them
+                  && bool(var->lionMoveTypes & piece_set(type_of(captured.piece.piece))))
+                  newTrade |= square_bb(captured.square);
+          };
+          addLionVictim(st->captured);
+          addLionVictim(st->extraCaptured);
+      }
+      Bitboard changedTrade = oldTrade ^ newTrade;
+      while (changedTrade)
+          k ^= Zobrist::lionTrade[pop_lsb(changedTrade)];
+      st->lionTradeSquares = newTrade;
+  }
+  else if (bool(st->lionTradeSquares))
+  {
+      Bitboard oldTrade = st->lionTradeSquares;
+      while (oldTrade)
+          k ^= Zobrist::lionTrade[pop_lsb(oldTrade)];
+      st->lionTradeSquares = Bitboard(0);
+  }
+
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
@@ -10568,6 +10682,15 @@ void Position::do_null_move(StateInfo& newSt) {
   while (st->epSquares)
       st->key ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
+  // A null move is not a Lion capture, so any one-ply trade restriction expires.
+  if (bool(st->lionTradeSquares))
+  {
+      Bitboard oldTrade = st->lionTradeSquares;
+      while (oldTrade)
+          st->key ^= Zobrist::lionTrade[pop_lsb(oldTrade)];
+      st->lionTradeSquares = Bitboard(0);
+  }
+
   st->key ^= Zobrist::side;
   st->boardKey = st->key ^ st->reserveKey;
   prefetch(TT.first_entry(key()));
@@ -11100,10 +11223,17 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // Some variants (e.g. Xiangqi/Janggi) use king_type() as movement semantics
   // while the actual royal piece on board remains KING, so avoid treating
   // non-royal king_type captures (e.g. advisors) as immediate game end.
-  if (st->captured.piece.piece != NO_PIECE)
+  // Two-leg moves can capture on the bend (st->extraCaptured) as well as the
+  // destination (st->captured): a physical royal on either victim square ends
+  // the game, e.g. an igui (from -> king -> from) or hit-and-run royal capture.
+  for (int victimIdx = 0; victimIdx < 2; ++victimIdx)
   {
-      Color capturedColor = color_of(st->captured.piece.piece);
-      PieceType capturedType = type_of(st->captured.piece.piece);
+      const ReversiblePieceOnSquare& victim =
+          victimIdx == 0 ? st->captured : st->extraCaptured;
+      if (victim.piece.piece == NO_PIECE)
+          continue;
+      Color capturedColor = color_of(victim.piece.piece);
+      PieceType capturedType = type_of(victim.piece.piece);
       // In multi-royal capture variants a physical king is only one of the
       // remaining royal candidates. Let the pseudo-royal loss rule decide
       // when the last candidate has been removed.
