@@ -215,11 +215,13 @@ void MovePicker::score() {
       const Square gate = gate_history_square(mv);
       return gate != SQ_NONE ? (*gateHistory)[pos.side_to_move()][gate] : 0;
   };
+  // Ordering weight for variant points lives here in MovePicker, not in
+  // Position::capture_summary (which reports raw signed points).
   auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
       Position::CaptureSummary summary = pos.capture_summary(mv);
       total = summary.value;
       topType = summary.highestType;
-      points = summary.points;
+      points = 20 * summary.points;
   };
   auto freeze_target_bonus = [&](Move mv) {
       if (!pos.potions_enabled() || !is_gating(mv))

@@ -457,6 +457,66 @@ class TestPublicAPI(unittest.TestCase):
             "promotion-decline", fen, ["a6a7", "h8g8", "a7a6", "g8h8"])
         self.assertIn("a6a7+", after_leaving_and_reentering)
 
+    def test_lion_hidden_protector_xray(self):
+        sf.load_variant_config(
+            "[lion-xray:chess]\n"
+            "maxFile = h\n"
+            "customPiece1 = l:KAD\n"
+            "customPiece2 = m:K\n"
+            "king = -\n"
+            "commoner = k\n"
+            "checking = false\n"
+            "castling = false\n"
+            "twoStepMoves = l:* m:*\n"
+            "lionMoveTypes = l m\n"
+            "lionCapturingRule = true\n"
+            "lionInsignificantPieces = p\n"
+        )
+        # Cub b3 blocks rook a3 from lion d3; b3c3d3 (pawn, then lion)
+        # vacates b3 and uncovers the x-ray: illegal.
+        self.assertNotIn("b3c3d3",
+                         sf.legal_moves("lion-xray", "8/8/8/8/8/rMpl4/8/8 w - - 0 1", []))
+        # No rook: the same distant capture is legal.
+        self.assertIn("b3c3d3",
+                      sf.legal_moves("lion-xray", "8/8/8/8/8/1Mpl4/8/8 w - - 0 1", []))
+
+    def test_two_leg_via_royal_ends_game(self):
+        sf.load_variant_config(
+            "[via-royal:chess]\n"
+            "customPiece1 = l:KAD\n"
+            "twoStepMoves = l:*\n"
+            "allowChecks = true\n"
+            "castling = false\n"
+        )
+        # White Lion b2 takes the Black king on c3 and returns (igui).
+        # The royal falls on the bend square, not the destination.
+        ended, _ = sf.is_immediate_game_end(
+            "via-royal", "7k/8/8/8/8/2k5/1L6/K7 w - - 0 1", ["b2c3b2"])
+        self.assertTrue(ended)
+
+    def test_promotion_deferred_fen_roundtrip(self):
+        sf.load_variant_config(
+            "[promotion-decline-fen:chess]\n"
+            "customPiece1 = a:K\n"
+            "promotionRegionWhite = *7 *8\n"
+            "promotionRegionBlack = *2 *1\n"
+            "promotionPieceTypes = q\n"
+            "promotedPieceType = a:q\n"
+            "promotionDeclineRule = true\n"
+            "mandatoryPawnPromotion = false\n"
+            "mandatoryPiecePromotion = false\n"
+        )
+        fen = "1r5k/8/A7/8/8/8/8/K7 w - - 0 1"
+        moves = ["a6a7", "h8g8"]
+        live = sorted(sf.legal_moves("promotion-decline-fen", fen, moves))
+        # a7 already declined once: quiet re-entry offers no promotion.
+        self.assertIn("a7b7", live)
+        self.assertNotIn("a7b7+", live)
+        mid = sf.get_fen("promotion-decline-fen", fen, moves)
+        self.assertIn("D:", mid)
+        reloaded = sorted(sf.legal_moves("promotion-decline-fen", mid, []))
+        self.assertEqual(reloaded, live)
+
     def test_validation_and_fog_are_binding_values(self):
         fen = sf.start_fen("chess")
         self.assertEqual(sf.validate_fen(fen, "chess"), 1)

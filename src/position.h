@@ -312,6 +312,12 @@ struct StateInfoCopied {
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
   Bitboard promotionDeferred = Bitboard(0);
+  // Squares on which the immediately preceding non-Lion move captured an
+  // enemy Lion. Empty unless the last move qualifies; read by
+  // lion_capture_legal() instead of inspecting st->previous. Part of the
+  // Zobrist key so identical boards with different trade restrictions hash
+  // differently. Cleared on FEN load (no previous move).
+  Bitboard lionTradeSquares = Bitboard(0);
   Bitboard edgeInsertLocks[COLOR_NB];
   Square castlingKingSquare[COLOR_NB];
   int castlingRightsMask[SQUARE_NB];
@@ -1063,7 +1069,9 @@ public:
   Bitboard capture_squares_unchecked(Move m) const;
   bool matches_recapture_square(Move m, Square s) const;
   // Generic capture summary for move ordering: Position owns victim
-  // knowledge (ordinary, en passant, locust, two-leg, effects).
+  // knowledge (ordinary, en passant, locust, two-leg, effects) and reports
+  // raw material value plus raw signed variant-points. MovePicker owns all
+  // ordering weights (including the points multiplier).
   struct CaptureSummary {
       int value = 0;
       PieceType highestType = NO_PIECE_TYPE;
@@ -1169,7 +1177,13 @@ public:
   void put_piece(Piece pc, Square s, bool isPromoted = false, Piece unpromotedPc = NO_PIECE, bool markNotMoved = false);
   void remove_piece(Square s);
 
-private:
+ private:
+  // detail::TwoLegPath appears here only in private helpers. The public
+  // surface exposes stable semantics (capture_squares(), capture_summary(),
+  // matches_recapture_square()). The two_leg.h include stays because hot-path
+  // inline helpers (capture_square/capture_squares) need the complete walker
+  // result type; the walker implementation itself lives in two_leg_impl.h and
+  // is only included by position.cpp/movegen.cpp.
   detail::TwoLegPath resolve_two_leg_move(Move m) const;
   bool lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo, bool isCapture) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
@@ -5995,7 +6009,7 @@ inline Position::CaptureSummary Position::capture_summary(Move m) const {
           else if (points_goal_value() == VALUE_ZERO)
               signedPts = 0;
       }
-      return 20 * signedPts;
+      return signedPts;
   };
   if (!is_two_leg(m))
   {
