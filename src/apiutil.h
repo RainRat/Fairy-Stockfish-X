@@ -316,7 +316,20 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     Square from = from_sq(m);
     Square to = to_sq(m);
 
-    if (type_of(m) == CASTLING)
+    if (is_two_leg(m))
+    {
+        san = square(pos, from, n) + square(pos, via_sq(m), n) + square(pos, to, n);
+        if (is_any_promotion(m))
+        {
+            Piece mover = pos.moved_piece(m);
+            PieceType promotedTo = mover != NO_PIECE ? pos.promoted_piece_type(type_of(mover)) : NO_PIECE_TYPE;
+            if (promotedTo != NO_PIECE_TYPE && !is_shogi(n))
+                san += std::string("=") + display_symbol(pos.piece_symbol(make_piece(us, promotedTo)));
+            else
+                san += "+";
+        }
+    }
+    else if (type_of(m) == CASTLING)
     {
         san = to > from ? "O-O" : "O-O-O";
 
@@ -436,7 +449,8 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
         || pos.variant()->castlingWins
         || pos.variant()->connectRegion1[c]
         || pos.variant()->connectRegion2[c]
-        || pos.variant()->connectRegion3[c])
+        || pos.variant()->connectRegion3[c]
+        || pos.has_two_leg_moves())
         return false;
 
     // Precalculate if any promotion pawn types have pieces

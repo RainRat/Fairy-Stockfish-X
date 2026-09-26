@@ -8,10 +8,67 @@ ENGINE=$(default_engine "${1:-}")
 VARIANTS=$(default_variants "${2:-}")
 
 TMP_INI="$(mktemp)"
+HOOK_INI="$(mktemp)"
 cleanup() {
-  rm -f "$TMP_INI"
+  rm -f "$TMP_INI" "$HOOK_INI"
 }
 trap cleanup EXIT
+
+cat >"$HOOK_INI" <<'EOF'
+[test-hook]
+king = -
+customPiece1 = h:R
+hookMoves = h:R-R
+startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-bent]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R
+startFen = 8/8/8/5h2/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-capture]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R
+startFen = 8/8/8/8/3hH3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-first-capture-stops]
+king = -
+customPiece1 = h:R
+hookMoves = h:R-R
+startFen = 8/8/8/3H4/3hH3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-overlap]
+king = -
+customPiece1 = h:R
+hookMoves = h:R-R
+startFen = 8/8/8/8/3hH3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+
+[test-hook-bend-mobility:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+mobilityRegionWhiteCustomPiece1 = d5
+startFen = 8/8/8/3k4/2H5/8/8/7K b - - 0 1
+castling = false
+
+[test-royal-route:chess]
+king = k:R
+twoStepMoves = k:NW>NE
+royalPieceNoThroughCheck = true
+startFen = k7/8/3b4/8/4K3/8/8/8 w - - 0 1
+castling = false
+EOF
 
 cat >"$TMP_INI" <<'EOF'
 [wallpass:chess]
@@ -69,10 +126,113 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
 king = w:W
 startFen = W6w/QQ6/8/8/8/8/8/8 w
 
+# Promotion-decline boundaries: leaving-zone captures re-offer promotion;
+# pawns get a last-rank non-capture retry.
+[test-decline-leave-capture:chess]
+customPiece1 = a:R
+promotedPieceType = a:q
+promotionRegionWhite = *7 *8
+promotionRegionBlack = *2 *1
+promotionDeclineRule = true
+mandatoryPawnPromotion = false
+mandatoryPiecePromotion = false
+castling = false
+doubleStep = false
+
+[test-decline-pawn-last-rank:chess]
+promotionRegionWhite = *7 *8
+promotionRegionBlack = *2 *1
+promotionDeclineRule = true
+mandatoryPawnPromotion = false
+mandatoryPiecePromotion = false
+castling = false
+doubleStep = false
+
 [pawn-explicit-initial:fairy]
 customPiece1 = p:iW
 pawnTypes = p
 startFen = 4k3/8/8/8/8/8/4P3/4K3 w - - 0 1
+
+# Lion-family and hook-mover regression fixtures. These live here (not in
+# src/variants.ini) so the production variant list stays free of test-only
+# entries; run_uci_cmds addresses them through this file.
+
+# Lion: two king steps in any direction (*), direct jumps (ADNW), step 1 (K).
+[test-lion]
+king = -
+customPiece1 = l:ADNWK
+twoStepMoves = l:*
+startFen = 8/8/8/3l4/4L3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+[test-lion-blocked-jump:test-lion]
+# Both knight-route vias (e5, f5) are friendly L: proves the direct N jump
+# is independent of the two-step routes, which must be suppressed here.
+startFen = 8/8/8/4LL2/4L3/8/8/8 w - - 0 1
+
+# Horned Falcon: Bishop (B), sideways/backward slides (sRbR), forward jump 2
+# (fD), forward step 1 (fW), forward two-step (N>N,N>S).
+[test-horned-falcon]
+king = -
+customPiece1 = h:BsRbRfDfW
+twoStepMoves = h:N>N,N>S
+startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Soaring Eagle: Rook (R), backward-diagonal slides (bB), forward diagonal
+# jump 2 (fA) and step 1 (fF), forward-diagonal two-step.
+[test-soaring-eagle]
+king = -
+customPiece1 = e:RbBfAfF
+twoStepMoves = e:NE>NE,NE>SW,NW>NW,NW>SE
+startFen = 8/8/8/3e4/4E3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Free Eagle: Queen (Q), diagonal jump 2 (A), diagonal cat-sword two-step.
+[test-free-eagle]
+king = -
+customPiece1 = f:QA
+twoStepMoves = f:NE>NE,NE>NW,NE>SE,NE>SW,NW>NE,NW>NW,NW>SE,NW>SW,SE>NE,SE>NW,SE>SE,SE>SW,SW>NE,SW>NW,SW>SE,SW>SW
+startFen = 8/8/8/3f4/4F3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Lion Hawk: Bishop (B) with full Lion jumps (ADNWK) and two-step (*).
+[test-lion-hawk]
+king = -
+customPiece1 = y:BADNWK
+twoStepMoves = y:*
+startFen = 8/8/8/3y4/4Y3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Hook mover (single capture): rook movement plus an optional turn, at most one capture.
+[test-hook]
+king = -
+customPiece1 = h:R
+hookMoves = h:R-R
+startFen = 8/8/8/3h4/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+# Hook mover bent-path only: straight captures belong to the Betza rider.
+[test-hook-bent]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R
+startFen = 8/8/8/5h2/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
 EOF
 
 variant_available() {
@@ -239,5 +399,146 @@ out=$(run_uci_cmds "$ENGINE" "$VARIANTS" oshi \
   "position fen ca2a4/b4ab1c/4a4/9/5A3/2AC5/9/2BAA1B2/C8 w - - 10 6 {0 0}
 go depth 8")
 assert_not_contains "$out" "^bestmove d4a4"
+
+# Lion family two-step move regressions: unique outcomes, igui, quiet pass, and gating.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "33"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_contains "$out" "^e4e6: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+assert_not_contains "$out" "^e4f4f5:"
+assert_not_contains "$out" "^e4e5f5:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion-blocked-jump \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4f6: 1$"
+# Both knight-route vias (e5, f5) are friendly-occupied, so the two-step
+# spellings are blocked while the direct N jump still reaches f6.
+assert_not_contains "$out" "^e4e5f6:"
+assert_not_contains "$out" "^e4f5f6:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
+  "position startpos moves e4d5e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/8/4L3/8/8/8 b - - 0 1"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \
+  "position startpos moves e4e5e4
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3l4/4L3/8/8/8 b - - 1 1"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-horned-falcon \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "23"
+assert_contains "$out" "^e4e6: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+assert_not_contains "$out" "^e4e3e2:"
+assert_not_contains "$out" "^e4e3e4:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-soaring-eagle \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "27"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+assert_contains "$out" "^e4g6: 1$"
+assert_not_contains "$out" "^e4e5e6:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-free-eagle \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "30"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4d5c6: 1$"
+assert_contains "$out" "^e4g6: 1$"
+assert_contains "$out" "^e4f5e4: 1$"
+assert_not_contains "$out" "^e4e5e6:"
+assert_not_contains "$out" "^e4e5e4:"
+
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion-hawk \
+  "position startpos
+go perft 1")
+assert_nodes "$out" "36"
+assert_contains "$out" "^e4d5e4: 1$"
+assert_contains "$out" "^e4e6: 1$"
+assert_contains "$out" "^e4e5e4: 1$"
+
+# Hook movers turn at right angles when both legs use the same geometry.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4e5d5: 1$"
+assert_contains "$out" "^e4e8f8: 1$"
+assert_contains "$out" "^e4e8: 1$"
+assert_not_contains "$out" "^e4d5e4:"
+assert_not_contains "$out" "^e4d4c4:"
+assert_not_contains "$out" "^e4d4e4:"
+assert_not_contains "$out" "^e4d4d8:"
+
+# Bent-path only: with no Betza movement, a hook gets no straight capture
+# (e4d4d4 absent) and cannot turn after a first-leg capture (e4d4d5 absent).
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-capture \
+  "position startpos
+go perft 1")
+assert_not_contains "$out" "^e4d4d4:"
+assert_not_contains "$out" "^e4d4d5:"
+
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook \
+  "position startpos moves e4e5d5
+d")
+assert_contains_literal "$out" "Fen: 8/8/8/3H4/8/8/8/8 b - - 0 1"
+
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-bent \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4e5f5: 1$"
+assert_not_contains "$out" "^e4e5e6:"
+
+# A hook cannot capture on the first leg and then turn: it must stop.
+# Straight captures still work through the ordinary Betza rider.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-first-capture-stops \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d4: 1$"
+assert_not_contains "$out" "^e4d4d4:"
+assert_not_contains "$out" "^e4d4d5:"
+
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-overlap \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d4: 1$"
+assert_not_contains "$out" "^e4d4d4:"
+assert_not_contains "$out" "^e4e5e7:"
+
+# A hook gives check with a bent capture even when the bend itself is outside
+# the mover's mobility region, as long as the capture ends inside it.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-hook-bend-mobility \
+  "position startpos
+d")
+assert_contains "$out" "^Checkers: c4"
+
+# The direct rook route e4-e6 crosses an attacked square, while the two-step
+# royal route e4-d5-e6 reaches the same endpoint without crossing it.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-royal-route \
+  "position startpos
+go perft 1")
+assert_contains "$out" "^e4d5e6: 1$"
+
+# A declined Chu promotion can be taken on a capture starting in-zone and ending outside.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-leave-capture \
+  "position fen 7k/8/1A6/1p6/8/8/8/K7 w - - 0 1 moves b6b7 h8g8
+go perft 1")
+assert_contains "$out" "^b7b5+: 1$"
+
+# A declined pawn gets a last-rank non-capture retry.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-pawn-last-rank \
+  "position fen 7k/8/P7/8/8/8/8/K7 w - - 0 1 moves a6a7 h8g8
+go perft 1")
+assert_contains "$out" "^a7a8q: 1$"
 
 echo "movegen regressions passed"

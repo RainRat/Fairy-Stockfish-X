@@ -26,10 +26,16 @@
 #include "parser.h"
 #include "piece.h"
 #include "variant.h"
+#include "direction_pair.h"
 
 using std::string;
 
 namespace Stockfish {
+
+void DirectionPairSpec::conclude() {
+  byColor[WHITE] = relative;
+  byColor[BLACK] = reflect_direction_pairs(relative);
+}
 
 VariantMap variants; // Global object
 
@@ -2218,6 +2224,37 @@ Variant* Variant::conclude() {
         pseudoRoyalCount = extinctionPieceCount + 1;
     }
 
+    twoStepPieceTypes = NO_PIECE_SET;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+    {
+        uint64_t mask = twoStepMoves[pt].relative;
+        twoStepMoves[pt].conclude();
+        if (mask)
+        {
+            twoStepPieceTypes |= piece_set(pt);
+        }
+    }
+
+    // Hook direction pairs are White-relative like two-step pairs; Black
+    // gets the 180-degree point reflection. Ranges are
+    // direction-independent and shared by both colors.
+    hookPieceTypes = NO_PIECE_SET;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+    {
+        uint64_t mask = hookMoves[pt].directions.relative;
+        if (mask)
+        {
+            hookPieceTypes |= piece_set(pt);
+        }
+        hookMoves[pt].directions.conclude();
+    }
+
+    // Two-leg captures defeat single-victim SEE: force move-sensitive
+    // pruning so search consults the per-move check.
+    if ((twoStepPieceTypes || hookPieceTypes)
+        && seePruningPolicy == SeePruningPolicy::RELIABLE)
+        seePruningPolicy = SeePruningPolicy::MOVE_SENSITIVE;
+
     // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
     for (PieceSet ps = mutuallyImmuneTypes; ps; )
     {
@@ -2411,12 +2448,11 @@ Variant* Variant::conclude() {
             || std::count(fenBoard.begin(), fenBoard.end(), pieceToChar[make_piece(BLACK, nnueKing)]) != 1)
             nnueKing = NO_PIECE_TYPE;
     }
-    // We can not use popcount here yet, as the lookup tables are initialized after the variants
     int nnueSquares = (maxRank + 1) * (maxFile + 1);
-    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && std::bitset<64>(pieceTypes).count() != 1))) || seirawanGating;
+    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && pieceTypes.count() != 1))) || seirawanGating;
     int nnuePockets = nnueUsePockets ? 2 * int(maxFile + 1) : 0;
-    int nnueNonDropPieceIndices = (2 * std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
-    int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (std::bitset<64>(pieceTypes).count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
+    int nnueNonDropPieceIndices = (2 * pieceTypes.count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
+    int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (pieceTypes.count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
     bool nnueHasWalls = wallingRule != NO_WALLING
                      || petrifyOnCaptureTypes != NO_PIECE_SET
                      || startFen.find('*') != std::string::npos;
@@ -2510,6 +2546,8 @@ Variant* Variant::conclude() {
                     && !twoBoards
                     && !restrictedMobility
                     && !stackingPieceTypes
+                    && twoStepPieceTypes == NO_PIECE_SET
+                    && hookPieceTypes == NO_PIECE_SET
                     && kingType == KING
                    )
                  ? endgameEval : NO_EG_EVAL;
@@ -2555,7 +2593,9 @@ Variant* Variant::conclude() {
                                  && !freezePieceTypes
                                  && !trapRegion
                                  && !flipEnclosedPieces
-                                 && !makpongRule;
+                                 && !makpongRule
+                                 && twoStepPieceTypes == NO_PIECE_SET
+                                 && hookPieceTypes == NO_PIECE_SET;
 
     shogiStylePromotions = false;
     for (PieceType current: promotedPieceType)

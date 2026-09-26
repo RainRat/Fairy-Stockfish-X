@@ -127,7 +127,7 @@ namespace {
   }
 
   void print_root_adjudication(const Position& pos, Value result, const char* reason) {
-    if (int(Options["Verbosity"]) < 2 || !is_uci_dialect(CurrentProtocol))
+    if (int(Options["Verbosity"]) < 2 || !is_uci_dialect(CurrentProtocol) || result == VALUE_NONE)
         return;
 
     sync_cout << "info string adjudication reason " << reason
@@ -258,10 +258,12 @@ void MainThread::search() {
 
       if (CurrentProtocol == XBOARD)
       {
-          if (!ponder)
+          // A VALUE_NONE terminal (e.g. stalemateValue = none) carries no
+          // result to report; fall through to bestmove (none) below.
+          if (!ponder && terminal.value != VALUE_NONE)
               sync_cout << xboard_result(rootPos, terminal.value) << sync_endl;
       }
-      else if (int(Options["Verbosity"]) >= 1)
+      else if (int(Options["Verbosity"]) >= 1 && terminal.value != VALUE_NONE)
           sync_cout << "info depth 0 score "
                     << UCI::value(terminal.value)
                     << sync_endl;
@@ -331,7 +333,7 @@ void MainThread::search() {
   if (optionalRootEnd && !noRootMove && !ponder)
   {
       RootTerminal terminal = compute_root_terminal(rootPos);
-      if (terminal.value >= bestThread->rootMoves[0].score)
+      if (terminal.value != VALUE_NONE && terminal.value >= bestThread->rootMoves[0].score)
       {
           sync_cout << xboard_result(rootPos, terminal.value) << sync_endl;
           return;
@@ -1333,6 +1335,8 @@ moves_loop: // When in check, search starts from here
               // Capture history based pruning when the move doesn't give check
               if (   !givesCheck
                   && lmrDepth < 1
+                  && (!pos.see_pruning_unreliable()
+                      || !pos.see_pruning_unreliable(move))
                   && captureHistory[movedPiece][to_sq(move)][captured_type(pos, move)] < 0)
                   continue;
 
@@ -1859,6 +1863,8 @@ moves_loop: // When in check, search starts from here
       // Futility pruning and moveCount pruning
       if (    bestValue > VALUE_TB_LOSS_IN_MAX_PLY
           && !givesCheck
+          && (!pos.see_pruning_unreliable()
+              || !pos.see_pruning_unreliable(move))
           && !(   pos.extinction_value(~pos.side_to_move()) == -VALUE_MATE
                && victim != NO_PIECE
                && (pos.extinction_piece_types(~pos.side_to_move()) & type_of(victim)))

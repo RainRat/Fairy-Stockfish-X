@@ -39,6 +39,19 @@ namespace Stockfish {
 
 constexpr int START_MULTIMOVES = 128;
 
+struct DirectionPairSpec {
+  uint64_t relative = 0;
+  uint64_t byColor[COLOR_NB] = {};
+
+  void conclude();
+};
+
+struct HookMoveSpec {
+  DirectionPairSpec directions;
+  int firstRange = 0;
+  int secondRange = 0;
+};
+
 enum class ColorChangeTrigger {
   NEVER,
   ON_CAPTURE,
@@ -148,6 +161,7 @@ struct Variant {
   std::string startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   Bitboard mobilityRegion[COLOR_NB][PIECE_TYPE_NB] = {};
   ColorSetting<PieceTypeBitboardGroup> promotionRegion = ColorSetting<PieceTypeBitboardGroup>(Rank8BB, Rank1BB);
+  bool promotionDeclineRule = false;
   ColorSetting<Bitboard> mandatoryPromotionRegion = ColorSetting<Bitboard>(Bitboard(0));
   ColorSetting<PieceType> mainPromotionPawnType = ColorSetting<PieceType>(PAWN);
   ColorSetting<PieceSet> promotionPawnTypes = ColorSetting<PieceSet>(piece_set(PAWN));
@@ -247,6 +261,21 @@ struct Variant {
   int pushingStrength[PIECE_TYPE_NB] = {};
   bool hasPushing = false;
   int pullingStrength[PIECE_TYPE_NB] = {};
+  DirectionPairSpec twoStepMoves[PIECE_TYPE_NB] = {};
+  // Color-independent: Black masks are the point reflection of White masks,
+  // and reflection preserves membership, so both colors share one set.
+  PieceSet twoStepPieceTypes = {};
+  PieceSet lionMoveTypes = NO_PIECE_SET;
+  PieceSet lionInsignificantPieces = NO_PIECE_SET;
+  bool lionCapturingRule = false;
+  // Okazaki rule: a non-lion counter-strike is allowed when the target
+  // lion is unprotected (has no defender).
+  bool lionOkazakiRule = false;
+  // Hook movers: two sliding legs with a bend (from -> bend -> to).
+  // Bent-path only: straight movement belongs to the ordinary Betza rider.
+  // At most one capture per move; a hook must stop on capture.
+  HookMoveSpec hookMoves[PIECE_TYPE_NB] = {};
+  PieceSet hookPieceTypes = {};
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
   PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
   bool adjacentSwapFriendly = false;

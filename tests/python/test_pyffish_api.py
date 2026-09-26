@@ -314,6 +314,7 @@ class TestPublicAPI(unittest.TestCase):
         self.assertNotIn("pieceTypesByRank", info["promotion"])
         self.assertEqual(info["promotion"]["promotedPieceTypes"], {})
         self.assertEqual(info["promotion"]["captureDemotedPieceTypes"], {})
+        self.assertFalse(info["promotion"]["declineRule"])
 
         janggi_info = json.loads(sf.variant_info("janggi"))
         self.assertIn("e2", janggi_info["board"]["diagonalLines"])
@@ -348,6 +349,26 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(drops["gameEnd"]["noCheckmateTypes"], {"white": ["knight"], "black": ["knight"]})
         self.assertEqual(drops["drops"]["oppositeColorTypes"], {"white": ["bishop"], "black": ["bishop"]})
 
+        sf.load_variant_config(
+            "[variantinfotwostep:chess]\n"
+            "customPiece1 = l:ADNWK\n"
+            "twoStepMoves = l:*\n"
+        )
+        twostep = json.loads(sf.variant_info("variantinfotwostep"))
+        self.assertEqual(twostep["movement"]["twoStepMoves"], {"custom1": "*"})
+        self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["twoStepMoves"], {})
+
+        sf.load_variant_config(
+            "[variantinfohook:chess]\n"
+            "customPiece1 = h:0\n"
+            "hookMoves = h:R-sR\n"
+        )
+        hook = json.loads(sf.variant_info("variantinfohook"))
+        self.assertEqual(hook["movement"]["hookMoves"],
+                         {"custom1": {"pairs": "N>E,N>W,S>E,S>W",
+                                      "firstRange": 0, "secondRange": 0}})
+        self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["hookMoves"], {})
+
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
             sf.variant_info("does-not-exist")
 
@@ -370,6 +391,156 @@ class TestPublicAPI(unittest.TestCase):
         self.assertIsInstance(optional[0], bool)
         self.assertIsInstance(optional[1], int)
         self.assertIsInstance(sf.has_insufficient_material("chess", fen, []), tuple)
+
+    def test_two_leg_pieces_disable_insufficient_material_shortcut(self):
+        sf.load_variant_config(
+            "[lion-api-adjudication:chess]\n"
+            "customPiece1 = h:0\n"
+            "hookMoves = h:R-R\n"
+            "castling = false\n"
+        )
+        fen = "7k/8/8/8/8/8/H7/K7 w - - 0 1"
+        self.assertIn("a2a3b3", sf.legal_moves("lion-api-adjudication", fen, []))
+        self.assertEqual(sf.has_insufficient_material("lion-api-adjudication", fen, []),
+                         (False, False))
+        self.assertEqual(sf.game_result("lion-api-adjudication", fen, []), sf.VALUE_NONE)
+        self.assertEqual(sf.has_insufficient_material("chess", "7k/8/8/8/8/8/8/K7 w - - 0 1", []),
+                         (True, True))
+
+    def test_multiple_pseudo_royals_end_only_when_last_is_captured(self):
+        sf.load_variant_config(
+            "[multi-royal-capture:chess]\n"
+            "customPiece1 = a:K\n"
+            "allowChecks = true\n"
+            "pseudoRoyalTypes = ka\n"
+            "pseudoRoyalCount = 1\n"
+            "pseudoRoyalValue = loss\n"
+        )
+
+        king_and_prince = "7k/8/8/8/8/8/r7/K6A b - - 0 1"
+        prince_and_king = "7k/8/8/8/8/8/7r/K6A b - - 0 1"
+        lone_king = "7k/8/8/8/8/8/r7/K7 b - - 0 1"
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", king_and_prince,
+                                                  ["a2a1"])[0], False)
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", prince_and_king,
+                                                  ["h2h1"])[0], False)
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", lone_king,
+                                                  ["a2a1"])[0], True)
+
+        attacked_king = "1r5k/8/8/8/8/8/8/K7 w - - 0 1"
+        self.assertIn("a1b1", sf.legal_moves("multi-royal-capture", attacked_king, []))
+
+    def test_promotion_decline_persists_until_capture_or_zone_exit(self):
+        sf.load_variant_config(
+            "[promotion-decline:chess]\n"
+            "customPiece1 = a:K\n"
+            "promotionRegionWhite = *7 *8\n"
+            "promotionRegionBlack = *2 *1\n"
+            "promotionPieceTypes = q\n"
+            "promotedPieceType = a:q\n"
+            "promotionDeclineRule = true\n"
+            "mandatoryPawnPromotion = false\n"
+            "mandatoryPiecePromotion = false\n"
+        )
+        self.assertTrue(json.loads(sf.variant_info("promotion-decline"))["promotion"]["declineRule"])
+        fen = "1r5k/8/A7/8/8/8/8/K7 w - - 0 1"
+        self.assertIn("a6a7+", sf.legal_moves("promotion-decline", fen, []))
+
+        after_declining = sf.legal_moves("promotion-decline", fen, ["a6a7", "h8g8"])
+        self.assertIn("a7b7", after_declining)
+        self.assertNotIn("a7b7+", after_declining)
+
+        after_capture = sf.legal_moves("promotion-decline", fen, ["a6a7", "h8g8"])
+        self.assertIn("a7b8+", after_capture)
+
+        after_leaving_and_reentering = sf.legal_moves(
+            "promotion-decline", fen, ["a6a7", "h8g8", "a7a6", "g8h8"])
+        self.assertIn("a6a7+", after_leaving_and_reentering)
+
+    def test_lion_hidden_protector_xray(self):
+        sf.load_variant_config(
+            "[lion-xray:chess]\n"
+            "maxFile = h\n"
+            "customPiece1 = l:KAD\n"
+            "customPiece2 = m:K\n"
+            "king = -\n"
+            "commoner = k\n"
+            "checking = false\n"
+            "castling = false\n"
+            "twoStepMoves = l:* m:*\n"
+            "lionMoveTypes = l m\n"
+            "lionCapturingRule = true\n"
+            "lionInsignificantPieces = p\n"
+        )
+        # Cub b3 blocks rook a3 from lion d3; b3c3d3 (pawn, then lion)
+        # vacates b3 and uncovers the x-ray: illegal.
+        self.assertNotIn("b3c3d3",
+                         sf.legal_moves("lion-xray", "8/8/8/8/8/rMpl4/8/8 w - - 0 1", []))
+        # No rook: the same distant capture is legal.
+        self.assertIn("b3c3d3",
+                      sf.legal_moves("lion-xray", "8/8/8/8/8/1Mpl4/8/8 w - - 0 1", []))
+
+    def test_two_leg_via_royal_ends_game(self):
+        sf.load_variant_config(
+            "[via-royal:chess]\n"
+            "customPiece1 = l:KAD\n"
+            "twoStepMoves = l:*\n"
+            "allowChecks = true\n"
+            "castling = false\n"
+        )
+        # White Lion b2 takes the Black king on c3 and returns (igui).
+        # The royal falls on the bend square, not the destination.
+        ended, _ = sf.is_immediate_game_end(
+            "via-royal", "7k/8/8/8/8/2k5/1L6/K7 w - - 0 1", ["b2c3b2"])
+        self.assertTrue(ended)
+
+    def test_promotion_deferred_fen_roundtrip(self):
+        sf.load_variant_config(
+            "[promotion-decline-fen:chess]\n"
+            "customPiece1 = a:K\n"
+            "promotionRegionWhite = *7 *8\n"
+            "promotionRegionBlack = *2 *1\n"
+            "promotionPieceTypes = q\n"
+            "promotedPieceType = a:q\n"
+            "promotionDeclineRule = true\n"
+            "mandatoryPawnPromotion = false\n"
+            "mandatoryPiecePromotion = false\n"
+        )
+        fen = "1r5k/8/A7/8/8/8/8/K7 w - - 0 1"
+        moves = ["a6a7", "h8g8"]
+        live = sorted(sf.legal_moves("promotion-decline-fen", fen, moves))
+        # a7 already declined once: quiet re-entry offers no promotion.
+        self.assertIn("a7b7", live)
+        self.assertNotIn("a7b7+", live)
+        mid = sf.get_fen("promotion-decline-fen", fen, moves)
+        self.assertIn("D:", mid)
+        reloaded = sorted(sf.legal_moves("promotion-decline-fen", mid, []))
+        self.assertEqual(reloaded, live)
+
+    def test_lion_trade_fen_roundtrip(self):
+        sf.load_variant_config(
+            "[lion-trade-fen:chess]\n"
+            "maxFile = h\n"
+            "customPiece1 = l:KAD\n"
+            "king = -\n"
+            "commoner = k\n"
+            "checking = false\n"
+            "castling = false\n"
+            "twoStepMoves = l:*\n"
+            "lionMoveTypes = l\n"
+            "lionCapturingRule = true\n"
+            "lionInsignificantPieces = p\n"
+        )
+        fen = "8/8/8/8/4l3/8/1L6/1r2R3 b - - 0 1"
+        moves = ["b1b2"]
+        live = sorted(sf.legal_moves("lion-trade-fen", fen, moves))
+        # b1xL captured a Lion: e1e4 (non-Lion takes a different Lion) is barred.
+        self.assertNotIn("e1e4", live)
+        mid = sf.get_fen("lion-trade-fen", fen, moves)
+        self.assertIn(" T:", mid)
+        reloaded = sorted(sf.legal_moves("lion-trade-fen", mid, []))
+        self.assertEqual(reloaded, live)
+        self.assertNotIn("e1e4", reloaded)
 
     def test_validation_and_fog_are_binding_values(self):
         fen = sf.start_fen("chess")

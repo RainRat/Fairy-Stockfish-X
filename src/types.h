@@ -557,6 +557,8 @@ constexpr int MAX_PLY = 246;
 enum Move :
 #if defined(VERY_LARGE_BOARDS)
   uint64_t
+#elif defined(LARGEBOARDS)
+  uint32_t
 #else
   int
 #endif
@@ -564,6 +566,15 @@ enum Move :
   MOVE_NONE,
   MOVE_NULL = 1 + (1 << SQUARE_BITS)
 };
+
+// Keep packed-move decoding independent of the enum's underlying storage type.
+constexpr uint64_t move_bits(Move m) {
+#if defined(VERY_LARGE_BOARDS)
+  return static_cast<uint64_t>(m);
+#else
+  return static_cast<uint32_t>(m);
+#endif
+}
 
 enum MoveType : int {
   NORMAL,
@@ -751,7 +762,11 @@ enum Value : int {
   MidgameLimit  = 15258, EndgameLimit  = 3915
 };
 
-constexpr int PIECE_TYPE_BITS = 6; // PIECE_TYPE_NB = pow(2, PIECE_TYPE_BITS)
+#if defined(VERY_LARGE_BOARDS)
+constexpr int PIECE_TYPE_BITS = 7; // 128 piece-type IDs; VLB boards are limited to 16x16.
+#else
+constexpr int PIECE_TYPE_BITS = 6;
+#endif
 
 enum PieceType {
   NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN,
@@ -778,7 +793,7 @@ enum PieceType {
   ALL_PIECES = 0,
 };
 static_assert(KING < PIECE_TYPE_NB, "KING exceeds PIECE_TYPE_NB.");
-static_assert(PIECE_TYPE_BITS <= 6, "PIECE_TYPE uses more than 6 bit");
+static_assert(PIECE_TYPE_BITS <= 7, "PIECE_TYPE uses more than 7 bit");
 static_assert(!(PIECE_TYPE_NB & (PIECE_TYPE_NB - 1)), "PIECE_TYPE_NB is not a power of 2");
 
 #if defined(VERY_LARGE_BOARDS)
@@ -794,14 +809,36 @@ enum Piece {
   PIECE_NB = 2 * PIECE_TYPE_NB
 };
 
-enum PieceSet : uint64_t {
-  NO_PIECE_SET = 0,
-  CHESS_PIECES = (1ULL << PAWN) | (1ULL << KNIGHT) | (1ULL << BISHOP) | (1ULL << ROOK) | (1ULL << QUEEN) | (1ULL << KING),
-  COMMON_FAIRY_PIECES = (1ULL << IMMOBILE_PIECE) | (1ULL << COMMONER) | (1ULL << ARCHBISHOP) | (1ULL << CHANCELLOR),
-  SHOGI_PIECES = (1ULL << SHOGI_PAWN) | (1ULL << GOLD) | (1ULL << SILVER) | (1ULL << SHOGI_KNIGHT) | (1ULL << LANCE)
-                | (1ULL << DRAGON)| (1ULL << DRAGON_HORSE) | (1ULL << KING),
-  COMMON_STEP_PIECES = (1ULL << COMMONER) | (1ULL << FERS) | (1ULL << WAZIR) | (1ULL << BREAKTHROUGH_PIECE),
+struct PieceSet {
+  uint64_t low = 0;
+#if defined(VERY_LARGE_BOARDS)
+  uint64_t high = 0;
+#endif
+
+  constexpr PieceSet() = default;
+  constexpr explicit PieceSet(uint64_t bits) : low(bits) {}
+#if defined(VERY_LARGE_BOARDS)
+  constexpr PieceSet(uint64_t lowBits, uint64_t highBits) : low(lowBits), high(highBits) {}
+#endif
+  constexpr operator bool() const {
+#if defined(VERY_LARGE_BOARDS)
+      return low || high;
+#else
+      return low;
+#endif
+  }
+  constexpr int count() const {
+      int n = 0;
+      for (uint64_t bits = low; bits; bits &= bits - 1) ++n;
+#if defined(VERY_LARGE_BOARDS)
+      for (uint64_t bits = high; bits; bits &= bits - 1) ++n;
+#endif
+      return n;
+  }
 };
+#if !defined(VERY_LARGE_BOARDS)
+static_assert(sizeof(PieceSet) == sizeof(uint64_t), "standard PieceSet must stay one word");
+#endif
 
 enum RiderType : int {
   NO_RIDER = 0,
@@ -1062,24 +1099,71 @@ ENABLE_BASE_OPERATORS_ON(RiderType)
 #undef ENABLE_BIT_OPERATORS_ON
 
 constexpr PieceSet piece_set(PieceType pt) {
+#if defined(VERY_LARGE_BOARDS)
+  return pt < 64 ? PieceSet(1ULL << pt) : PieceSet(0, 1ULL << (pt - 64));
+#else
   return PieceSet(1ULL << pt);
+#endif
 }
 
-constexpr PieceSet operator~ (PieceSet ps) { return (PieceSet)~(uint64_t)ps; }
-constexpr PieceSet operator| (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 | (uint64_t)ps2); }
-constexpr PieceSet operator| (PieceSet ps, PieceType pt) { return ps | piece_set(pt); }
-constexpr PieceSet operator& (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 & (uint64_t)ps2); }
-constexpr PieceSet operator& (PieceSet ps, PieceType pt) {
-  return (uint64_t(ps) & (1ULL << ALL_PIECES)) ? piece_set(pt) : PieceSet(uint64_t(ps) & (1ULL << pt));
+constexpr PieceSet operator~(PieceSet ps) {
+#if defined(VERY_LARGE_BOARDS)
+  return PieceSet(~ps.low, PIECE_TYPE_BITS == 7 ? ~ps.high : 0);
+#else
+  return PieceSet(~ps.low);
+#endif
 }
-constexpr PieceSet operator^ (PieceSet ps1, PieceSet ps2) { return (PieceSet)((uint64_t)ps1 ^ (uint64_t)ps2); }
+constexpr PieceSet operator|(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return PieceSet(ps1.low | ps2.low, ps1.high | ps2.high);
+#else
+  return PieceSet(ps1.low | ps2.low);
+#endif
+}
+constexpr PieceSet operator| (PieceSet ps, PieceType pt) { return ps | piece_set(pt); }
+constexpr PieceSet operator&(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return PieceSet(ps1.low & ps2.low, ps1.high & ps2.high);
+#else
+  return PieceSet(ps1.low & ps2.low);
+#endif
+}
+constexpr PieceSet operator& (PieceSet ps, PieceType pt) {
+  return (ps.low & 1ULL) ? piece_set(pt) : ps & piece_set(pt);
+}
+constexpr PieceSet operator^(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return PieceSet(ps1.low ^ ps2.low, ps1.high ^ ps2.high);
+#else
+  return PieceSet(ps1.low ^ ps2.low);
+#endif
+}
 constexpr PieceSet operator^ (PieceSet ps, PieceType pt) { return ps ^ piece_set(pt); }
-inline PieceSet& operator|= (PieceSet& ps1, PieceSet ps2) { ps1 = PieceSet(uint64_t(ps1) | uint64_t(ps2)); return ps1; }
+constexpr bool operator==(PieceSet ps1, PieceSet ps2) {
+#if defined(VERY_LARGE_BOARDS)
+  return ps1.low == ps2.low && ps1.high == ps2.high;
+#else
+  return ps1.low == ps2.low;
+#endif
+}
+constexpr bool operator!=(PieceSet ps1, PieceSet ps2) { return !(ps1 == ps2); }
+inline PieceSet& operator|=(PieceSet& ps1, PieceSet ps2) { ps1 = ps1 | ps2; return ps1; }
 inline PieceSet& operator|= (PieceSet& ps, PieceType pt) { return ps |= piece_set(pt); }
-inline PieceSet& operator&= (PieceSet& ps1, PieceSet ps2) { ps1 = PieceSet(uint64_t(ps1) & uint64_t(ps2)); return ps1; }
+inline PieceSet& operator&=(PieceSet& ps1, PieceSet ps2) { ps1 = ps1 & ps2; return ps1; }
 //inline PieceSet& operator&= (PieceSet& ps, PieceType pt) does not make sense
-inline PieceSet& operator^= (PieceSet& ps1, PieceSet ps2) { ps1 = PieceSet(uint64_t(ps1) ^ uint64_t(ps2)); return ps1; }
+inline PieceSet& operator^=(PieceSet& ps1, PieceSet ps2) { ps1 = ps1 ^ ps2; return ps1; }
 inline PieceSet& operator^= (PieceSet& ps, PieceType pt) { return ps ^= piece_set(pt); }
+
+constexpr PieceSet NO_PIECE_SET{};
+constexpr PieceSet CHESS_PIECES = piece_set(PAWN) | piece_set(KNIGHT) | piece_set(BISHOP)
+                                | piece_set(ROOK) | piece_set(QUEEN) | piece_set(KING);
+constexpr PieceSet COMMON_FAIRY_PIECES = piece_set(IMMOBILE_PIECE) | piece_set(COMMONER)
+                                       | piece_set(ARCHBISHOP) | piece_set(CHANCELLOR);
+constexpr PieceSet SHOGI_PIECES = piece_set(SHOGI_PAWN) | piece_set(GOLD) | piece_set(SILVER)
+                                | piece_set(SHOGI_KNIGHT) | piece_set(LANCE) | piece_set(DRAGON)
+                                | piece_set(DRAGON_HORSE) | piece_set(KING);
+constexpr PieceSet COMMON_STEP_PIECES = piece_set(COMMONER) | piece_set(FERS)
+                                      | piece_set(WAZIR) | piece_set(BREAKTHROUGH_PIECE);
 
 static_assert(piece_set(PAWN) & PAWN);
 static_assert(piece_set(KING) & KING);
@@ -1206,7 +1290,7 @@ constexpr Square to_sq(Move m) {
 }
 
 constexpr Square from_sq(Move m) {
-  Square raw_from = Square((m >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  Square raw_from = Square((move_bits(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
   return type_of(m) == DROP ? SQ_NONE : raw_from;
 }
 
@@ -1216,33 +1300,29 @@ inline int from_to(Move m) {
 
 inline PieceType promotion_type(Move m) {
   if (type_of(m) == PROMOTION)
-    return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+    return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
   if (type_of(m) == PROMOTION_POTION) {
-    int choice = (m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS)) & 3;
+    int choice = (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS)) & 3;
     return choice == 0 ? KNIGHT : (choice == 1 ? BISHOP : (choice == 2 ? ROOK : QUEEN));
   }
   return NO_PIECE_TYPE;
 }
 
-inline bool is_promotion_move(Move m) {
-  return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
-}
-
 inline Square potion_target_square(Move m) {
-  return Square((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
+  return Square((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & SQUARE_BIT_MASK);
 }
 
 inline int potion_type(Move m) {
   assert(type_of(m) == PROMOTION_POTION);
-  return (m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
+  return (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + SQUARE_BITS + 2)) & 1;
 }
 
 inline PieceType gating_type(Move m) {
-  return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 inline Square gating_square(Move m) {
-  const uint64_t raw = static_cast<uint64_t>(m);
+  const uint64_t raw = move_bits(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
   const uint64_t gate = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
   if (gate)
@@ -1266,7 +1346,7 @@ inline int rotation_value(Move m) {
 inline Square pull_square(Move m) {
   if (type_of(m) != PULL)
       return SQ_NONE;
-  const uint64_t raw = static_cast<uint64_t>(m);
+  const uint64_t raw = move_bits(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
   const uint64_t sq = (raw >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask;
   return sq ? Square(sq - 1) : SQ_NONE;
@@ -1280,19 +1360,148 @@ inline bool is_stack_move(Move m) { return type_of(m) == STACK; }
 inline bool is_unstack_move(Move m) { return type_of(m) == UNSTACK; }
 inline bool is_laser_fire(Move m) { return type_of(m) == LASER_FIRE; }
 
+#if defined(VERY_LARGE_BOARDS)
+constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
+#elif defined(LARGEBOARDS)
+// LARGEBOARDS (7 square bits): valid gating gate+1 values never reach the top
+// mask bit, so the flag can sit at bit 31 within the unsigned 32-bit Move.
+constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS);
+#else
+// 8x8 (6 square bits): gating gate+1 reaches bit 28 (gate SQ_H8), so the flag
+// must sit above it at bit 29 to stay disjoint from SPECIAL gating moves.
+constexpr uint64_t ExtendedSpecialFlag = uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS + SQUARE_BITS + 1);
+#endif
+
+// Named alias used by move-encoding tests and tools.
+constexpr uint64_t TwoLegFlag = ExtendedSpecialFlag;
+
+inline bool has_extended_special_payload(Move m) {
+  return type_of(m) == SPECIAL && bool(move_bits(m) & ExtendedSpecialFlag);
+}
+
+inline bool is_plain_special(Move m) { return type_of(m) == SPECIAL && !has_extended_special_payload(m); }
+
+inline Square special_payload_square(Move m) {
+  constexpr uint64_t SquareFieldMask = (uint64_t(1) << SQUARE_BITS) - 1;
+  return Square((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
+}
+
+inline bool is_promotion_move(Move m) {
+  return type_of(m) == PROMOTION || type_of(m) == PROMOTION_POTION;
+}
+
+// Two-leg special moves use SPECIAL's upper payload for the via square and
+// subtype. Keep their encoding beside the other packed Move helpers.
+enum TwoLegSubtype : int {
+  TWO_LEG_SUBTYPE_NONE = 0,
+  TWO_LEG_SUBTYPE_TWO_STEP = 1,
+  TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION = 2,
+  TWO_LEG_SUBTYPE_HOOK = 3,
+  TWO_LEG_SUBTYPE_HOOK_PROMOTION = 4,
+};
+
+inline TwoLegSubtype two_leg_subtype(Move m) {
+  if (!has_extended_special_payload(m))
+      return TWO_LEG_SUBTYPE_NONE;
+  int sub = (move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1);
+  return sub >= TWO_LEG_SUBTYPE_TWO_STEP && sub <= TWO_LEG_SUBTYPE_HOOK_PROMOTION
+       ? TwoLegSubtype(sub) : TWO_LEG_SUBTYPE_NONE;
+}
+
+inline bool is_two_step(Move m) {
+  TwoLegSubtype sub = two_leg_subtype(m);
+  return sub == TWO_LEG_SUBTYPE_TWO_STEP || sub == TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION;
+}
+
+inline bool two_step_promotes(Move m) {
+  return two_leg_subtype(m) == TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION;
+}
+
+inline bool is_hook(Move m) {
+  TwoLegSubtype sub = two_leg_subtype(m);
+  return sub == TWO_LEG_SUBTYPE_HOOK || sub == TWO_LEG_SUBTYPE_HOOK_PROMOTION;
+}
+
+inline bool hook_promotes(Move m) {
+  return two_leg_subtype(m) == TWO_LEG_SUBTYPE_HOOK_PROMOTION;
+}
+
+inline bool is_two_leg(Move m) { return is_two_step(m) || is_hook(m); }
+inline bool is_two_leg_promotion(Move m) { return two_step_promotes(m) || hook_promotes(m); }
+inline bool is_any_promotion(Move m) {
+  return is_promotion_move(m) || type_of(m) == PIECE_PROMOTION || is_two_leg_promotion(m);
+}
+
+inline Square via_sq(Move m) {
+  assert(is_two_leg(m));
+  return special_payload_square(m);
+}
+
+constexpr Move make_two_step(Square from, Square via, Square to, bool promotes = false) {
+  return Move(
+      ExtendedSpecialFlag
+    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+    + (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION : TWO_LEG_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + static_cast<uint64_t>(SPECIAL)
+    + (static_cast<uint64_t>(from) << SQUARE_BITS)
+    + static_cast<uint64_t>(to)
+  );
+}
+
+constexpr Move make_hook(Square from, Square via, Square to, bool promotes = false) {
+  return Move(
+      ExtendedSpecialFlag
+    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+    + (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_HOOK_PROMOTION : TWO_LEG_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    + static_cast<uint64_t>(SPECIAL)
+    + (static_cast<uint64_t>(from) << SQUARE_BITS)
+    + static_cast<uint64_t>(to)
+  );
+}
+
+static_assert(int(TWO_LEG_SUBTYPE_HOOK_PROMOTION) < int(PIECE_TYPE_NB),
+              "Two-leg subtypes must fit the SPECIAL subtype field");
+
+// Extended SPECIAL payloads share upper bits with gating; keep the generic
+// marker above both valid gating values and the payload square.
+static_assert((ExtendedSpecialFlag & ((uint64_t(1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS)) - 1)) == 0,
+              "ExtendedSpecialFlag overlaps from/to/type bits");
+static_assert(((uint64_t(SQUARE_NB) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & ExtendedSpecialFlag) == 0,
+              "ExtendedSpecialFlag collides with a valid gating payload");
+static_assert(((uint64_t(SQUARE_NB - 1) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & ExtendedSpecialFlag) == 0,
+              "ExtendedSpecialFlag collides with a valid special payload");
+#if defined(VERY_LARGE_BOARDS)
+static_assert(ExtendedSpecialFlag < (uint64_t(1) << 63), "ExtendedSpecialFlag exceeds 64-bit Move storage");
+static_assert(sizeof(Move) == sizeof(uint64_t), "very-large-board Move must remain 64-bit");
+#else
+// TT stores ordinary-board moves as uint32_t bit patterns. Keeping Move
+// unsigned makes the LARGEBOARDS bit-31 extended payload marker an ordinary bit.
+static_assert(ExtendedSpecialFlag < (uint64_t(1) << 32), "ExtendedSpecialFlag exceeds 32-bit Move storage");
+static_assert(sizeof(Move) == sizeof(uint32_t), "ordinary-board Move must remain 32-bit");
+#if defined(LARGEBOARDS)
+static_assert(ExtendedSpecialFlag == (uint64_t(1) << 31), "LARGEBOARDS ExtendedSpecialFlag must stay above gating payloads");
+#else
+static_assert(ExtendedSpecialFlag == (uint64_t(1) << 29), "8x8 ExtendedSpecialFlag must sit above the gating field");
+#endif
+#endif
+
 inline bool is_gating(Move m) {
-  if ((static_cast<uint64_t>(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
+  if (has_extended_special_payload(m))
+      return false;
+
+  if ((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) == 0)
       return false;
 
   const MoveType mt = type_of(m);
   constexpr uint64_t SquareFieldMask = (uint64_t(SQUARE_BIT_MASK) << 1) | 1;
+  const uint64_t upper = move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS);
   if (mt == SPECIAL || mt == LASER_FIRE)
-      return ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
+      return (upper & SquareFieldMask) != 0;
   if (mt == NORMAL || mt == CASTLING || mt == EN_PASSANT)
       return gating_type(m) != NO_PIECE_TYPE
-          || ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask);
+          || (upper & SquareFieldMask);
   return (mt == PROMOTION || mt == PIECE_PROMOTION || mt == PIECE_DEMOTION)
-      && ((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & SquareFieldMask) != 0;
+      && (upper & SquareFieldMask) != 0;
 }
 
 inline bool is_drop_move(Move m) {
@@ -1305,21 +1514,21 @@ inline bool is_insert_move(Move m) {
 }
 
 inline bool is_pass(Move m) {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
       && gating_type(m) == NO_PIECE_TYPE;
 }
 
 inline bool is_self_destruct(Move m) {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && from_sq(m) == to_sq(m)
       && !is_gating(m)
       && gating_type(m) != NO_PIECE_TYPE;
 }
 
 inline bool is_first_move_special(Move m) {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && from_sq(m) != to_sq(m)
       && !is_gating(m)
       && gating_type(m) != NO_PIECE_TYPE;
@@ -1361,7 +1570,7 @@ constexpr Move make_insert(Square marker, Square to, PieceType pt_in_hand, Piece
 }
 
 constexpr PieceType exchange_piece(Move m) {
-  return type_of(m) != DROP ? NO_PIECE_TYPE : PieceType((m >> SQUARE_BITS) & SQUARE_BIT_MASK);
+  return type_of(m) != DROP ? NO_PIECE_TYPE : PieceType((move_bits(m) >> SQUARE_BITS) & SQUARE_BIT_MASK);
 }
 
 constexpr Move make_exchange(Square to, PieceType pt_exchange, PieceType pt_in_hand, PieceType pt_dropped) {
@@ -1416,11 +1625,11 @@ constexpr Move make_promotion_potion(Square from, Square to, PieceType prom_pt, 
 }
 
 constexpr PieceType dropped_piece_type(Move m) {
-  return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 constexpr PieceType in_hand_piece_type(Move m) {
-  return PieceType((m >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
+  return PieceType((move_bits(m) >> (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS)) & (PIECE_TYPE_NB - 1));
 }
 
 inline bool is_custom(PieceType pt) {
@@ -1428,6 +1637,8 @@ inline bool is_custom(PieceType pt) {
 }
 
 inline bool is_ok(Move m) {
+  if (has_extended_special_payload(m))
+      return is_ok(from_sq(m)) && is_ok(to_sq(m)) && is_ok(special_payload_square(m));
   return from_sq(m) != to_sq(m)
       || is_gating(m)
       || is_laser_fire(m)
