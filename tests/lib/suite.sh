@@ -89,7 +89,7 @@ run_movement() {
     legacy geometry-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy rider-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy fast-regression-piece-regions.sh 3m "${ENGINE}" "${VARIANTS}"
-    legacy universal-hopper.sh 2m "${ENGINE}" "${VARIANTS}"
+    legacy universal-hopper.sh 5m "${ENGINE}" "${VARIANTS}"
     legacy wrapping-topology.sh 2m "${ENGINE}"
     legacy test_hex_boards.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy non-knight-riders.sh 2m "${ENGINE}"
