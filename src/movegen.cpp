@@ -951,8 +951,10 @@ namespace {
             if (pos.state()->promotionDeferred & from)
             {
                 b2 &= captureSquares | jumpCaptures;
-                // Pawns reaching the last rank get a final non-capture opportunity.
-                Bitboard lastRank = rank_bb(Us == WHITE ? pos.max_rank() : RANK_1);
+                // Configured types reaching the last rank get a final non-capture
+                // opportunity (mirrors move_promotion_status lastRankRetry).
+                Bitboard lastRank = (pos.variant()->promotionDeclineFinalRankRetryTypes & piece_set(Pt))
+                                  ? rank_bb(Us == WHITE ? pos.max_rank() : RANK_1) : Bitboard(0);
                 pawnPromotions &= captureSquares | jumpCaptures | lastRank;
             }
             else

@@ -1108,7 +1108,7 @@ constexpr PieceSet piece_set(PieceType pt) {
 
 constexpr PieceSet operator~(PieceSet ps) {
 #if defined(VERY_LARGE_BOARDS)
-  return PieceSet(~ps.low, PIECE_TYPE_BITS == 7 ? ~ps.high : 0);
+  return PieceSet(~ps.low, ~ps.high);
 #else
   return PieceSet(~ps.low);
 #endif
@@ -1440,22 +1440,22 @@ inline Square via_sq(Move m) {
 constexpr Move make_two_step(Square from, Square via, Square to, bool promotes = false) {
   return Move(
       ExtendedSpecialFlag
-    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION : TWO_LEG_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
-    + static_cast<uint64_t>(SPECIAL)
-    + (static_cast<uint64_t>(from) << SQUARE_BITS)
-    + static_cast<uint64_t>(to)
+    | (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+    | (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_TWO_STEP_PROMOTION : TWO_LEG_SUBTYPE_TWO_STEP) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    | static_cast<uint64_t>(SPECIAL)
+    | (static_cast<uint64_t>(from) << SQUARE_BITS)
+    | static_cast<uint64_t>(to)
   );
 }
 
 constexpr Move make_hook(Square from, Square via, Square to, bool promotes = false) {
   return Move(
       ExtendedSpecialFlag
-    + (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
-    + (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_HOOK_PROMOTION : TWO_LEG_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
-    + static_cast<uint64_t>(SPECIAL)
-    + (static_cast<uint64_t>(from) << SQUARE_BITS)
-    + static_cast<uint64_t>(to)
+    | (static_cast<uint64_t>(via) << (2 * SQUARE_BITS + MOVE_TYPE_BITS + PIECE_TYPE_BITS))
+    | (static_cast<uint64_t>(promotes ? TWO_LEG_SUBTYPE_HOOK_PROMOTION : TWO_LEG_SUBTYPE_HOOK) << (2 * SQUARE_BITS + MOVE_TYPE_BITS))
+    | static_cast<uint64_t>(SPECIAL)
+    | (static_cast<uint64_t>(from) << SQUARE_BITS)
+    | static_cast<uint64_t>(to)
   );
 }
 
@@ -1638,7 +1638,8 @@ inline bool is_custom(PieceType pt) {
 
 inline bool is_ok(Move m) {
   if (has_extended_special_payload(m))
-      return is_ok(from_sq(m)) && is_ok(to_sq(m)) && is_ok(special_payload_square(m));
+      return two_leg_subtype(m) != TWO_LEG_SUBTYPE_NONE && is_ok(from_sq(m))
+          && is_ok(to_sq(m)) && is_ok(special_payload_square(m));
   return from_sq(m) != to_sq(m)
       || is_gating(m)
       || is_laser_fire(m)

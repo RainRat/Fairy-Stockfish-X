@@ -5662,7 +5662,8 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
               {
                   Square targetSq = pop_lsb(targets);
                   // Unprotected = no defender of the target's owner.
-                  if (attackers_to(targetSq, pieces(), them))
+                  // Exclude the victim square like the mover-lion branch above.
+                  if (attackers_to(targetSq, pieces() & ~square_bb(targetSq), them))
                   {
                       counterstrikeAllowed = false;
                       break;
