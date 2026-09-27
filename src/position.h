@@ -2319,7 +2319,10 @@ inline bool Position::has_capture() const {
   // Check for cached value
   if (st->legalCapture != NO_VALUE)
       return st->legalCapture == VALUE_TRUE;
-  if (is_immediate_game_end())
+  // A via Royal capture ends the game immediately; suppress further capture
+  // generation there. Guarded to two-leg variants so unrelated variants keep
+  // the original path with no extra immediate-end scan.
+  if (has_two_leg_moves() && is_immediate_game_end())
   {
       st->legalCapture = VALUE_FALSE;
       return false;
@@ -2349,7 +2352,7 @@ inline bool Position::has_capture() const {
 inline bool Position::has_en_passant_capture() const {
   if (st->legalEnPassant != NO_VALUE)
       return st->legalEnPassant == VALUE_TRUE;
-  if (is_immediate_game_end())
+  if (has_two_leg_moves() && is_immediate_game_end())
   {
       st->legalEnPassant = VALUE_FALSE;
       return false;

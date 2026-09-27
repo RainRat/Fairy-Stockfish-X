@@ -265,7 +265,7 @@ struct Variant {
   DirectionPairSpec twoStepMoves[PIECE_TYPE_NB] = {};
   // Color-independent: Black masks are the point reflection of White masks,
   // and reflection preserves membership, so both colors share one set.
-  PieceSet twoStepPieceTypes = {};
+  PieceSet twoStepPieceTypes = NO_PIECE_SET;
   PieceSet lionMoveTypes = NO_PIECE_SET;
   PieceSet lionInsignificantPieces = NO_PIECE_SET;
   bool lionCapturingRule = false;
@@ -275,7 +275,7 @@ struct Variant {
   // Bent-path only: straight movement belongs to the ordinary Betza rider.
   // At most one capture per move; a hook must stop on capture.
   HookMoveSpec hookMoves[PIECE_TYPE_NB] = {};
-  PieceSet hookPieceTypes = {};
+  PieceSet hookPieceTypes = NO_PIECE_SET;
   PieceSet adjacentSwapMoveTypes = NO_PIECE_SET;
   PieceSet adjacentSwapTargetTypes = ~NO_PIECE_SET;
   bool adjacentSwapFriendly = false;

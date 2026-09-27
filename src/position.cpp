@@ -5594,8 +5594,12 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
   Piece mover = piece_on(from);
   const bool movingIsLion = mover != NO_PIECE
                          && (var->lionMoveTypes & piece_set(type_of(mover)));
+  // All capture squares of this move, for victim scan and post-move occupancy.
+  // For ordinary moves this is the single victim square; for two-leg moves
+  // both legs.
+  const Bitboard allCaptures = is_two_leg(m) ? twoLegInfo.captures : capture_squares(m);
   Bitboard lionCaptures = 0;
-  Bitboard captures = is_two_leg(m) ? twoLegInfo.captures : capture_squares(m);
+  Bitboard captures = allCaptures;
   while (captures)
   {
       Square victimSq = pop_lsb(captures);
@@ -5608,9 +5612,6 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
   if (!lionCaptures)
       return true;
 
-  // All capture squares of this move, for post-move occupancy. For ordinary
-  // moves this is the single victim square; for two-leg moves both legs.
-  const Bitboard allCaptures = is_two_leg(m) ? twoLegInfo.captures : capture_squares(m);
   const Square to = to_sq(m);
 
   if (movingIsLion)
@@ -5882,9 +5883,6 @@ bool Position::legal(Move m) const {
       return false;
   if ((type_of(m) == PIECE_PROMOTION || is_two_leg_promotion(m))
       && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
-      return false;
-  if (is_two_leg_promotion(m)
-      && !move_promotion_status(moverPiece, from, to, isCapture).allowed)
       return false;
   // Ordinary shogi-style promotions go through the same shared eligibility
   // function as two-leg promotions, so hand-constructed/TT moves cannot

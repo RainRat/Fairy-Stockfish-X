@@ -1228,7 +1228,12 @@ namespace {
                 continue;
 
             // Deduplicate equivalent routes within each movement subtype.
-            std::array<std::array<Bitboard, SQUARE_NB + 1>, 2> seen{};
+            // Keyed by (kind, capture-via, to): quiet routes sharing the same
+            // destination collapse, while distinct via captures stay separate.
+            // Small linear table avoids a Bitboard-per-square table (≈16KB on
+            // VLB) on the stack for every two-leg piece.
+            std::array<std::pair<int, int>, 512> seenPairs;
+            int seenCount = 0;
             Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces()) & ~pos.pieces();
             directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
             if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
@@ -1243,11 +1248,24 @@ namespace {
                                && path.to != from && (directTargets & path.to);
                     if (direct && !routeSensitive)
                         return false;
-                    auto& seenForKind = seen[path.kind == TwoLegKind::TWO_STEP ? 0 : 1];
+                    int kindIdx = path.kind == TwoLegKind::TWO_STEP ? 0 : 1;
                     int captureVia = capVia ? int(path.via) : SQUARE_NB;
-                    if ((seenForKind[captureVia] & path.to) && !routeSensitive)
+                    int toIdx = int(path.to);
+                    bool duplicate = false;
+                    if (!routeSensitive)
+                    {
+                        for (int i = 0; i < seenCount; ++i)
+                            if (seenPairs[i].first == (kindIdx * (SQUARE_NB + 1) + captureVia)
+                                && seenPairs[i].second == toIdx)
+                            {
+                                duplicate = true;
+                                break;
+                            }
+                    }
+                    if (duplicate)
                         return false;
-                    seenForKind[captureVia] |= square_bb(path.to);
+                    if (!routeSensitive && seenCount < int(seenPairs.size()))
+                        seenPairs[seenCount++] = {kindIdx * (SQUARE_NB + 1) + captureVia, toIdx};
                     moveList = emit_two_leg_candidate<Us, Type>(pos, moveList, pt, path.kind, from,
                                                                  path.via, path.to, capVia, capTo,
                                                                  target, checkers);
