@@ -412,6 +412,10 @@ std::string variant_info_json(const std::string& name) {
     field(capture, b, "rifle", boolean(v.rifleCapture));
     field(capture, b, "selfCapture", color_bools(v.selfCapture[WHITE], v.selfCapture[BLACK]));
     field(capture, b, "selfCaptureTypes", color_piece_sets(v.selfCaptureTypes[WHITE], v.selfCaptureTypes[BLACK]));
+    field(capture, b, "lionMoveTypes", piece_set_json(v.lionMoveTypes));
+    field(capture, b, "lionCapturingRule", boolean(v.lionCapturingRule));
+    field(capture, b, "lionInsignificantPieces", piece_set_json(v.lionInsignificantPieces));
+    field(capture, b, "lionCounterstrikeIfUnprotected", boolean(v.lionCounterstrikeIfUnprotected));
     capture << '}'; field(out, first, "capture", capture.str());
 
     std::ostringstream castling; castling << '{'; b = true;

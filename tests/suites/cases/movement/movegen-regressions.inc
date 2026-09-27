@@ -156,6 +156,20 @@ mandatoryPiecePromotion = false
 castling = false
 doubleStep = false
 
+# Shogi-style (+) pieces use the b2 promotion path rather than the pawn path,
+# so the last-rank retry must apply there too (mirrors move_promotion_status).
+[test-decline-piece-last-rank:chess]
+customPiece1 = a:R
+promotedPieceType = a:q
+promotionRegionWhite = *7 *8
+promotionRegionBlack = *2 *1
+promotionDeclineRule = true
+promotionDeclineFinalRankRetryTypes = a
+mandatoryPawnPromotion = false
+mandatoryPiecePromotion = false
+castling = false
+doubleStep = false
+
 [pawn-explicit-initial:fairy]
 customPiece1 = p:iW
 pawnTypes = p
@@ -555,5 +569,22 @@ out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-pawn-last-rank \
   "position fen 7k/8/P7/8/8/8/8/K7 w - - 0 1 moves a6a7 h8g8
 go perft 1")
 assert_contains "$out" "^a7a8q: 1$"
+
+# A declined shogi-style piece gets a last-rank non-capture retry via the b2 path.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-piece-last-rank \
+  "position fen 7k/8/8/8/8/1A6/8/K7 w - - 0 1 moves b3b7 h8g8
+go perft 1")
+assert_contains "$out" "^b7b8+: 1$"
+assert_contains "$out" "^b7b8: 1$"
+
+# Deferred rights survive FEN round trips and reloads.
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-piece-last-rank \
+  "position fen 7k/8/8/8/8/1A6/8/K7 w - - 0 1 moves b3b7 h8g8
+d")
+assert_contains_literal "$out" "D:b7"
+out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-piece-last-rank \
+  "position fen 6k1/1A6/8/8/8/8/8/K7 w - - 1 1 D:b7
+go perft 1")
+assert_contains "$out" "^b7b8+: 1$"
 
 echo "movegen regressions passed"

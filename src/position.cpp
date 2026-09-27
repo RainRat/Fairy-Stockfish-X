@@ -939,6 +939,13 @@ namespace {
           key ^= Zobrist::edgeInsertLock[c][pop_lsb(locks)];
   }
 
+  // Fixed FEN square spelling ("a1" style, 1-based decimal rank) independent
+  // of move-notation protocol. parse_fen_square() reads this spelling, so
+  // fen() must use it even under USI or other protocols.
+  inline std::string fen_square(Square sq) {
+      return std::string{char('a' + file_of(sq))} + std::to_string(int(rank_of(sq)) + 1);
+  }
+
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
       if (spec.size() < 2 || spec[0] < 'a' || spec[0] > 'a' + pos.max_file())
           return SQ_NONE;
@@ -964,7 +971,8 @@ namespace {
                                              char tag, Bitboard& out) {
       // Optional trailing FEN field (" D:sq,sq,..." / " T:sq,sq,..."). Absence
       // means no squares (backward compatible). Returns false and sets failbit
-      // on malformed syntax; squares must be on-board occupied squares.
+      // on malformed syntax; squares must be on-board. Occupancy is not
+      // required: T: may name a square emptied by the recorded capture.
       ss >> std::ws;
       if (ss.peek() != tag)
           return true;
@@ -2303,15 +2311,16 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   // Optional deferred-promotion field emitted by fen() (" D:sq,sq,...").
   // Only parsed for promotion-decline variants; absence means no deferred
-  // squares (backward compatible).
-  if (var->promotionDeclineRule)
-      parse_optional_square_list(*this, ss, 'D', st->promotionDeferred);
+  // squares (backward compatible). A malformed field is reported and leaves
+  // no deferred squares rather than silently loading different rights.
+  if (var->promotionDeclineRule && !parse_optional_square_list(*this, ss, 'D', st->promotionDeferred))
+      std::cerr << "Invalid deferred-promotion field in FEN; ignoring 'D' squares." << std::endl;
 
   // Optional Lion-trade field emitted by fen() (" T:sq,sq,..."). Only parsed
   // for lion-capture variants; absence means no restriction (backward
   // compatible, and the normal case for a fresh FEN with no preceding move).
-  if (var->lionCapturingRule)
-      parse_optional_square_list(*this, ss, 'T', st->lionTradeSquares);
+  if (var->lionCapturingRule && !parse_optional_square_list(*this, ss, 'T', st->lionTradeSquares))
+      std::cerr << "Invalid lion-trade field in FEN; ignoring 'T' squares." << std::endl;
 
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];
@@ -2822,6 +2831,26 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       if (count_in_hand(ALL_PIECES) == 0)
           ss << '-';
       ss << " " << gamePly + 1;
+      // Extended SFEN: preserve lion-family history that standard SFEN cannot
+      // represent. Appended only when set, so ordinary positions are unaffected.
+      // Uses the fixed FEN square spelling shared with parse_fen_square().
+      auto appendFenSquareList = [&](char tag, Bitboard squares) {
+          if (!bool(squares))
+              return;
+          ss << " " << tag << ":";
+          bool first = true;
+          for (Bitboard b = squares; b; )
+          {
+              if (!first)
+                  ss << ",";
+              first = false;
+              ss << fen_square(pop_lsb(b));
+          }
+      };
+      if (var->promotionDeclineRule)
+          appendFenSquareList('D', st->promotionDeferred);
+      if (var->lionCapturingRule)
+          appendFenSquareList('T', st->lionTradeSquares);
       return ss.str();
   }
 
@@ -2927,7 +2956,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   {
       ss << " ";
       for (Bitboard b = ep_squares(); b; )
-          ss << UCI::square(*this, pop_lsb(b));
+          ss << fen_square(pop_lsb(b));
       ss << " ";
   }
 
@@ -2979,7 +3008,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               if (is_ok(zoneCenter))
                   zones.push_back(std::string(c == WHITE ? "w" : "b")
                                   + (potion == Variant::POTION_FREEZE ? "f:" : "j:")
-                                  + UCI::square(*this, zoneCenter));
+                                  + fen_square(zoneCenter));
           }
 
       if (!zones.empty() || hasCooldownState)
@@ -3003,6 +3032,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   // Deferred-promotion and Lion-trade state cannot be reconstructed from the
   // board alone, so serialize each as an optional trailing field (" D:...",
   // " T:...") when set. Absence on load means no squares/restriction.
+  // Fixed square spelling keeps FEN independent of move-notation protocol.
   auto appendSquareList = [&](char tag, Bitboard squares) {
       if (!bool(squares))
           return;
@@ -3013,7 +3043,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           if (!first)
               ss << ",";
           first = false;
-          ss << UCI::square(*this, pop_lsb(b));
+          ss << fen_square(pop_lsb(b));
       }
   };
   if (var->promotionDeclineRule)
@@ -12544,7 +12574,50 @@ void Position::flip() {
           f += "-";
   }
 
-  std::getline(ss, token); // Half and full moves
+  std::getline(ss, token); // Half and full moves, trailing option fields
+  // Rank order is reversed above, so reflect square-based history (D:/T:)
+  // along with the board. Files are unchanged by flip.
+  for (const std::string& tag : { std::string(" D:"), std::string(" T:") })
+  {
+      size_t tagPos = token.find(tag);
+      if (tagPos == std::string::npos)
+          continue;
+      size_t listBegin = tagPos + tag.size();
+      size_t listEnd = token.find(' ', listBegin);
+      if (listEnd == std::string::npos)
+          listEnd = token.size();
+      std::string mirrored;
+      size_t sqBegin = listBegin;
+      bool firstSq = true;
+      while (sqBegin <= listEnd)
+      {
+          size_t sqEnd = token.find(',', sqBegin);
+          if (sqEnd == std::string::npos || sqEnd > listEnd)
+              sqEnd = listEnd;
+          std::string spec = token.substr(sqBegin, sqEnd - sqBegin);
+          if (!firstSq)
+              mirrored += ",";
+          firstSq = false;
+          if (spec.size() >= 2)
+          {
+              int rankNumber = 0;
+              bool numeric = true;
+              for (size_t i = 1; i < spec.size(); ++i)
+                  if (std::isdigit(static_cast<unsigned char>(spec[i])))
+                      rankNumber = rankNumber * 10 + (spec[i] - '0');
+                  else
+                      numeric = false;
+              if (numeric && rankNumber >= 1 && rankNumber <= max_rank() + 1)
+                  mirrored += spec[0] + std::to_string(max_rank() + 2 - rankNumber);
+              else
+                  mirrored += spec;
+          }
+          else
+              mirrored += spec;
+          sqBegin = sqEnd + 1;
+      }
+      token.replace(listBegin, listEnd - listBegin, mirrored);
+  }
   f += token;
 
   set(variant(), f, is_chess960(), st, this_thread());
