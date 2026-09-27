@@ -2411,6 +2411,34 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "nFoldRuleImmediate cannot be negative." << std::endl;
         valid = false;
     }
+    // Stalemate, checkmate and repetition results feed directly into game
+    // adjudication and search scores, where VALUE_NONE has no valid meaning
+    // (it would surface as a bogus near-maximum score). Reject "none" here
+    // instead of working around it at every use site. extinctionValue and
+    // pseudoRoyalValue keep "none" as their documented "disabled" state.
+    auto result_has_none = [](const ColorSetting<Value>& setting) {
+        return setting.global == VALUE_NONE
+            || setting.byColor[WHITE] == VALUE_NONE
+            || setting.byColor[BLACK] == VALUE_NONE;
+    };
+    if (result_has_none(v->stalemateValue))
+    {
+        if (DoCheck)
+            std::cerr << "stalemateValue cannot be none." << std::endl;
+        valid = false;
+    }
+    if (result_has_none(v->checkmateValue))
+    {
+        if (DoCheck)
+            std::cerr << "checkmateValue cannot be none." << std::endl;
+        valid = false;
+    }
+    if (result_has_none(v->nFoldValue))
+    {
+        if (DoCheck)
+            std::cerr << "nFoldValue cannot be none." << std::endl;
+        valid = false;
+    }
     if (v->nonRoyalDrawThreshold < 0)
     {
         if (DoCheck)

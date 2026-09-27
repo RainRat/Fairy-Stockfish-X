@@ -412,10 +412,11 @@ bad_piece_value_ini=$(mktemp)
 unknown_option_ini=$(mktemp)
 bad_royal_betza_ini=$(mktemp)
 bad_unmatched_closer_ini=$(mktemp)
+bad_none_result_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${bad_none_result_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -526,6 +527,23 @@ cat > "${bad_check_counting_ini}" <<'INI'
 checking = false
 checkCounting = true
 startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+INI
+
+# Stalemate, checkmate and repetition results have no valid "none" meaning:
+# VALUE_NONE would surface as a bogus near-maximum score in adjudication
+# and search. Per-color forms are covered too.
+cat > "${bad_none_result_ini}" <<'INI'
+[bad-stalemate-none:chess]
+stalemateValue = none
+
+[bad-checkmate-none:chess]
+checkmateValue = none
+
+[bad-nfold-none:chess]
+nFoldValue = none
+
+[bad-stalemate-none-white:chess]
+stalemateValueWhite = none
 INI
 
 cat > "${bad_hopper_minmax_ini}" <<'INI'
@@ -809,6 +827,15 @@ assert_contains "${bad_ini_syntax_uci_output}" "unknown variant 'bad-ini-syntax'
 bad_check_counting_output=$("${ENGINE}" check "${bad_check_counting_ini}" 2>&1 || true)
 assert_contains_literal "${bad_check_counting_output}" "checkCounting=true requires checking=true."
 assert_contains_literal "${bad_check_counting_output}" "Variant 'bad-check-counting' has invalid configuration. Skipping."
+
+bad_none_result_output=$("${ENGINE}" check "${bad_none_result_ini}" 2>&1 || true)
+assert_contains_literal "${bad_none_result_output}" "stalemateValue cannot be none."
+assert_contains_literal "${bad_none_result_output}" "checkmateValue cannot be none."
+assert_contains_literal "${bad_none_result_output}" "nFoldValue cannot be none."
+assert_contains_literal "${bad_none_result_output}" "Variant 'bad-stalemate-none' has invalid configuration. Skipping."
+assert_contains_literal "${bad_none_result_output}" "Variant 'bad-checkmate-none' has invalid configuration. Skipping."
+assert_contains_literal "${bad_none_result_output}" "Variant 'bad-nfold-none' has invalid configuration. Skipping."
+assert_contains_literal "${bad_none_result_output}" "Variant 'bad-stalemate-none-white' has invalid configuration. Skipping."
 
 bad_hopper_minmax_output=$(run_uci "$ENGINE" "$bad_hopper_minmax_ini" "bad-hopper-minmax" </dev/null 2>&1 || true)
 assert_contains_literal "${bad_hopper_minmax_output}" "Invalid hopper range (min > max)"
