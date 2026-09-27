@@ -68,6 +68,13 @@ twoStepMoves = k:NW>NE
 royalPieceNoThroughCheck = true
 startFen = k7/8/3b4/8/4K3/8/8/8 w - - 0 1
 castling = false
+
+[test-two-step-via-check:chess]
+allowChecks = false
+customPiece1 = a:0
+twoStepMoves = a:N>S
+startFen = 8/8/8/8/8/1k6/1A6/K7 b - - 0 1
+castling = false
 EOF
 
 cat >"$TMP_INI" <<'EOF'
@@ -529,6 +536,13 @@ out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-royal-route \
   "position startpos
 go perft 1")
 assert_contains "$out" "^e4d5e6: 1$"
+
+# A two-step mover can capture the King on its via square and return to its
+# origin; that first-leg capture must still count as an attack.
+out=$(run_uci_cmds "$ENGINE" "$HOOK_INI" test-two-step-via-check \
+  "position fen 8/8/8/8/8/1k6/1A6/K7 b - - 0 1
+d")
+assert_contains "$out" "^Checkers:[[:space:]]*b2"
 
 # A declined Chu promotion can be taken on a capture starting in-zone and ending outside.
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-decline-leave-capture \

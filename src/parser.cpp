@@ -784,6 +784,7 @@ namespace {
     template <> bool set(const std::string& value, ChasingRule& target) {
         static constexpr auto values = std::array{
             std::pair{"axf", AXF_CHASING},
+            std::pair{"all", ALL_ATTACKS_CHASING},
             std::pair{"none", NO_CHASING},
         };
         return parse_named_value(value, target, values);
@@ -2160,6 +2161,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("nMoveHardLimitRuleValue", v->nMoveHardLimitRuleValue);
     parse_attribute("nFoldRule", v->nFoldRule);
     parse_attribute("nFoldRuleImmediate", v->nFoldRuleImmediate);
+    parse_attribute("bareKingRule", v->bareKingRule);
+    parse_attribute("bareKingExemptTypes", v->bareKingExemptTypes, v);
+    parse_attribute("bareKingDeadTypes", v->bareKingDeadTypes, v);
     parse_attribute("nonRoyalDrawThreshold", v->nonRoyalDrawThreshold);
     parse_color_setting("nFoldValue", v->nFoldValue);
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);

@@ -3493,10 +3493,19 @@ bool Position::two_leg_attacks_square(Color us, PieceType pt, Square from, Squar
   // `friendly`, matching the generic attackers_to() contract.
   if (!(occupied & from))
       return false;
-  return detail::TwoLegWalker::for_each_two_leg_path(*this, us, pt, from, occupied, friendly,
-      [&](const detail::TwoLegPath& path) {
-          return path.via == target || path.to == target;
-      }, target);
+  auto hitsTarget = [&](const detail::TwoLegPath& path) {
+      return path.via == target || path.to == target;
+  };
+
+  if (detail::TwoLegWalker::for_each_two_leg_path(*this, us, pt, from, occupied, friendly,
+                                                   hitsTarget, target))
+      return true;
+
+  // A two-step mover can capture on its first leg and finish elsewhere.
+  // Hooks cannot capture on the bend, so only two-step paths need this query.
+  return (variant()->twoStepPieceTypes & piece_set(pt))
+      && detail::TwoLegWalker::for_each_two_step_path(*this, us, pt, from, occupied, friendly,
+                                                       hitsTarget, SQ_NONE, target);
 }
 
 Bitboard Position::two_leg_attackers_to(Square s, Bitboard occupied, Color c,
@@ -5663,8 +5672,12 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
               {
                   Square targetSq = pop_lsb(targets);
                   // Unprotected = no defender of the target's owner.
-                  // Exclude the victim square like the mover-lion branch above.
-                  if (attackers_to(targetSq, pieces() & ~square_bb(targetSq), them))
+                  // Check the resulting position: moving off a line can reveal
+                  // a defender that was hidden by the capturing piece.
+                  Bitboard after = pieces() & ~square_bb(from) & ~allCaptures;
+                  if (is_ok(to))
+                      after |= square_bb(to);
+                  if (attackers_to(targetSq, after, them))
                   {
                       counterstrikeAllowed = false;
                       break;
@@ -11140,8 +11153,18 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       if (   stp->key == st->key
           && ++cnt + 1 >= (ply > i && !moveRepetition && !chaseUs && !chaseThem && !perpetualUs && !perpetualThem ? 2 : target))
       {
+          bool mutualJitto = var->chasingRule == ALL_ATTACKS_CHASING;
+          for (StateInfo* cycle = st; mutualJitto && cycle != stp; cycle = cycle->previous)
+          {
+              Move move = cycle->move;
+              bool jitto = is_pass(move)
+                        || (is_two_leg(move) && from_sq(move) == to_sq(move)
+                            && !cycle->captured.piece && !cycle->extraCaptured.piece);
+              mutualJitto = jitto;
+          }
           result = convert_mate_value(  (perpetualThem || perpetualUs) ? (!perpetualUs ? VALUE_MATE : !perpetualThem ? -VALUE_MATE : VALUE_DRAW)
                                       : (chaseThem || chaseUs) ? (!chaseUs ? VALUE_MATE : !chaseThem ? -VALUE_MATE : VALUE_DRAW)
+                                      : mutualJitto ? -VALUE_MATE
                                       : var->nFoldValue.get(sideToMove), ply);
           if (result == VALUE_DRAW && var->materialCounting)
               result = convert_mate_value(material_counting_result(), ply);
@@ -11277,6 +11300,66 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               result = c == sideToMove ? pseudo_royal_value(ply) : -pseudo_royal_value(ply);
               return true;
           }
+
+  // Baring is checked only at material exhaustion: one side has no live
+  // non-royal pieces and the other has exactly one. A promoted exempt piece
+  // qualifies; dead pieces on their final rank do not.
+  if (var->bareKingRule)
+  {
+      auto active_material = [&](Color c) {
+          Bitboard material = pieces(c) & ~st->pseudoRoyals;
+          int count = 0;
+          while (material)
+          {
+              Square sq = pop_lsb(material);
+              PieceType pt = type_of(piece_on(sq));
+              if ((var->bareKingDeadTypes & piece_set(pt))
+                  && relative_rank(c, sq, max_rank()) == max_rank())
+                  continue;
+              ++count;
+          }
+          return count;
+      };
+      auto qualifying_material = [&](Color c) {
+          Bitboard material = pieces(c) & ~st->pseudoRoyals;
+          Bitboard qualifying = 0;
+          while (material)
+          {
+              Square sq = pop_lsb(material);
+              PieceType pt = type_of(piece_on(sq));
+              if ((var->bareKingDeadTypes & piece_set(pt))
+                  && relative_rank(c, sq, max_rank()) == max_rank())
+                  continue;
+              if (is_promoted(sq) || !(var->bareKingExemptTypes & piece_set(pt)))
+                  qualifying |= square_bb(sq);
+          }
+          return qualifying;
+      };
+
+      Color bare = sideToMove;
+      Color other = ~bare;
+      Bitboard bareRoyals = st->pseudoRoyals & pieces(bare);
+      Bitboard otherRoyals = st->pseudoRoyals & pieces(other);
+      Bitboard qualifying = qualifying_material(other);
+      if (popcount(bareRoyals) == 1 && popcount(otherRoyals) == 1
+          && active_material(bare) == 0 && active_material(other) == 1
+          && popcount(qualifying) == 1)
+      {
+          // Chu/Dai permit moving while in check, so a royal's attack map is
+          // sufficient here and avoids generating moves during adjudication.
+          bool canCaptureExtra = attackers_to(lsb(qualifying), pieces(), bare) & bareRoyals;
+          bool canCaptureRoyal = attackers_to(lsb(otherRoyals), pieces(), bare) & bareRoyals;
+          if (canCaptureRoyal)
+              return false;
+          if (canCaptureExtra)
+          {
+              result = VALUE_DRAW;
+              return true;
+          }
+          result = mated_in(ply);
+          return true;
+      }
+  }
 
   // Extinction
   // Extinction does not apply for pseudo-royal pieces in normal capture rules,
@@ -12091,6 +12174,20 @@ Bitboard Position::chased() const {
           }
       }
   };
+
+  // Chu/Dai repetition records every enemy piece attacked by the last mover.
+  // Unlike Xiangqi chase adjudication, attacks need not be undefended.
+  if (var->chasingRule == ALL_ATTACKS_CHASING)
+  {
+      Bitboard targets = pieces(sideToMove);
+      while (targets)
+      {
+          Square sq = pop_lsb(targets);
+          if (attackers_to(sq, ~sideToMove))
+              b |= square_bb(sq);
+      }
+      return b;
+  }
 
   // Direct attacks
   Square from = from_sq(st->move);

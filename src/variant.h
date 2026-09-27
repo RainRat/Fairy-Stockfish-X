@@ -479,6 +479,9 @@ struct Variant {
   Value nMoveHardLimitRuleValue = VALUE_DRAW;
   int nFoldRule = 3;
   int nFoldRuleImmediate = 0;
+  bool bareKingRule = false;
+  PieceSet bareKingExemptTypes = NO_PIECE_SET;
+  PieceSet bareKingDeadTypes = NO_PIECE_SET;
   ColorSetting<Value> nFoldValue = ColorSetting<Value>(VALUE_DRAW);
 
 

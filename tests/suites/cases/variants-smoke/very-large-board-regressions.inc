@@ -126,7 +126,7 @@ test_vlb_chu_dai_promotion_wiring() {
 
   # Chu Dragon Horse promotes to Horned Falcon (igui N>S).
   output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
-position fen K11/12/12/12/5D'6/12/12/12/12/12/12/11k w - - 0 1 moves f8e9+ l1k1
+position fen K11/12/12/12/5D'6/12/12/12/12/12/1p10/11k w - - 0 1 moves f8e9+ l1k1
 go perft 1
 EOF
 )
@@ -138,7 +138,7 @@ EOF
 
   # Chu Drunk Knight promotes to Soaring Eagle (double capture NE>NE).
   output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
-position fen K11/8p3/7p4/12/5E'6/12/12/12/12/12/12/11k w - - 0 1 moves f8g9+ l1k1
+position fen K11/8p3/7p4/12/5E'6/12/12/12/12/12/1p10/11k w - - 0 1 moves f8g9+ l1k1
 go perft 1
 EOF
 )
@@ -146,7 +146,7 @@ EOF
 
   # Dai Dragon Horse promotes to Horned Falcon (igui N>S).
   output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
-position fen K14/15/15/15/15/5D'9/15/15/15/15/15/15/15/15/k14 w - - 0 1 moves f10e11+ a1a2
+position fen K14/15/15/15/15/5D'9/15/15/15/15/15/15/15/1p13/k14 w - - 0 1 moves f10e11+ a1a2
 go perft 1
 EOF
 )
@@ -158,11 +158,75 @@ EOF
 
   # Dai Drunk Knight promotes to Soaring Eagle (double capture NE>NE).
   output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
-position fen K14/15/8p6/7p7/15/5E'9/15/15/15/15/15/15/15/15/k14 w - - 0 1 moves f10g11+ a1a2
+position fen K14/15/8p6/7p7/15/5E'9/15/15/15/15/15/15/15/1p13/k14 w - - 0 1 moves f10g11+ a1a2
 go perft 1
 EOF
 )
   assert_contains_literal "$output" "g11h12i13: 1"
+}
+
+test_vlb_chu_dai_dead_pieces() {
+  local output
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 11k/P11/12/12/12/12/12/12/12/12/12/K11 w - - 0 1
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu and Dai dead-piece rules require VERY_LARGE_BOARDS"
+    return 0
+  fi
+  assert_contains_literal "$output" "a11a12: 1"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen 14k/P14/15/15/15/15/15/15/15/15/15/15/15/15/K14 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "a14a15: 1"
+
+  # Declining on zone entry and moving onward does not grant Dai Chu's
+  # special last-rank pawn retry; the pawn may become dead there.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen 14k/15/15/15/15/P14/15/15/15/15/15/15/15/15/K14 w - - 0 1 moves a10a11 o15n15 a11a12 n15o15 a12a13 o15n15 a13a14 n15o15
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "a14a15: 1"
+  assert_not_contains_literal "$output" "a14a15+"
+
+  # A bare King loses against one qualifying extra piece.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 11k/12/12/12/12/12/12/12/12/12/12/KR10 b - - 0 1
+go depth 1
+EOF
+)
+  assert_contains_literal "$output" "bestmove (none)"
+
+  # An unpromoted pawn does not count as winning material.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 11k/12/12/12/12/12/12/12/12/12/1P10/K11 b - - 0 1
+go depth 1
+EOF
+)
+  assert_not_contains "$output" "bestmove (none)"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen P10k/12/12/12/12/12/12/12/12/12/12/K11 b - - 0 1
+go depth 1
+EOF
+)
+  assert_not_contains "$output" "bestmove (none)"
+
+  # The bare King can take the sole extra piece on its next move, so the
+  # immediate material-depletion result is a draw.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 10Rk/12/12/12/12/12/12/12/12/12/12/K11 b - - 0 1
+go depth 1
+EOF
+)
+  assert_contains_literal "$output" "score cp 0"
 }
 
 test_vlb_lame_riders() {
@@ -407,6 +471,7 @@ UCI
 test_vlb_gale_smoke
 test_vlb_chu_dai_lion_moves
 test_vlb_chu_dai_promotion_wiring
+test_vlb_chu_dai_dead_pieces
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen

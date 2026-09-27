@@ -138,7 +138,9 @@ const char* walling_name(WallingRule v) {
     static const char* names[] = {"none", "arrow", "duck", "edge", "past", "static"};
     return names[int(v)];
 }
-const char* chasing_name(ChasingRule v) { return v == AXF_CHASING ? "axf" : "none"; }
+const char* chasing_name(ChasingRule v) {
+    return v == AXF_CHASING ? "axf" : v == ALL_ATTACKS_CHASING ? "all" : "none";
+}
 const char* material_counting_name(MaterialCounting v) {
     static const char* names[] = {"none", "janggi", "unweighted", "whiteDrawOdds", "blackDrawOdds"};
     return names[int(v)];
@@ -469,6 +471,9 @@ std::string variant_info_json(const std::string& name) {
     field(end, b, "nMoveRule", std::to_string(v.nMoveRule));
     field(end, b, "nMoveRuleTypes", color_piece_sets(v.nMoveRuleTypes[WHITE], v.nMoveRuleTypes[BLACK]));
     field(end, b, "nFoldRule", std::to_string(v.nFoldRule));
+    field(end, b, "bareKingRule", boolean(v.bareKingRule));
+    field(end, b, "bareKingExemptTypes", piece_set_json(v.bareKingExemptTypes));
+    field(end, b, "bareKingDeadTypes", piece_set_json(v.bareKingDeadTypes));
     field(end, b, "nFoldValue", quote(value_name(v.nFoldValue)));
     field(end, b, "nFoldValueAbsolute", boolean(v.nFoldValueAbsolute));
     field(end, b, "perpetualCheckIllegal", boolean(v.perpetualCheckIllegal));

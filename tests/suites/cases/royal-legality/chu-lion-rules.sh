@@ -88,6 +88,14 @@ UCI
 )
 assert_not_contains "${out}" '^e1e4: 1$'
 
+# A counterstriker cannot hide a sliding defender by vacating its line.
+out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-counterstrike-test <<'UCI'
+position fen 8/8/8/r1Rl4/8/8/1L6/1r6 b - - 0 1 moves b1b2
+go perft 1
+UCI
+)
+assert_not_contains "${out}" '^c4d4: 1$'
+
 # The same recapture is allowed when the prior capturer was a Lion.
 out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-test <<'UCI'
 position fen 8/8/8/8/1R6/8/1L6/1l6 b - - 0 1 moves b1b2

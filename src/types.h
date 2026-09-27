@@ -641,7 +641,7 @@ enum CountingRule {
 };
 
 enum ChasingRule {
-  NO_CHASING, AXF_CHASING
+  NO_CHASING, AXF_CHASING, ALL_ATTACKS_CHASING
 };
 
 enum EnclosingRule {
