@@ -47,6 +47,8 @@ tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EX
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 ```
 
+Build these named test binaries with the wrapper so the test runner can verify their build profiles.
+
 If you prefer standard make, compile from `src/` using `make -j build ...`.
 
 ## Running the engine
@@ -74,6 +76,8 @@ bash tests/fast-regression.sh src/stockfish-allvars
 tests/protocol.sh src/stockfish-allvars
 tests/perft.sh all src/stockfish-allvars
 ```
+
+Use the named binary for each broad check and report the binary actually tested. A run with a different binary does not establish whether the documented check passes. The fast suite may also use `src/stockfish-vlb` when it exists; rebuild that binary from current sources before running the suite.
 
 Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 tests/python/test_pyffish_api.py`.
 
@@ -184,3 +188,4 @@ The fast and full suites preserve signature-based artifacts under `.local/build`
 * Config parses; changed rules are documented; old keys remain compatible where practical.
 * Positions load and search; relevant perft, protocol, regression, and upstream checks pass.
 * Performance-sensitive changes have before/after notes; only intended files are staged.
+* When asked to update an existing PR, commit and push the intended changes, refresh the PR description and test status, then verify that the remote head and PR reflect the update.
