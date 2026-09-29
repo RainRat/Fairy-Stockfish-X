@@ -847,7 +847,7 @@ static void test_quiet_two_leg_promotion_is_tactical() {
     // A quiet (victimless) two-step promotion must appear in the CAPTURES
     // generation bucket, exactly like an ordinary quiet pawn promotion.
     pos.set(variants.get("test-lion-promo-only"),
-            "8/8/6L1/8/8/8/8/4K2k w - - 0 1", false, &st, nullptr);
+            "8/8/6L1/8/8/8/8/4K1k1 w - - 0 1", false, &st, nullptr);
     Move m_quiet_promo = make_two_step(SQ_G6, SQ_G7, SQ_G8, true);
     assert(pos.legal(m_quiet_promo));
     assert(!pos.capture(m_quiet_promo));
@@ -855,6 +855,8 @@ static void test_quiet_two_leg_promotion_is_tactical() {
     assert(pos.capture_or_promotion(m_quiet_promo));
     // A quiet promotion searched in CAPTURES must not be duplicated in QUIETS.
     assert(!MoveList<QUIETS>(pos).contains(m_quiet_promo));
+    assert(pos.gives_check(m_quiet_promo));
+    assert(!MoveList<QUIET_CHECKS>(pos).contains(m_quiet_promo));
     Move m_quiet = make_two_step(SQ_G6, SQ_G7, SQ_G8, false);
     assert(!MoveList<CAPTURES>(pos).contains(m_quiet));
     assert(MoveList<QUIETS>(pos).contains(m_quiet));
@@ -875,6 +877,8 @@ static void test_quiet_two_leg_promotion_is_tactical() {
     assert(MoveList<CAPTURES>(pos).contains(m_hook_quiet_promo));
     assert(pos.capture_or_promotion(m_hook_quiet_promo));
     assert(!MoveList<QUIETS>(pos).contains(m_hook_quiet_promo));
+    assert(pos.gives_check(m_hook_quiet_promo));
+    assert(!MoveList<QUIET_CHECKS>(pos).contains(m_hook_quiet_promo));
     // Quiet non-promotions stay out of CAPTURES.
     Move m_hook_quiet = make_hook(SQ_G7, SQ_G8, SQ_H8, false);
     assert(!MoveList<CAPTURES>(pos).contains(m_hook_quiet));

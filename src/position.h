@@ -374,6 +374,8 @@ struct StateInfoDerived {
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
+  // JCSA perpetual-check priority also applies when royal attacks may be ignored.
+  bool       jcsaCheck = false;
 };
 
 struct MoveUndoInfo {

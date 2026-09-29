@@ -2367,6 +2367,7 @@ void Position::set_check_info(StateInfo* si) const {
 
   std::fill_n(si->checkSquares, PIECE_TYPE_NB, Bitboard(0));
   auto init_pseudo_royal_state = [&]() {
+      si->jcsaCheck = false;
       si->pseudoRoyalCandidates = 0;
       si->pseudoRoyals = 0;
       if (pseudo_royal_types())
@@ -2379,6 +2380,18 @@ void Position::set_check_info(StateInfo* si) const {
                   si->pseudoRoyals |= pieces(sideToMove, pt);
               if (count(~sideToMove, pt) <= pseudo_royal_count())
                   si->pseudoRoyals |= pieces(~sideToMove, pt);
+          }
+      }
+      if (var->chasingRule == ALL_ATTACKS_CHASING && var->perpetualCheckIllegal)
+      {
+          si->jcsaCheck = bool(si->evasionCheckersBB);
+          if (allow_checks())
+          {
+              Bitboard royals = si->pseudoRoyalCandidates & pieces(sideToMove);
+              // With both King and Prince, either may be sacrificed;
+              // attacking one is not a check on the surviving royal.
+              if (royals && !more_than_one(royals))
+                  si->jcsaCheck |= bool(attackers_to(lsb(royals), ~sideToMove));
           }
       }
   };
@@ -11129,6 +11142,46 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
 
+  if (var->chasingRule == ALL_ATTACKS_CHASING)
+  {
+      bool attacked[COLOR_NB] = {};
+      bool perpetual[COLOR_NB] = { var->perpetualCheckIllegal, var->perpetualCheckIllegal };
+      bool mutualJitto = true;
+      StateInfo* cycle = st;
+      int cnt = 1;
+      for (int i = 2; i <= end; i += 2)
+      {
+          for (Color mover : { ~sideToMove, sideToMove })
+          {
+              attacked[mover] |= bool(cycle->chased);
+              perpetual[mover] &= cycle->jcsaCheck;
+              Move move = cycle->move;
+              mutualJitto &= is_pass(move)
+                          || (is_two_leg(move) && from_sq(move) == to_sq(move)
+                              && !cycle->captured.piece && !cycle->extraCaptured.piece);
+              cycle = cycle->previous;
+          }
+          // Jitto can repeat a position after only two plies. JCSA attacks
+          // need occur somewhere in the cycle, not against the same victim.
+          if (cycle->key == st->key && ++cnt >= target)
+          {
+              Value value = var->nFoldValue.get(sideToMove);
+              if (perpetual[WHITE] || perpetual[BLACK])
+                  value = perpetual[sideToMove] ? (perpetual[~sideToMove] ? VALUE_DRAW : -VALUE_MATE)
+                                               : VALUE_MATE;
+              else if (attacked[WHITE] != attacked[BLACK])
+                  value = attacked[sideToMove] ? -VALUE_MATE : VALUE_MATE;
+              else if (mutualJitto)
+                  value = -VALUE_MATE;
+              result = convert_mate_value(value, ply);
+              if (result == VALUE_DRAW && var->materialCounting)
+                  result = convert_mate_value(material_counting_result(), ply);
+              return true;
+          }
+      }
+      return false;
+  }
+
   if (end < 4)
       return false;
 
@@ -11183,18 +11236,8 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       if (   stp->key == st->key
           && ++cnt + 1 >= (ply > i && !moveRepetition && !chaseUs && !chaseThem && !perpetualUs && !perpetualThem ? 2 : target))
       {
-          bool mutualJitto = var->chasingRule == ALL_ATTACKS_CHASING;
-          for (StateInfo* cycle = st; mutualJitto && cycle != stp; cycle = cycle->previous)
-          {
-              Move move = cycle->move;
-              bool jitto = is_pass(move)
-                        || (is_two_leg(move) && from_sq(move) == to_sq(move)
-                            && !cycle->captured.piece && !cycle->extraCaptured.piece);
-              mutualJitto = jitto;
-          }
           result = convert_mate_value(  (perpetualThem || perpetualUs) ? (!perpetualUs ? VALUE_MATE : !perpetualThem ? -VALUE_MATE : VALUE_DRAW)
                                       : (chaseThem || chaseUs) ? (!chaseUs ? VALUE_MATE : !chaseThem ? -VALUE_MATE : VALUE_DRAW)
-                                      : mutualJitto ? -VALUE_MATE
                                       : var->nFoldValue.get(sideToMove), ply);
           if (result == VALUE_DRAW && var->materialCounting)
               result = convert_mate_value(material_counting_result(), ply);
@@ -12205,16 +12248,39 @@ Bitboard Position::chased() const {
       }
   };
 
-  // Chu/Dai repetition records every enemy piece attacked by the last mover.
-  // Unlike Xiangqi chase adjudication, attacks need not be undefended.
+  // Chu/Dai count attacks by the mover and newly exposed attacks, including
+  // defended targets. Unchanged attacks by stationary pieces do not count.
   if (var->chasingRule == ALL_ATTACKS_CHASING)
   {
+      Square from = from_sq(st->move), to = to_sq(st->move);
+      if (is_pass(st->move) || from == to)
+          return b;
+      Color mover = ~sideToMove;
+      Bitboard beforeOccupied = (pieces() & ~square_bb(to)) | from;
+      if (st->captured)
+          beforeOccupied |= st->captured.square;
+      if (st->extraCaptured)
+          beforeOccupied |= st->extraCaptured.square;
+      Bitboard beforeFriendly = (pieces(mover) & ~square_bb(to)) | from;
       Bitboard targets = pieces(sideToMove);
       while (targets)
       {
           Square sq = pop_lsb(targets);
-          if (attackers_to(sq, ~sideToMove))
+          Bitboard attackers = attackers_to(sq, mover);
+          if (attackers & to)
               b |= square_bb(sq);
+          else while (attackers)
+          {
+              Square attacker = pop_lsb(attackers);
+              PieceType pt = type_of(piece_on(attacker));
+              if (!(attacks_from(mover, pt, attacker, beforeOccupied) & sq)
+                  && !two_leg_attacks_square(mover, pt, attacker, sq, beforeOccupied,
+                                             beforeFriendly & ~square_bb(sq)))
+              {
+                  b |= square_bb(sq);
+                  break;
+              }
+          }
       }
       return b;
   }
@@ -12720,6 +12786,7 @@ bool Position::pos_is_ok() const {
       && si.pseudoRoyals == st->pseudoRoyals
       && same_array(si.extinctionSeen, st->extinctionSeen)
       && si.chased == st->chased
+      && si.jcsaCheck == st->jcsaCheck
       && si.shak == st->shak
       && si.bikjang == st->bikjang;
 

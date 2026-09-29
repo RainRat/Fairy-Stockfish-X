@@ -27,6 +27,65 @@ class TestBindings(unittest.TestCase):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_jcsa_repetition_attacking_moves(self):
+        sf.load_variant_config(
+            "[api-jcsa-repetition:chess]\n"
+            "castling = false\nnFoldRule = 4\nnFoldRuleImmediate = 4\n"
+            "nFoldValue = loss\nchasingRule = all\n"
+            "customPiece1 = j:KAD\ntwoStepMoves = j:*\n"
+        )
+        cases = [
+            # White alternates attacked victims; Black must win, even though
+            # no single pawn is attacked throughout the cycle.
+            ("7k/8/8/pp6/8/8/R7/7K b - - 0 1",
+             ["h8g8", "a2b2", "g8h8", "b2a2"], sf.VALUE_MATE),
+            # An unchanged attack by the stationary rook is not an attacking
+            # king move. The neutral repetition loses for Black to move.
+            ("7k/8/8/pp6/8/8/R7/7K b - - 0 1",
+             ["h8g8", "h1g1", "g8h8", "g1h1"], -sf.VALUE_MATE),
+            # Both sides attack: JCSA's neutral-cycle rule applies, rather
+            # than Xiangqi's mutual-chase draw.
+            ("5k2/7r/8/p7/7P/8/R7/5K2 b - - 0 1",
+             ["h7h6", "a2a3", "h6h7", "a3a2"], -sf.VALUE_MATE),
+            # A cycle need only include an attacking move, not attack on
+            # every move: a2b2 loses the attack, b2a2 restores it.
+            ("7k/8/8/p7/8/8/R7/7K b - - 0 1",
+             ["h8g8", "a2b2", "g8h8", "b2a2"], sf.VALUE_MATE),
+            # Moving the knight exposes the stationary rook's attack.
+            ("7k/8/8/p7/8/8/N7/R6K b - - 0 1",
+             ["h8g8", "a2c3", "g8h8", "c3a2"], sf.VALUE_MATE),
+        ]
+        for fen, cycle, expected in cases:
+            with self.subTest(fen=fen, cycle=cycle):
+                self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 2), sf.VALUE_NONE)
+                self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 3), expected)
+
+        # Quiet jitto repeats after two plies: the sixth ply is already the
+        # fourth occurrence, and the first passer (Black) loses.
+        fen = "4k3/7j/8/8/8/8/J7/4K3 b - - 0 1"
+        cycle = ["h7h8h7", "a2a3a2"]
+        self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 2), sf.VALUE_NONE)
+        self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 3), -sf.VALUE_MATE)
+
+        sf.load_variant_config(
+            "[api-jcsa-royal-repetition:api-jcsa-repetition]\n"
+            "allowChecks = true\npseudoRoyalTypes = k\nperpetualCheckIllegal = true\n"
+        )
+        # Royal attacks may be ignored in Chu, but continuous checking still
+        # takes precedence when both players also make attacking moves.
+        fen = "R6k/8/8/8/8/6P1/2r3P1/7K b - - 0 1"
+        cycle = ["c2c3", "a8b8", "c3c2", "b8a8"]
+        self.assertEqual(sf.game_result("api-jcsa-royal-repetition", fen, cycle * 3), sf.VALUE_MATE)
+
+        sf.load_variant_config(
+            "[api-jcsa-prince-repetition:api-jcsa-royal-repetition]\n"
+            "commoner = y\npseudoRoyalTypes = ky\n"
+        )
+        # With both King and Prince, aiming at the King is an ordinary attack:
+        # both players attack, so the neutral-cycle loser is Black to move.
+        fen = "R6k/5y2/8/8/8/6P1/2r3P1/7K b - - 0 1"
+        self.assertEqual(sf.game_result("api-jcsa-prince-repetition", fen, cycle * 3), -sf.VALUE_MATE)
+
     def test_move_list_rejects_invalid_move(self):
         # Whole-request contract: one bad token fails the call (contrast the
         # native UCI truncation documented in DEVELOPING.md).

@@ -1135,8 +1135,8 @@ namespace {
     // Like ordinary pawn pushes, quiet promotions belong in CAPTURES even
     // though they capture nothing; quiet non-promotions do not. QUIETS keeps
     // the non-promoting version but must not duplicate the promotion
-    // (MovePicker searches both stages). QUIET_CHECKS keeps checking
-    // promotions and non-promotions; the gives_check filter below applies.
+    // (MovePicker searches both stages). QUIET_CHECKS also excludes promotions
+    // already searched in CAPTURES; the gives_check filter below applies.
     if constexpr (Type == CAPTURES)
     {
         if (!isCapture && !allowsPromo)
@@ -1165,20 +1165,12 @@ namespace {
         }
     }
 
-    if (allowsPromo && Type != QUIETS)
+    if (allowsPromo && Type != QUIETS && Type != QUIET_CHECKS)
     {
         Move mPromo = kind == TwoLegKind::TWO_STEP
                     ? make_two_step(from, via, to, true)
                     : make_hook(from, via, to, true);
-        if constexpr (Type == QUIET_CHECKS)
-        {
-            if (pos.gives_check(mPromo))
-                *moveList++ = mPromo;
-        }
-        else
-        {
-            *moveList++ = mPromo;
-        }
+        *moveList++ = mPromo;
     }
 
     if (!mandatoryPromo)

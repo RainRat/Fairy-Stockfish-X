@@ -468,10 +468,36 @@ UCI
   done
 }
 
+test_vlb_chu_promotion_retry_subvariants() {
+  local output variant piece
+  for variant in chu_shogi chu_shogi_go_between_retry chu_shogi_correspondence chu_shogi_no_final_rank_retry; do
+    for piece in P "G'" L; do
+      output=$(run_uci "$ENGINE" "$VARIANTS" "$variant" <<EOF 2>&1
+position fen 11k/5${piece}6/12/12/12/12/12/12/12/12/12/K11 w - - 0 1 D:f11
+go perft 1
+EOF
+)
+      if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+        echo "skip: Chu promotion retry subvariants require VERY_LARGE_BOARDS"
+        return 0
+      fi
+      if [[ "$piece" == P && "$variant" != chu_shogi_no_final_rank_retry
+         || "$piece" == "G'" && "$variant" == chu_shogi_go_between_retry
+         || "$piece" == L && "$variant" == chu_shogi_correspondence ]]; then
+        assert_contains_literal "$output" "f11f12+: 1"
+      else
+        assert_not_contains "$output" '^f11f12\+: 1$'
+      fi
+      assert_contains_literal "$output" "f11f12: 1"
+    done
+  done
+}
+
 test_vlb_gale_smoke
 test_vlb_chu_dai_lion_moves
 test_vlb_chu_dai_promotion_wiring
 test_vlb_chu_dai_dead_pieces
+test_vlb_chu_promotion_retry_subvariants
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen

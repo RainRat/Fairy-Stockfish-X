@@ -1076,3 +1076,29 @@ describe('ffish.variants()', function () {
     chai.expect(ffish.variants().includes("janggi")).to.equal(true);
   });
 });
+
+describe('Chu Shogi rules on very-large-board builds', function () {
+  it('adjudicates attacking cycles and the fourth mutual-jitto occurrence', function () {
+    if (!ffish.variants().split(' ').includes('chu_shogi')) this.skip();
+    const cases = [
+      ['11k/12/12/12/pp10/12/12/12/12/12/R11/11K b - - 0 1',
+       ['l12k12', 'a2b2', 'k12l12', 'b2a2'], '0-1'],
+      ['5k6/11r/12/12/p11/12/12/11P/12/12/R11/5K6 b - - 0 1',
+       ['l11l10', 'a2a3', 'l10l11', 'a3a2'], '1-0'],
+      ["5k6/11j'/12/12/12/12/12/12/12/12/J'11/5K6 b - - 0 1",
+       ['l11l12l11', 'a2a3a2'], '1-0'],
+    ];
+    for (const [fen, cycle, expected] of cases) {
+      const board = new ffish.Board('chu_shogi', fen);
+      try {
+        for (let repeat = 0; repeat < 3; ++repeat) {
+          chai.expect(board.result()).to.equal('*');
+          for (const move of cycle) chai.expect(board.push(move), move).to.equal(true);
+        }
+        chai.expect(board.result()).to.equal(expected);
+      } finally {
+        board.delete();
+      }
+    }
+  });
+});
