@@ -7262,13 +7262,20 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
 
     Bitboard freezers;
     Bitboard targets;
+    Bitboard occupied = byTypeBB[ALL_PIECES];
     if (simulated)
     {
         freezers = simulated->freezerOccupancy[~c];
         targets = simulated->colorOccupancy[c] & ~simulated->freezeImmuneOccupancy[c];
+        occupied = simulated->occupiedAfterEffects;
     }
     else if (simulatedMove != MOVE_NONE)
     {
+        if (var->freezeAttackedSquares)
+        {
+            SimulatedMoveInfo info = simulated_move_info(simulatedMove);
+            return freeze_squares_from_freezers(c, &info);
+        }
         if (simulatedFreezeCacheMove != simulatedMove || simulatedFreezeCacheState != st)
         {
             SimulatedMoveInfo simulatedMoveInfo = simulated_move_info(simulatedMove);
@@ -7290,7 +7297,29 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
 
     Bitboard frozen = 0;
     while (freezers)
-        frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
+    {
+        Square freezer = pop_lsb(freezers);
+        if (!var->freezeAttackedSquares)
+        {
+            frozen |= adjacent_squares(*this, freezer, var->freezeDiagonals) & targets;
+            continue;
+        }
+
+        PieceType pt = type_of(piece_at(freezer, occupied));
+        Bitboard attackedTargets = targets;
+        if (var->freezeSameType)
+        {
+            Bitboard sameType = 0;
+            for (Bitboard candidates = targets; candidates; )
+            {
+                Square target = pop_lsb(candidates);
+                if (type_of(piece_at(target, occupied)) == pt)
+                    sameType |= target;
+            }
+            attackedTargets &= sameType;
+        }
+        frozen |= attacks_from<false, false>(~c, pt, freezer, occupied) & attackedTargets;
+    }
     return frozen;
 }
 

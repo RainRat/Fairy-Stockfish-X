@@ -208,6 +208,8 @@ struct Variant {
   PieceSet freezePieceTypes = NO_PIECE_SET;
   PieceSet freezeImmunePieceTypes = NO_PIECE_SET;
   bool freezeDiagonals = true;
+  bool freezeAttackedSquares = false;
+  bool freezeSameType = false;
   TrapProtection trapProtection = TrapProtection::NONE;
   Bitboard trapRegion = 0;
   bool doubleStep = true;
