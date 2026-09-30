@@ -1406,6 +1406,9 @@ Key Position::layout_key() const {
   for (Bitboard b = st->promotionDeferred; b; )
       k ^= Zobrist::promotionDeferred[pop_lsb(b)];
 
+  for (Bitboard b = st->lionTradeSquares; b; )
+      k ^= Zobrist::lionTrade[pop_lsb(b)];
+
   k ^= st->pieceStateKey;
 
   return k;
@@ -3611,11 +3614,13 @@ bool Position::requires_full_evasion_generation() const {
       return false;
   if (topology_wraps())
       return true;
+  // Bent two-leg checks cannot be blocked geometrically like riders; generate
+  // NON_EVASIONS and let legal() filter them. Ordinary checks in two-leg
+  // variants still use the cheap EVASIONS path.
   if (has_two_leg_moves()
       && (evasion_checkers() & pieces(~sideToMove, two_leg_piece_types())))
       return true;
-  return has_two_leg_moves()
-      && (blast_on_capture() || blast_on_move() || var->freezePieceTypes || var->trapRegion);
+  return false;
 }
 
 detail::TwoLegPath Position::resolve_two_leg_move(Move m) const {
@@ -7408,7 +7413,7 @@ bool Position::gives_check(Move m) const {
                           || laser_game()
                          || has_adjacent_swapping()
                          || is_swap_move(m)
-                         || has_two_leg_moves()
+                         || is_two_leg(m)
                          || type_of(m) == DROP2
                          || type_of(m) == INSERT;
 
@@ -7577,12 +7582,6 @@ bool Position::gives_check_impl(Move m) const {
                             NO_PIECE_TYPE, &simulated) & square_bb(attackFrom)))
       return !(var->captureForbiddenByColor[sideToMove][pt] & royalType);
 
-  if (attackFromSurvives && simulatedMoverFriendly
-      && !(frozenAttackers & square_bb(attackFrom))
-      && is_two_leg(m)
-      && (two_leg_attackers_to(royalSq, occupied, sideToMove, &simulated) & square_bb(attackFrom)))
-      return !(var->captureForbiddenByColor[sideToMove][pt] & royalType);
-
   // Is there a direct check?
   if (attackFromSurvives
       && simulatedMoverFriendly
@@ -7633,7 +7632,7 @@ bool Position::gives_check_impl(Move m) const {
       discCheckSq |= square_bb(via_sq(m));
 
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion
-          || has_two_leg_moves())
+          || var->hookPieceTypes)
          || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
                             NO_PIECE_TYPE, &simulated)
@@ -11420,8 +11419,46 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       {
           // Chu/Dai permit moving while in check, so a royal's attack map is
           // sufficient here and avoids generating moves during adjudication.
-          bool canCaptureExtra = attackers_to(lsb(qualifying), pieces(), bare) & bareRoyals;
-          bool canCaptureRoyal = attackers_to(lsb(otherRoyals), pieces(), bare) & bareRoyals;
+          // Lion captures are the exception: a protected distant Lion or a
+          // trade-blocked retaliation attacks but cannot legally capture, so
+          // fall back to a legal-move search when Lions are involved.
+          bool canCaptureExtra = false;
+          bool canCaptureRoyal = false;
+          Square bareSq = lsb(bareRoyals);
+          Square extraSq = lsb(qualifying);
+          Square otherRoyalSq = lsb(otherRoyals);
+          Piece barePiece = piece_on(bareSq);
+          Piece extraPiece = piece_on(extraSq);
+          Piece otherRoyalPiece = piece_on(otherRoyalSq);
+          bool lionInvolved = var->lionCapturingRule
+                           && (barePiece != NO_PIECE || extraPiece != NO_PIECE
+                               || otherRoyalPiece != NO_PIECE)
+                           && (((barePiece != NO_PIECE
+                                 && (var->lionMoveTypes & piece_set(type_of(barePiece))))
+                                || (extraPiece != NO_PIECE
+                                    && (var->lionMoveTypes & piece_set(type_of(extraPiece))))
+                                || (otherRoyalPiece != NO_PIECE
+                                    && (var->lionMoveTypes
+                                        & piece_set(type_of(otherRoyalPiece))))));
+          if (!lionInvolved)
+          {
+              canCaptureExtra = attackers_to(extraSq, pieces(), bare) & bareRoyals;
+              canCaptureRoyal = attackers_to(otherRoyalSq, pieces(), bare) & bareRoyals;
+          }
+          else
+          {
+              for (const auto& m : MoveList<LEGAL>(*this))
+                  if (from_sq(m) == bareSq)
+                  {
+                      Bitboard caps = is_two_leg(m) ? capture_squares(m)
+                                                   : (capture(m) ? square_bb(capture_square(m))
+                                                                 : Bitboard(0));
+                      canCaptureExtra |= bool(caps & extraSq);
+                      canCaptureRoyal |= bool(caps & otherRoyalSq);
+                      if (canCaptureExtra && canCaptureRoyal)
+                          break;
+                  }
+          }
           if (canCaptureRoyal)
               return false;
           if (canCaptureExtra)
@@ -12253,7 +12290,8 @@ Bitboard Position::chased() const {
   if (var->chasingRule == ALL_ATTACKS_CHASING)
   {
       Square from = from_sq(st->move), to = to_sq(st->move);
-      if (is_pass(st->move) || from == to)
+      // A from==to igui that captures on the bend is still an attack.
+      if (is_pass(st->move) || (from == to && !st->captured && !st->extraCaptured))
           return b;
       Color mover = ~sideToMove;
       Bitboard beforeOccupied = (pieces() & ~square_bb(to)) | from;
