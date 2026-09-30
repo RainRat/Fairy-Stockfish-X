@@ -7,6 +7,10 @@ CXX=${CXX:-${COMPILER:-g++}}
 SUITE_DIR="${ROOT_DIR}/tests/suites"
 VARIANTS=${VARIANTS:-${ROOT_DIR}/src/variants.ini}
 RUN_DIR="${ROOT_DIR}/.local/build/test-run"
+source "${ROOT_DIR}/tests/lib/build-signature.sh"
+# Default harness/test parallelism to all cores; children (.inc cases,
+# engine-rules) inherit this. Override with JOBS=N.
+export JOBS="${JOBS:-$(nproc 2>/dev/null || echo 2)}"
 
 declare -A SUITE_TIMEOUT=(
   [config]=300 [movement]=900 [royal-legality]=900 [captures-effects]=600
@@ -80,6 +84,23 @@ check_engine() {
     fi
 }
 
+check_engine_freshness() {
+    local engine="$1"
+    [[ "${FSX_ALLOW_STALE_ENGINE:-0}" == 1 ]] && return 0
+    # Wrapper-built and verified current: no staleness possible.
+    if fsx_build_artifact_is_current "$ROOT_DIR" "$engine" 2>/dev/null; then
+        return 0
+    fi
+    # Otherwise (direct make, copied binary, or stale wrapper artifact) fail
+    # only when the sources are actually newer than the binary. Board-size
+    # mixing is still caught by the family check above.
+    if find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+        -newer "$engine" -print -quit 2>/dev/null | grep -q .; then
+        echo "stale engine: ${engine} is older than its sources; rebuild with tests/build.sh" >&2
+        return 1
+    fi
+}
+
 check_prerequisites() {
     local suite="$1" prereq
     IFS=',' read -ra prereqs <<<"${SUITE_PREREQS[$suite]}"
@@ -103,7 +124,13 @@ print_list() {
 run_one() {
     local suite="$1" engine="$2" variants="$3" log_dir="${4:-}" log=""
     check_engine "$suite" "$engine"
+    check_engine_freshness "$engine"
     check_prerequisites "$suite"
+    case "${SUITE_FAMILY[$suite]}" in
+        normal) export FSX_EXPECTED_BOARD="7 7" ;;
+        large) export FSX_EXPECTED_BOARD="11 9" ;;
+        very-large) export FSX_EXPECTED_BOARD="15 15" ;;
+    esac
     if [[ -n "$log_dir" ]]; then
         log="${log_dir}/${suite}.log"
         if timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants" >"$log" 2>&1; then
@@ -195,8 +222,8 @@ prepare_shared_objects() {
     source "${ROOT_DIR}/tests/lib/harness-build.sh"
     fsx_harness_init "${engine}" "${ROOT_DIR}"
     if [[ "${VERBOSE:-0}" == 1 ]]; then
-        fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-2}"
-    elif fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-2}" >"${log}" 2>&1; then
+        fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-$(nproc 2>/dev/null || echo 2)}"
+    elif fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-$(nproc 2>/dev/null || echo 2)}" >"${log}" 2>&1; then
         echo "ok: shared test objects"
     else
         echo "FAILED: shared test objects" >&2
@@ -276,10 +303,12 @@ case "$command" in
         for suite in "${SUITES_TO_RUN[@]}"; do
             [[ -n "${SUITE_TIMEOUT[$suite]:-}" ]] || { echo "unknown suite: $suite" >&2; exit 2; }
         done
+        # Normalize early so harness builds and signature lookups see the
+        # same absolute engine path that the suites will test.
+        engine=$(normalize_engine "$engine")
         prepare_python
         export CXX
         prepare_shared_objects "$engine"
-        engine=$(normalize_engine "$engine")
         if [[ "${VERBOSE:-0}" == 1 ]]; then
             unset FSX_QUIET_VARIANT_LOAD_SUMMARIES
         else

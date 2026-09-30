@@ -40,6 +40,9 @@ echo "Building ${EXE}..."
 if ! fsx_build_signature_matches "$ROOT_DIR" "$OUTPUT_FILE" "$BUILD_SIGNATURE" "$BUILD_PROFILE"; then
     echo "Build configuration changed or artifact is unverified; cleaning objects..."
     rm -f "${OUTPUT_FILE}"
+    # Drop the generated dependency file as well: it can reference headers
+    # that no longer exist after refactors, which breaks the build outright.
+    rm -f "${ROOT_DIR}/src/.depend"
     if ! make -C "${ROOT_DIR}/src" EXE="${EXE}" objclean >"${LOG_FILE}" 2>&1; then
         echo "FAILED: ${EXE} cleanup failed" >&2
         cat "${LOG_FILE}" >&2
@@ -52,7 +55,7 @@ if [[ "${VERBOSE:-0}" == 1 ]]; then
     validate_build_output
     fsx_build_write_signature "$ROOT_DIR" "$OUTPUT_FILE" "$BUILD_SIGNATURE" "$BUILD_PROFILE"
 else
-    if make -C "${ROOT_DIR}/src" -j $(nproc 2>/dev/null || echo 2) build "$@" >"${LOG_FILE}" 2>&1; then
+    if make -C "${ROOT_DIR}/src" -s -j $(nproc 2>/dev/null || echo 2) build "$@" >"${LOG_FILE}" 2>&1; then
         validate_build_output
         fsx_build_write_signature "$ROOT_DIR" "$OUTPUT_FILE" "$BUILD_SIGNATURE" "$BUILD_PROFILE"
         echo "ok: ${EXE} built successfully"

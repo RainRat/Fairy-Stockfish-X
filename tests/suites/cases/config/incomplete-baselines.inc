@@ -43,7 +43,7 @@ if grep -Fq "unknown variant 'camel-rhino'; keeping 'chess'" <<<"${camel_out}"; 
   echo "camel-rhino skipped by this engine build"
 else
   assert_contains "${camel_out}" "variant camel-rhino" "camel-rhino loads in large-board builds"
-  assert_contains "${camel_out}" "Nodes searched:" "camel-rhino perft runs"
+  assert_contains "${camel_out}" "Nodes searched: 68" "camel-rhino perft node count"
 fi
 
 echo "incomplete baselines ok"

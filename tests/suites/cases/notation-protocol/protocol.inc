@@ -44,7 +44,7 @@ $(expect_engine_setup)
    expect "uciok"
    send "startpos\n"
    send "d\n"
-   expect -re "(rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1|rnbakabnr/9/1c5c1/p1p1p1p/9/9/P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1)"
+   expect -re "(rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1|rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1)"
    send "quit\n"
    expect eof
 EOF
@@ -64,13 +64,34 @@ EOF
 # the valid prefix is applied, the bad token and everything after it are
 # ignored. Fail-open for notation mismatches; do not turn this into
 # whole-request rejection without a GUI-compat review (see DEVELOPING.md).
+# (No e3 in the FEN: this engine only records an en passant square when a
+# capture is actually possible, and none exists here.)
 run_expect "$ENGINE" > /dev/null <<EOF
 $(expect_engine_setup)
    send "uci\n"
    expect "uciok"
    send "position startpos moves e2e4 bogus g1f3\n"
    send "d\n"
-   expect -re "Fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+   expect -re "Fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+   send "quit\n"
+   expect eof
+EOF
+
+# Malformed numeric `go` limits are rejected without killing the engine:
+# the command is ignored with an `info string error` diagnostic and the
+# engine still answers `isready`.
+run_expect "$ENGINE" > /dev/null <<EOF
+$(expect_engine_setup)
+   send "uci\n"
+   expect "uciok"
+   send "go depth xyz\n"
+   expect "info string error: invalid argument for 'depth'"
+   send "isready\n"
+   expect "readyok"
+   send "go depth -1\n"
+   expect "info string error: negative search limit"
+   send "isready\n"
+   expect "readyok"
    send "quit\n"
    expect eof
 EOF
@@ -85,7 +106,7 @@ $(expect_engine_setup 'load [lindex $argv 1]')
    send "ping\n"
    expect "pong"
    send "variant 3check-crazyhouse\n"
-   expect {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 1}
+   expect -ex {rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 3+3 0 1}
    send "quit\n"
    expect eof
 EOF

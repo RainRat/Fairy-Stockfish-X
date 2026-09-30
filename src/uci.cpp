@@ -162,9 +162,16 @@ namespace {
     int secResolution = Options["usemillisec"] ? 1 : 1000;
 
     while (is >> token)
+    {
         if (token == "searchmoves") // Needs to be the last command on the line
+        {
+            // Note: unmatched tokens are queued as MOVE_NONE, which matches
+            // no legal move. A list with no legal match must search no moves
+            // (bestmove (none)), so do not filter them out here.
             while (is >> token)
                 limits.searchmoves.push_back(UCI::to_move(pos, token));
+            break;
+        }
 
         else if (token == "wtime")     is >> limits.time[isUsi ? BLACK : WHITE];
         else if (token == "btime")     is >> limits.time[isUsi ? WHITE : BLACK];
@@ -188,10 +195,35 @@ namespace {
         {
             int byoyomi = 0;
             is >> byoyomi;
+            if (is.fail() || byoyomi < 0)
+            {
+                sync_cout << "info string error: invalid argument for 'byoyomi'" << sync_endl;
+                return;
+            }
             limits.inc[WHITE] = limits.inc[BLACK] = byoyomi;
             limits.time[WHITE] += byoyomi;
             limits.time[BLACK] += byoyomi;
         }
+
+        // Like upstream, refuse to start a search on malformed numeric input
+        // rather than searching with indeterminate limits. Unlike upstream's
+        // abort, ignore just this command: there is no error channel that all
+        // GUIs handle, and killing the engine loses the game.
+        if (is.fail())
+        {
+            sync_cout << "info string error: invalid argument for '" << token << "'" << sync_endl;
+            return;
+        }
+    }
+
+    if (   limits.depth < 0 || limits.mate < 0 || limits.perft < 0 || limits.movestogo < 0
+        || limits.nodes < 0 || limits.movetime < 0
+        || limits.time[WHITE] < 0 || limits.time[BLACK] < 0
+        || limits.inc[WHITE] < 0 || limits.inc[BLACK] < 0)
+    {
+        sync_cout << "info string error: negative search limit" << sync_endl;
+        return;
+    }
 
     Threads.start_thinking(pos, states, limits, ponderMode);
   }

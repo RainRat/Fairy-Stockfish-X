@@ -11,6 +11,9 @@
 # Unknown engine names reuse the existing position.o board-family probe and
 # require their object family to have been prepared by the caller.
 
+_HARNESS_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+source "${_HARNESS_LIB_DIR}/build-signature.sh"
+
 fsx_harness_hash_text() {
   local text="${1:-}"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -100,6 +103,24 @@ fsx_harness_init() {
       ;;
   esac
 
+  # Match the tested engine's own architecture when it was built via
+  # tests/build.sh (recorded profile). Rebuilding the in-tree objects with a
+  # different ARCH would silently replace the binary under test, so prefer
+  # the recorded value and keep the portable default only as a fallback.
+  if [[ "${FSX_HARNESS_KNOWN_ENGINE_CONFIG}" == true ]]; then
+    local recorded_arch=""
+    recorded_arch=$(fsx_build_recorded_profile "${root_dir}" "${engine}" 2>/dev/null \
+      | tr ';' '\n' | sed -n 's/^arch=//p' | tail -n1 || true)
+    if [[ -n "${recorded_arch}" ]]; then
+      local build_arg_idx
+      for build_arg_idx in "${!FSX_HARNESS_BUILD_ARGS[@]}"; do
+        if [[ "${FSX_HARNESS_BUILD_ARGS[${build_arg_idx}]}" == ARCH=* ]]; then
+          FSX_HARNESS_BUILD_ARGS[${build_arg_idx}]="ARCH=${recorded_arch}"
+        fi
+      done
+    fi
+  fi
+
   # Preserve support for custom engine names used by local harnesses. The
   # position object is the authority for the board macro family when no named
   # build target is available; VLB callers should use the named binary above.
@@ -116,7 +137,7 @@ fsx_harness_init() {
 }
 
 fsx_harness_prepare_objects() {
-  local jobs="${1:-${JOBS:-2}}"
+  local jobs="${1:-${JOBS:-$(nproc 2>/dev/null || echo 2)}}"
 
   if [[ "${FSX_REUSE_OBJECTS:-0}" == 1 || -z "${FSX_HARNESS_BUILD_EXE}" ]]; then
     return 0
@@ -125,8 +146,11 @@ fsx_harness_prepare_objects() {
   # Keep the caller's engine available while refreshing the object family.
   # objclean removes $(EXE), and the harness must not invalidate the engine it
   # is about to test.
-  make -C "${FSX_HARNESS_ROOT_DIR}/src" EXE= objclean
-  make -C "${FSX_HARNESS_ROOT_DIR}/src" -j"${jobs}" build "${FSX_HARNESS_BUILD_ARGS[@]}"
+  # Drop the generated dependency file too: it can reference headers removed
+  # by refactors, which breaks the build outright until regenerated.
+  rm -f "${FSX_HARNESS_ROOT_DIR}/src/.depend"
+  make -C "${FSX_HARNESS_ROOT_DIR}/src" -s EXE= objclean
+  make -C "${FSX_HARNESS_ROOT_DIR}/src" -s -j"${jobs}" build "${FSX_HARNESS_BUILD_ARGS[@]}"
 
   if [[ ! -x "${FSX_HARNESS_ROOT_DIR}/src/${FSX_HARNESS_BUILD_EXE}" ]]; then
     echo "harness build did not produce ${FSX_HARNESS_BUILD_EXE}" >&2
@@ -137,7 +161,7 @@ fsx_harness_prepare_objects() {
 fsx_harness_prepare_objects_cached() {
   local cache_dir="$1"
   local label="${2:-harness objects}"
-  local jobs="${3:-${JOBS:-2}}"
+  local jobs="${3:-${JOBS:-$(nproc 2>/dev/null || echo 2)}}"
   local desired_signature object_signature
 
   # Custom engine names have no reliable Makefile configuration mapping, and

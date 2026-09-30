@@ -127,10 +127,9 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" nightrider "fen 8/8/8/8/8/4K3/8/n1R5 w - - 0 1" 2 52 > /dev/null
   expect "$perft_exp" grasshopper startpos 4 635298 > /dev/null
   expect "$perft_exp" hoppelpoppel startpos 4 202459 > /dev/null
-  # connect-group edge adjacency: h1 must not wrap-connect to a2
-  if has_variant linesofaction; then
-    expect "$perft_exp" linesofaction "fen 1n6/8/8/8/8/8/N7/7N b - - 0 1" 1 3 > /dev/null
-  fi
+  # NOTE: linesofaction is defined in variants.ini, which perft.sh does not
+  # load (it exercises built-in variants only). Its wrap-connect edge case
+  # is covered by the variants-smoke connect-goals suite instead.
   expect "$perft_exp" newzealand startpos 4 200310 > /dev/null
   # alternative goals
   expect "$perft_exp" racingkings startpos 4 296242 > /dev/null
@@ -260,7 +259,13 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     # non-chess
     expect "$perft_exp" flipello10 startpos 7 55180 > /dev/null
   else
-    echo "skipping large-board perft set: required variants not available in this build"
+    if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+      echo "SKIP-BOARDSIZE: large-board perft set unavailable in this build; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+    else
+      echo "large-board perft set requires shogi, capablanca and xiangqi in this build; refusing to silently skip" >&2
+      echo "run with a large-board all-variant engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
+      exit 1
+    fi
   fi
 fi
 
@@ -268,13 +273,21 @@ fi
 if [[ $VARIANT == "all" ]]; then
   if has_variant duck; then
     expect "$perft_exp" duck startpos 1 640 > /dev/null
+  elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+    echo "SKIP-BOARDSIZE: duck perft unavailable in this build; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
   else
-    echo "skipping duck perft: variant not available in this build"
+    echo "duck perft requires an all-variant build; refusing to silently skip" >&2
+    echo "run with a large-board all-variant engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
+    exit 1
   fi
   if has_variant amazons; then
     expect "$perft_exp" amazons startpos 1 2176 > /dev/null
+  elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+    echo "SKIP-BOARDSIZE: amazons perft unavailable in this build; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
   else
-    echo "skipping amazons perft: variant not available in this build"
+    echo "amazons perft requires an all-variant build; refusing to silently skip" >&2
+    echo "run with a large-board all-variant engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
+    exit 1
   fi
 fi
 

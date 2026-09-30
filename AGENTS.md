@@ -42,10 +42,19 @@ Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=ye
 For named binaries used by regression scripts:
 
 ```sh
+tests/build.sh ARCH=x86-64-modern EXE=stockfish
 tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
 tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 ```
+
+The very-large-board regressions resolve `stockfish-vlb` (via `VLB_ENGINE`
+or a sibling of the suite engine) and the VLB overlap-parity check resolves
+a normal-board `stockfish` (via `NORMAL_ENGINE` or a sibling); both fail
+loudly when the binary is missing. Set `FSX_ALLOW_SMALL_BOARD=1` only for
+intentional small-board runs where board-size skips are expected.
+Set `FSX_ALLOW_STALE_ENGINE=1` only to bypass the sources-newer-than-binary
+staleness check (never for results you intend to keep).
 
 If you prefer standard make, compile from `src/` using `make -j build ...`.
 

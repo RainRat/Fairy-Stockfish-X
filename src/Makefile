@@ -882,6 +882,17 @@ config-sanity: $(load_net)
 	@test "$(vnni256)" = "yes" || test "$(vnni256)" = "no"
 	@test "$(vnni512)" = "yes" || test "$(vnni512)" = "no"
 	@test "$(neon)" = "yes" || test "$(neon)" = "no"
+	@test "$(largeboards)" = "yes" || test "$(largeboards)" = "no"
+	@test "$(verylargeboards)" = "yes" || test "$(verylargeboards)" = "no"
+	@test "$(all)" = "yes" || test "$(all)" = "no"
+	@test "$(precomputedmagics)" = "yes" || test "$(precomputedmagics)" = "no"
+	@test "$(nnue)" = "yes" || test "$(nnue)" = "no"
+	@if [ "$(verylargeboards)" != "no" ] && [ "$(origin largeboards)" != "file" ] && [ "$(largeboards)" = "no" ]; then \
+		echo "error: verylargeboards=yes implies largeboards=yes; drop 'largeboards=no'" >&2; exit 1; fi
+	@if [ "$(verylargeboards)" != "no" ] && [ "$(origin precomputedmagics)" != "file" ] && [ "$(precomputedmagics)" != "no" ]; then \
+		echo "error: verylargeboards=yes forces precomputedmagics=no; drop 'precomputedmagics=yes'" >&2; exit 1; fi
+	@if [ "$(pext)" = "yes" ] && [ "$(origin precomputedmagics)" != "file" ] && [ "$(precomputedmagics)" != "no" ]; then \
+		echo "error: pext support forces precomputedmagics=no; drop 'precomputedmagics=yes'" >&2; exit 1; fi
 	@test "$(comp)" = "gcc" || test "$(comp)" = "icc" || test "$(comp)" = "mingw" || test "$(comp)" = "clang" \
 	|| test "$(comp)" = "aarch64-linux-android21-clang"
 

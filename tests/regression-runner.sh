@@ -46,6 +46,9 @@ engine_is_stale() {
 
 expected_engine_profile() {
   case "$(basename "$1")" in
+    stockfish)
+      printf 'arch=x86-64-modern;board=normal;all=no;nnue=no;debug=no;optimize=yes'
+      ;;
     stockfish-large)
       printf 'arch=x86-64-modern;board=large;all=no;nnue=no;debug=no;optimize=yes'
       ;;
@@ -80,6 +83,7 @@ validate_engines() {
     "${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}"
     "${LARGE_ENGINE:-${ROOT_DIR}/src/stockfish-large}"
     "${MINI_ENGINE:-${ROOT_DIR}/src/stockfish-allvars}"
+    "${NORMAL_ENGINE:-${ROOT_DIR}/src/stockfish}"
   )
 
   for candidate in "${candidates[@]}"; do
@@ -97,6 +101,7 @@ validate_engines() {
 
   if (( stale )); then
     echo "rebuild the named regression binaries before starting the suite:" >&2
+    echo "  tests/build.sh ARCH=x86-64-modern EXE=stockfish" >&2
     echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large" >&2
     echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb" >&2
     echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2

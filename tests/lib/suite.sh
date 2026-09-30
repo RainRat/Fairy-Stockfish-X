@@ -62,8 +62,13 @@ native() {
         *large*:*|*allvars*:*|*vlb*:*|*:*large|*:*very-large) ;;
         *)
             case "${group}" in occupancy|state|royal)
-                echo "skip: ${SUITE_NAME}/native-${group} requires a large-board engine"
-                return 0
+                if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+                    echo "SKIP-BOARDSIZE: ${SUITE_NAME}/native-${group} requires a large-board engine; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+                    return 0
+                fi
+                echo "native-${group} requires a large-board engine; got ${ENGINE}" >&2
+                echo "run with a large-board engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
+                return 1
                 ;;
             esac
             ;;

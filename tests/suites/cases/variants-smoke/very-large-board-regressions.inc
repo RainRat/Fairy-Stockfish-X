@@ -10,9 +10,45 @@ ENGINE="${1:-${ROOT_DIR}/src/stockfish-vlb}"
 VARIANTS="${2:-${ROOT_DIR}/src/variants.ini}"
 setup_test_context "${ENGINE}" "${VARIANTS}" "vlb regressions"
 
+# This case needs very-large-board coverage. When invoked with the suite's
+# large-board engine, resolve a VLB sibling instead of silently testing
+# nothing: VLB_ENGINE wins, then stockfish-vlb next to the given engine.
+if [[ "$(basename "${ENGINE}")" != *vlb* && "${FSX_ENGINE_FAMILY:-}" != very-large ]]; then
+  engine_dir=$(cd "$(dirname "${ENGINE}")" 2>/dev/null && pwd || dirname "${ENGINE}")
+  VLB_CANDIDATE="${VLB_ENGINE:-${engine_dir}/stockfish-vlb}"
+  if [[ -x "${VLB_CANDIDATE}" ]]; then
+    echo "vlb regressions: using VLB engine ${VLB_CANDIDATE}"
+    ENGINE="${VLB_CANDIDATE}"
+  elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+    echo "SKIP-BOARDSIZE: VLB engine not available at ${VLB_CANDIDATE}; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+    exit 0
+  else
+    echo "vlb regressions require a very-large-board engine; got ${ENGINE} and no VLB engine at ${VLB_CANDIDATE}" >&2
+    echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb" >&2
+    echo "or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
+    exit 1
+  fi
+fi
+
 if [[ ! -x "${ENGINE}" ]]; then
-  echo "skip: VLB engine not available"
-  exit 0
+  if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+    echo "SKIP-BOARDSIZE: VLB engine ${ENGINE} not available; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+    exit 0
+  fi
+  echo "vlb regressions require a very-large-board engine; ${ENGINE} is not executable" >&2
+  exit 1
+fi
+
+# Guard against a misnamed or stale binary: a VLB engine must load a
+# very-large-only variant. Without this, every case below would skip and
+# the suite would pass without testing anything.
+if ! probe_variant_available "${ENGINE}" "hex-16x16" "${VARIANTS}"; then
+  if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+    echo "SKIP-BOARDSIZE: ${ENGINE} lacks very-large-board coverage; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+    exit 0
+  fi
+  echo "engine ${ENGINE} cannot load very-large-board variants (hex-16x16 missing); refusing to skip VLB coverage" >&2
+  exit 1
 fi
 
 test_vlb_gale_smoke() {
@@ -24,13 +60,13 @@ EOF
 )
 
   if grep -q "variants skipped because of board size limits" <<<"$output"; then
-    echo "skip: gale requires VERY_LARGE_BOARDS"
-    return 0
+    echo "gale unexpectedly skipped because of board size limits on ${ENGINE}" >&2
+    return 1
   fi
 
   if grep -q "No such variant: gale" <<<"$output"; then
-    echo "skip: gale unavailable in this binary"
-    return 0
+    echo "gale unavailable in this binary" >&2
+    return 1
   fi
 
   assert_contains_literal "$output" "info string variant gale "
@@ -65,12 +101,12 @@ go perft 1
 UCI
 )
   if grep -q "variants skipped because of board size limits" <<<"$out"; then
-    echo "skip: VLB lame rider regression requires a very-large-board capable engine"
-    return 0
+    echo "VLB lame rider variants unexpectedly skipped because of board size limits on ${ENGINE}" >&2
+    return 1
   fi
   if grep -q "No such variant" <<<"$out"; then
-    echo "skip: VLB lame rider variant unavailable in this binary"
-    return 0
+    echo "VLB lame rider variants unavailable in this binary" >&2
+    return 1
   fi
 
   assert_contains "$out" "info string variant vlb-lame-clear files 16 ranks 16"
@@ -210,10 +246,16 @@ EOF
 }
 
 test_vlb_overlap_parity() {
-  local normal_engine="${NORMAL_ENGINE:-${ROOT_DIR}/src/stockfish}"
+  engine_dir=$(cd "$(dirname "${ENGINE}")" 2>/dev/null && pwd || dirname "${ENGINE}")
+  local normal_engine="${NORMAL_ENGINE:-${engine_dir}/stockfish}"
   if [[ ! -x "${normal_engine}" ]]; then
-    echo "skip: normal engine unavailable for VLB overlap parity"
-    return 0
+    if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+      echo "SKIP-BOARDSIZE: normal engine unavailable for VLB overlap parity; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+      return 0
+    fi
+    echo "VLB overlap parity requires a normal-board engine; none at ${normal_engine}" >&2
+    echo "build with: tests/build.sh ARCH=x86-64-modern EXE=stockfish" >&2
+    return 1
   fi
 
   local tmpdir variant_file variant normal_out vlb_out normal_moves vlb_moves expected_from
