@@ -11,7 +11,7 @@
 #ifndef TWO_LEG_H_INCLUDED
 #define TWO_LEG_H_INCLUDED
 
-#include "direction_pair.h"
+#include "bitboard.h"
 
 namespace Stockfish {
 

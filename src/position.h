@@ -1158,6 +1158,7 @@ public:
   Thread* this_thread() const;
   bool is_immediate_game_end() const;
   bool is_immediate_game_end(Value& result, int ply = 0) const;
+  bool sole_pseudo_royal_mated() const;
   bool has_legal_move() const;
   bool has_legal_move_ignoring_immediate_end() const;
   bool is_optional_game_end() const;
@@ -3162,6 +3163,11 @@ inline EnclosingRule Position::flip_enclosed_pieces() const {
 
 inline Value Position::stalemate_value(int ply) const {
   assert(var != nullptr);
+  // No-check royal games (Chu/Dai Shogi) have no stalemate draws: a mated
+  // sole royal ends the game via is_immediate_game_end(), and any other
+  // position with no legal moves is a loss for the stalemated player.
+  if (allow_checks() && pseudo_royal_types() && pseudo_royal_value() != VALUE_NONE)
+      return pseudo_royal_value(ply);
   // Check for checkmate of pseudo-royal pieces
   if (pseudo_royal_types() && !allow_checks())
   {

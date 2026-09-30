@@ -5706,33 +5706,39 @@ bool Position::lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo,
 
   // Immediate Lion-trading restriction, read from current state (set by
   // do_move() and hashed into the key): after a non-Lion captures an enemy
-  // Lion, a non-Lion retaliation on a different Lion square is illegal.
-  if (!movingIsLion && bool(st->lionTradeSquares))
+  // Lion, a non-Lion retaliation on a Lion is illegal (First Lion).
+  // A Lion victim on a stored trade square is the promoted piece now
+  // occupying it (e.g. a Kirin that captured a Lion and promoted to a Lion
+  // there): JCSA treats that Lion as establishing First Lion when it has
+  // protection, so the protection test applies to it in every mode, while
+  // retaliation on a different Lion square is always illegal in the strict
+  // reading and protection-tested otherwise.
+  if (!movingIsLion && bool(st->lionTradeSquares) && bool(lionCaptures))
   {
-      if (lionCaptures & ~st->lionTradeSquares)
+      Bitboard newTargets = lionCaptures & ~st->lionTradeSquares;
+      Bitboard sameTargets = lionCaptures & st->lionTradeSquares;
+      // Strict reading: retaliation on a different Lion is always illegal.
+      if (bool(newTargets) && !var->lionCounterstrikeIfUnprotected)
+          return false;
+      // Remaining victims need the protection test: different-square Lions
+      // in the counterstrike mode, and same-square promoted Lions (e.g. a
+      // Kirin that captured a Lion and promoted to a Lion there) in every
+      // mode. Protected = a defender of the target's owner, either before
+      // the capture (victim removed) or after it (mover vacated, victims
+      // removed, mover placed): the before-state matters when the moving
+      // piece was shielding the target, the after-state when vacating
+      // reveals an x-ray.
+      Bitboard tested = var->lionCounterstrikeIfUnprotected ? (newTargets | sameTargets)
+                                                            : sameTargets;
+      while (tested)
       {
-          bool counterstrikeAllowed = false;
-          if (var->lionCounterstrikeIfUnprotected)
-          {
-              counterstrikeAllowed = true;
-              Bitboard targets = lionCaptures & ~st->lionTradeSquares;
-              while (targets)
-              {
-                  Square targetSq = pop_lsb(targets);
-                  // Unprotected = no defender of the target's owner.
-                  // Check the resulting position: moving off a line can reveal
-                  // a defender that was hidden by the capturing piece.
-                  Bitboard after = pieces() & ~square_bb(from) & ~allCaptures;
-                  if (is_ok(to))
-                      after |= square_bb(to);
-                  if (attackers_to(targetSq, after, them))
-                  {
-                      counterstrikeAllowed = false;
-                      break;
-                  }
-              }
-          }
-          if (!counterstrikeAllowed)
+          Square targetSq = pop_lsb(tested);
+          Bitboard before = pieces() & ~square_bb(targetSq);
+          Bitboard after = pieces() & ~square_bb(from) & ~allCaptures;
+          if (is_ok(to))
+              after |= square_bb(to);
+          if (attackers_to(targetSq, before, them)
+              || attackers_to(targetSq, after, them))
               return false;
       }
   }
@@ -11317,6 +11323,46 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
   return false;
 }
 
+/// Position::sole_pseudo_royal_mated() tests the Chu/Dai Shogi mate rule for
+/// no-check royal games: the side to move has exactly one remaining royal
+/// candidate, it is attacked, and no legal reply saves it. Replies are
+/// saving when they capture the last enemy royal (winning outright), leave
+/// the mover with more than one royal (either may then be sacrificed), or
+/// leave the sole royal unattacked. Unrelated moves elsewhere do not defeat
+/// mate. Generates NON_EVASIONS plus legal() instead of LEGAL so the probe
+/// cannot recurse through is_immediate_game_end().
+
+bool Position::sole_pseudo_royal_mated() const {
+  if (!allow_checks() || pseudo_royal_value() == VALUE_NONE || !pseudo_royal_types())
+      return false;
+  Bitboard royals = st->pseudoRoyalCandidates & pieces(sideToMove);
+  if (!royals || more_than_one(royals))
+      return false;
+  Square royal = lsb(royals);
+  if (!attackers_to(royal, ~sideToMove))
+      return false;
+  for (const auto& m : MoveList<NON_EVASIONS>(*this))
+  {
+      if (!legal(m) || virtual_drop(m))
+          continue;
+      StateInfo nextState;
+      ScopedProbeMove probe(*this, m, nextState);
+      Color mover = ~sideToMove;
+      // Capturing the last enemy royal wins outright.
+      if (!(st->pseudoRoyals & pieces(sideToMove))
+          && popcount(pieces(sideToMove) & st->pseudoRoyalCandidates) == 0)
+          return false;
+      Bitboard ours = st->pseudoRoyalCandidates & pieces(mover);
+      if (!ours)
+          continue;
+      if (more_than_one(ours))
+          return false;
+      if (!attackers_to(lsb(ours), sideToMove))
+          return false;
+  }
+  return true;
+}
+
 /// Position::is_immediate_game_end() tests whether the position ends the game
 /// immediately by a variant rule, i.e., there are no more legal moves.
 /// It does not detect stalemates.
@@ -11374,11 +11420,30 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               return true;
           }
 
+  // Sole-royal mate for no-check royal games (Chu/Dai Shogi): the sole
+  // remaining royal is attacked and no legal reply saves it. Unrelated
+  // moves elsewhere do not defeat mate.
+  if (sole_pseudo_royal_mated())
+  {
+      result = mated_in(ply);
+      return true;
+  }
+
   // Baring is checked only at material exhaustion: one side has no live
   // non-royal pieces and the other has exactly one. A promoted exempt piece
   // qualifies; dead pieces on their final rank do not.
   if (var->bareKingRule)
   {
+      // A shogi knight is intrinsically immobile on the last two ranks, all
+      // other dead types on the final rank.
+      auto bare_king_dead = [&](Color c, PieceType pt, Square sq) {
+          if (!(var->bareKingDeadTypes & piece_set(pt)))
+              return false;
+          Rank r = relative_rank(c, sq, max_rank());
+          if (pt == SHOGI_KNIGHT)
+              return r == max_rank() || r == max_rank() - 1;
+          return r == max_rank();
+      };
       auto active_material = [&](Color c) {
           Bitboard material = pieces(c) & ~st->pseudoRoyals;
           int count = 0;
@@ -11386,8 +11451,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           {
               Square sq = pop_lsb(material);
               PieceType pt = type_of(piece_on(sq));
-              if ((var->bareKingDeadTypes & piece_set(pt))
-                  && relative_rank(c, sq, max_rank()) == max_rank())
+              if (bare_king_dead(c, pt, sq))
                   continue;
               ++count;
           }
@@ -11400,8 +11464,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           {
               Square sq = pop_lsb(material);
               PieceType pt = type_of(piece_on(sq));
-              if ((var->bareKingDeadTypes & piece_set(pt))
-                  && relative_rank(c, sq, max_rank()) == max_rank())
+              if (bare_king_dead(c, pt, sq))
                   continue;
               if (is_promoted(sq) || !(var->bareKingExemptTypes & piece_set(pt)))
                   qualifying |= square_bb(sq);

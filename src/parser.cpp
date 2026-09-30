@@ -241,7 +241,7 @@ namespace {
         std::string s;
         for (char c : token)
             s += char(std::tolower(static_cast<unsigned char>(c)));
-        // Index order matches KingDirections; see king_step_name in two_leg.h.
+        // Index order matches KingDirections; see king_step_name in direction_pair.h.
         for (int i = 0; i < 8; ++i)
         {
             std::string name = king_step_name(i);

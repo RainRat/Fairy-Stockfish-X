@@ -112,6 +112,15 @@ UCI
 )
 assert_contains "${out}" '^c4c3: 1$'
 
+# But not when the promoted Lion is protected: First-Lion is established on
+# the same square (the White rook on c1 x-rays c3 once the Kirin leaves c2).
+out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-promo-test <<'UCI'
+position fen 8/8/8/8/2r5/2l5/2A5/2R5 w - - 0 1 moves c2c3+
+go perft 1
+UCI
+)
+assert_not_contains "${out}" '^c4c3: 1$'
+
 # That promotion does not let a non-Lion take a different Lion immediately.
 out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" chu-promo-test <<'UCI'
 position fen 8/8/8/8/2r2r2/2l2L2/2A5/8 w - - 0 1 moves c2c3+

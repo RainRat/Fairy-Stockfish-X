@@ -4,6 +4,7 @@
 
 #include "position.h"
 #include "two_leg.h"
+#include "direction_pair.h"
 
 #include <algorithm>
 #include <array>

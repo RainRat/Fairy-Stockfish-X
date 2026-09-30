@@ -493,11 +493,421 @@ EOF
   done
 }
 
+test_vlb_chu_dai_promotion_tables() {
+  local output from entry move
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu/Dai promotion tables require VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  # Every production Chu promotion mapping end to end: step into the zone
+  # with `+`, reply with the corner King, then play a move only the
+  # promoted type can make. Format: unpromoted|entry move|probe move only
+  # the promotion can play. (Both Kings get a spare pawn so the baring rule
+  # stays quiet while the mapping is exercised.)
+  while IFS='|' read -r from entry move; do
+    output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<EOF 2>&1
+position fen 11k/12/12/12/2${from}8/12/12/12/12/12/1p9/K11 w - - 0 1 moves c8${entry}+ l12l11
+go perft 1
+EOF
+)
+    assert_contains_literal "$output" "${move}: 1"
+  done <<'TABLE'
+P|c9|c9d9
+G|c9|c9e9
+S|c9|c9c11
+L|c9|c9c11
+R|c9|c9e9
+A'|c9|c9c8
+D'|c9|c9c10c9
+E'|c9|c9d10c9
+F'|c9|c9e11
+G'|c9|c9d10
+K'|c9|c9c11
+L'|c9|c9b8
+M'|c9|c9d10
+N'|c9|c9d10
+C|c9|c9d9
+B'|d9|d9d11
+H'|d9|d9d10d9
+TABLE
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 11k/12/12/12/3B7/12/12/12/12/12/1p9/K11 w - - 0 1 moves d8e9+ l12l11
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "e9e10: 1"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
+    echo "skip: Dai promotion table requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  # Every production Dai promotion mapping end to end (zone ranks 11-15).
+  while IFS='|' read -r from entry move; do
+    output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<EOF 2>&1
+position fen 14k/15/15/15/15/2${from}12/15/15/15/15/15/15/15/1p13/K14 w - - 0 1 moves c10${entry}+ o15o14
+go perft 1
+EOF
+)
+    assert_contains_literal "$output" "${move}: 1"
+  done <<'TABLE'
+P|c11|c11d11
+G|c11|c11e11
+S|c11|c11c13
+L|c11|c11c13
+R|c11|c11e11
+A'|c11|c11c10
+D'|c11|c11c12c11
+E'|c11|c11d12c11
+F'|c11|c11e13
+G'|c11|c11d12
+K'|c11|c11c13
+L'|c11|c11b10
+M'|c11|c11d12
+N'|c11|c11d12
+C|c11|c11d11
+O'|c11|c11d12
+R'|c11|c11c10
+I|c11|c11d11
+U'|c11|c11d12
+H'|d11|d11d12d11
+B'|d11|d11d13
+P'|d11|d11d12
+S'|d11|d11d12
+T'|d11|d11d12
+TABLE
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen 14k/15/15/15/15/3B11/15/15/15/15/15/15/15/1p13/K14 w - - 0 1 moves d10e11+ o15o14
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "e11e12: 1"
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen 14k/15/15/15/15/15/2N12/15/15/15/15/15/15/1p13/K14 w - - 0 1 moves c9d11+ o15o14
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "d11d12: 1"
+}
+
+test_vlb_chu_dai_movement_table() {
+  local output piece move
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu/Dai movement tables require VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  # One signature move per Chu starting piece type from the center:
+  # catches typos in the production Betza tables, not just engine machinery.
+  # Quiet two-step moves ending on an ordinarily reachable square are deduped,
+  # so two-step pieces are pinned with igui-style (return-to-start) probes.
+  while IFS='|' read -r piece move; do
+    output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<EOF 2>&1
+position fen 11k/12/12/12/12/12/5${piece}6/12/12/12/12/K11 w - - 0 1
+go perft 1
+EOF
+)
+    assert_contains_literal "$output" "${move}: 1"
+  done <<'TABLE'
+Q|f6f9
+A'|f6g7
+B'|f6g7
+D'|f6i9
+E'|f6f9
+F'|f6g7
+G'|f6f7
+H'|f6h6
+J'|f6f7f6
+K'|f6f7
+L'|f6f9
+M'|f6i6
+N'|f6f9
+C|f6f7
+O'|f6f7
+P'|f6f9
+R'|f6f9
+S'|f6f9
+T'|f6f9
+U'|f6i9
+V'|f6g7
+W'|f6f7f6
+X'|f6g7f6
+Y'|f6i9
+Z'|f6g7
+E"|f6g6
+D"|f6f9
+B"|f6f9
+F"|f6i9
+P|f6f7
+G|f6f7
+S|f6g7
+L|f6f9
+R|f6f9
+B|f6i9
+TABLE
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
+    echo "skip: Dai movement table requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  while IFS='|' read -r piece move; do
+    output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<EOF 2>&1
+position fen 14k/15/15/15/15/15/15/7${piece}7/15/15/15/15/15/15/K14 w - - 0 1
+go perft 1
+EOF
+)
+    assert_contains_literal "$output" "${move}: 1"
+  done <<'TABLE'
+Q|h8h11
+A'|h8i9
+B'|h8i9
+D'|h8k11
+E'|h8h11
+F'|h8h9
+G'|h8h9
+H'|h8j8
+J'|h8h9h8
+K'|h8h9
+L'|h8h11
+M'|h8k8
+N'|h8h11
+C|h8h9
+O'|h8h9
+P'|h8i9
+R'|h8h9
+S'|h8j10
+I|h8h9
+T'|h8i9
+U'|h8h10
+V'|h8h9
+W'|h8h11
+X'|h8h11
+Y'|h8k11
+Z'|h8h11
+A"|h8k11
+B"|h8i9
+D"|h8h9h8
+E"|h8i9h8
+H"|h8h9h8
+J"|h8h11
+K"|h8h11
+L"|h8k8
+M"|h8k11
+N"|h8h9
+O"|h8h9
+P"|h8i9
+R"|h8i9
+S"|h8i9
+T"|h8i9
+U"|h8i9
+V"|h8i9
+W"|h8i9
+P|h8h9
+S|h8i9
+G|h8h9
+N|h8i10
+L|h8h11
+R|h8h11
+B|h8k11
+TABLE
+}
+
+test_vlb_chu_sole_royal_mate() {
+  local output
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu sole-royal mate requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  # Mated sole King with a remote movable piece: the go-between's moves do
+  # not save the King, so there is no legal reply at all.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen p'p'9k/12/12/12/12/12/7G'4/12/12/12/12/K11 w - - 0 1
+go depth 1
+EOF
+)
+  assert_contains_literal "$output" "bestmove (none)"
+
+  # The same King escapes when the b-file attacker is gone.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen p'10k/12/12/12/12/12/7G'4/12/12/12/12/K11 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "a1b1: 1"
+
+  # King and Prince: the attacked King may be sacrificed, so the position
+  # plays on even though no reply makes the King safe.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen p'p'9k/12/12/12/12/12/7G'4/7Y4/12/12/12/K11 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "a1b1: 1"
+}
+
+test_vlb_chu_protected_kirin_first_lion() {
+  local output
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu protected-Kirin First-Lion requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  # A Kirin captures a Lion on zone entry and promotes to a protected Lion:
+  # First-Lion is established and the non-Lion recapture is illegal.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 11k/12/2p'9/2j'9/3H'8/12/12/12/12/12/12/K1P'9 w - - 0 1 moves d8c9+
+go perft 1
+EOF
+)
+  assert_not_contains "$output" '^c10c9: 1$'
+
+  # Control: the same promoted Lion without protection may be recaptured.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 11k/12/2p'9/2j'9/3H'8/12/12/12/12/12/12/K11 w - - 0 1 moves d8c9+
+go perft 1
+EOF
+)
+  assert_contains_literal "$output" "c10c9: 1"
+}
+
+test_vlb_chu_dai_lion_trading() {
+  local output
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
+    echo "skip: Chu/Dai Lion-trading distinction requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  # Chu restricts the immediate non-Lion retaliation on a protected Lion.
+  output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
+position fen 11k/12/12/12/7j'4/7P'4/12/1p'10/1J'10/12/12/K3B7 w - - 0 1 moves h7h8
+go perft 1
+EOF
+)
+  assert_not_contains "$output" '^b5b4: 1$'
+
+  # Dai omits Chu's Lion-capture restrictions: the same retaliation is legal.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen 14k/15/15/15/15/15/15/7j'7/7R7/15/1r13/1J'13/15/15/K3B10 w - - 0 1 moves h7h8
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
+    echo "skip: Dai Lion-trading distinction requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+  assert_contains_literal "$output" "b5b4: 1"
+}
+
+test_vlb_dai_dead_piece_depth() {
+  local output
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position startpos
+go perft 1
+EOF
+)
+  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
+    echo "skip: Dai dead-piece depth requires VERY_LARGE_BOARDS"
+    return 0
+  fi
+
+  # A bare King loses against a live knight.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen k14/15/15/15/15/15/15/7N7/15/15/15/15/15/15/14K b - - 0 1
+go depth 1
+EOF
+)
+  assert_contains_literal "$output" "bestmove (none)"
+
+  # A knight on the third-last rank is still live material.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen k14/15/1N13/15/15/15/15/15/15/15/15/15/15/15/14K b - - 0 1
+go depth 1
+EOF
+)
+  assert_contains_literal "$output" "bestmove (none)"
+
+  # A knight on the penultimate rank is trapped and does not count.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen k14/1N13/15/15/15/15/15/15/15/15/15/15/15/15/14K b - - 0 1
+go depth 1
+EOF
+)
+  assert_not_contains "$output" "bestmove (none)"
+
+  # A knight on the final rank is trapped and does not count.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen kN13/15/15/15/15/15/15/15/15/15/15/15/15/15/14K b - - 0 1
+go depth 1
+EOF
+)
+  assert_not_contains "$output" "bestmove (none)"
+
+  # A trapped iron general on the final rank does not count.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen k1I12/15/15/15/15/15/15/15/15/15/15/15/15/15/14K b - - 0 1
+go depth 1
+EOF
+)
+  assert_not_contains "$output" "bestmove (none)"
+
+  # A trapped stone general on the final rank does not count.
+  output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
+position fen k1T'12/15/15/15/15/15/15/15/15/15/15/15/15/15/14K b - - 0 1
+go depth 1
+EOF
+)
+  assert_not_contains "$output" "bestmove (none)"
+}
+
 test_vlb_gale_smoke
 test_vlb_chu_dai_lion_moves
 test_vlb_chu_dai_promotion_wiring
 test_vlb_chu_dai_dead_pieces
 test_vlb_chu_promotion_retry_subvariants
+test_vlb_chu_dai_promotion_tables
+test_vlb_chu_dai_movement_table
+test_vlb_chu_sole_royal_mate
+test_vlb_chu_protected_kirin_first_lion
+test_vlb_chu_dai_lion_trading
+test_vlb_dai_dead_piece_depth
 test_vlb_lame_riders
 test_vlb_symbol_check
 test_vlb_symbol_fen
