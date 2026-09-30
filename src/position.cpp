@@ -6586,11 +6586,12 @@ bool Position::legal(Move m) const {
       {
           // captured_piece() only sees the primary (to) victim; a double
           // capture must also respect restrictions on the via victim.
-          detail::TwoLegPath captures = resolve_two_leg_move(m);
-          Square extra = captures.primary_capture(from);
-          if (captures.captures && captures.captures != square_bb(extra))
+          // twoLegInfo was resolved at the top of legal(); reuse it instead
+          // of re-walking the path.
+          Square extra = twoLegInfo.primary_capture(from);
+          if (twoLegInfo.captures && twoLegInfo.captures != square_bb(extra))
           {
-              Bitboard extraCapture = captures.captures & ~square_bb(extra);
+              Bitboard extraCapture = twoLegInfo.captures & ~square_bb(extra);
               Square extraSquare = pop_lsb(extraCapture);
               PieceType viaTarget = type_of(piece_on(extraSquare));
               if (attacker < PIECE_TYPE_NB && viaTarget < PIECE_TYPE_NB && (var->captureForbiddenByColor[us][attacker] & viaTarget))
