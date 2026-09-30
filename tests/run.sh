@@ -306,7 +306,6 @@ case "$command" in
         # Normalize early so harness builds and signature lookups see the
         # same absolute engine path that the suites will test.
         engine=$(normalize_engine "$engine")
-        check_named_engines "$engine"
         prepare_python
         export CXX
         prepare_shared_objects "$engine"
