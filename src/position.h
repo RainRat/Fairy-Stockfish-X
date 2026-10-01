@@ -216,7 +216,7 @@ struct PackedReversiblePiece {
 
   Piece piece() const { return Piece(value & 0x7f); }
   Piece unpromoted() const { return Piece((value >> 7) & 0x7f); }
-  bool promoted() const { return bool(value & (1 << 14)); }
+  bool promoted() const { return bool(value & (1U << 14)); }
   explicit operator bool() const { return value != 0; }
 };
 static_assert(sizeof(PackedReversiblePiece) == sizeof(uint16_t));

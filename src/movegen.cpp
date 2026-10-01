@@ -1106,7 +1106,7 @@ namespace {
     const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);
     const Bitboard checkers = pos.evasion_checkers();
-    Bitboard target;
+    Bitboard target = Bitboard(0);
     Bitboard captureTarget = Bitboard(0);
     Bitboard forcedFromMask = AllSquares;
     bool restrictToForcedJumper = false;

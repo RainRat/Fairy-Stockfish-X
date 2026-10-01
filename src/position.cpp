@@ -936,6 +936,13 @@ namespace {
           key ^= Zobrist::edgeInsertLock[c][pop_lsb(locks)];
   }
 
+  // Fixed FEN square spelling ("a1" style, 1-based decimal rank) independent
+  // of move-notation protocol. parse_fen_square() reads this spelling, so
+  // fen() must use it even under USI or other protocols.
+  inline std::string fen_square(Square sq) {
+      return std::string{char('a' + file_of(sq))} + std::to_string(int(rank_of(sq)) + 1);
+  }
+
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
       if (spec.size() < 2 || spec[0] < 'a' || spec[0] > 'a' + pos.max_file())
           return SQ_NONE;
@@ -2853,7 +2860,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   {
       ss << " ";
       for (Bitboard b = ep_squares(); b; )
-          ss << UCI::square(*this, pop_lsb(b));
+          ss << fen_square(pop_lsb(b));
       ss << " ";
   }
 
@@ -2905,7 +2912,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               if (is_ok(zoneCenter))
                   zones.push_back(std::string(c == WHITE ? "w" : "b")
                                   + (potion == Variant::POTION_FREEZE ? "f:" : "j:")
-                                  + UCI::square(*this, zoneCenter));
+                                  + fen_square(zoneCenter));
           }
 
       if (!zones.empty() || hasCooldownState)

@@ -598,7 +598,8 @@ shogiPawnDropMateIllegal = false
 shogiPawnDropMateIllegal = false
 INI
 
-cat > "${royal_blast_ini}" <<'INI'[royal-blast-allowed:chess]
+cat > "${royal_blast_ini}" <<'INI'
+[royal-blast-allowed:chess]
 checking = true
 blastOnCapture = true
 castling = false
