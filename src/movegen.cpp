@@ -1789,7 +1789,14 @@ namespace {
             {
                 if (!pos.variant()->freezePieceTypes)
                 {
+                    // Heap-leased: a full overflow buffer is ~2 MiB on
+                    // VERY_LARGE_BOARDS builds and overflows the stack.
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+                    MoveBufferLease allBuffer(pos);
+                    ExtMove* allMoves = allBuffer.get();
+#else
                     ExtMove allMoves[MOVEGEN_OVERFLOW_CAPACITY];
+#endif
                     ExtMove* allEnd = generate_all_impl<Us, NON_EVASIONS>(pos, allMoves);
                     assert(allEnd - allMoves <= MOVEGEN_OVERFLOW_CAPACITY);
                     for (ExtMove* it = allMoves; it != allEnd; ++it)
@@ -2009,7 +2016,13 @@ namespace {
       }
 
       ScopedSpellContext spellScope(potion.freezeExtra, potion.jumpRemoved);
+      // Heap-leased: see the EVASIONS freeze-potion buffer above.
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+      MoveBufferLease baseBuffer(pos);
+      ExtMove* baseMoves = baseBuffer.get();
+#else
       ExtMove baseMoves[MOVEGEN_OVERFLOW_CAPACITY];
+#endif
       const bool broadenFreezeEvasion = pos.evasion_checkers()
                                      && !pos.topology_wraps()
                                      && potion.potion == Variant::POTION_FREEZE
