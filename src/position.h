@@ -20,6 +20,7 @@
 #define POSITION_H_INCLUDED
 
 #include <array>
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -28,6 +29,7 @@
 #include <string>
 #include <functional>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "bitboard.h"
@@ -37,6 +39,7 @@
 #include "variant.h"
 #include "movegen.h"
 #include "piece.h"
+#include "two_leg.h"
 
 #include "nnue/nnue_accumulator.h"
 
@@ -200,26 +203,42 @@ struct ReversiblePieceOnSquare {
 };
 
 struct PackedReversiblePiece {
+#if defined(VERY_LARGE_BOARDS)
+  static_assert(PIECE_NB <= 256, "Packed reversible piece needs wider fields");
+  uint32_t value = 0;
+#else
   static_assert(PIECE_NB <= 128, "Packed reversible piece needs wider fields");
-
   uint16_t value = 0;
+#endif
 
   void clear() { value = 0; }
 
   void set(Piece pc, bool isPromoted, Piece unpromotedPc = NO_PIECE) {
     assert(pc > NO_PIECE && pc < PIECE_NB);
     assert(unpromotedPc >= NO_PIECE && unpromotedPc < PIECE_NB);
-    value = uint16_t(pc)
-          | (uint16_t(unpromotedPc) << 7)
-          | (uint16_t(isPromoted) << 14);
+#if defined(VERY_LARGE_BOARDS)
+    value = uint32_t(pc) | (uint32_t(unpromotedPc) << 8) | (uint32_t(isPromoted) << 16);
+#else
+    value = uint16_t(pc) | (uint16_t(unpromotedPc) << 7) | (uint16_t(isPromoted) << 14);
+#endif
   }
 
+#if defined(VERY_LARGE_BOARDS)
+  Piece piece() const { return Piece(value & 0xff); }
+  Piece unpromoted() const { return Piece((value >> 8) & 0xff); }
+  bool promoted() const { return bool(value & (1U << 16)); }
+#else
   Piece piece() const { return Piece(value & 0x7f); }
   Piece unpromoted() const { return Piece((value >> 7) & 0x7f); }
-  bool promoted() const { return bool(value & (1 << 14)); }
+  bool promoted() const { return bool(value & (1U << 14)); }
+#endif
   explicit operator bool() const { return value != 0; }
 };
+#if defined(VERY_LARGE_BOARDS)
+static_assert(sizeof(PackedReversiblePiece) == sizeof(uint32_t));
+#else
 static_assert(sizeof(PackedReversiblePiece) == sizeof(uint16_t));
+#endif
 
 struct InPlaceTransformState {
   ReversiblePieceOnSquare morphedFrom;
@@ -308,6 +327,14 @@ struct StateInfoCopied {
   int    pointsCount[COLOR_NB];
   CheckCount checksRemaining[COLOR_NB];
   Bitboard epSquares;
+  Bitboard promotionDeferred = Bitboard(0);
+  // Squares on which the immediately preceding non-Lion move captured an
+  // enemy Lion. Empty unless the last move qualifies; read by
+  // lion_capture_legal() instead of inspecting st->previous. Part of the
+  // Zobrist key so identical boards with different trade restrictions hash
+  // differently. Serialized as the optional trailing " T:..." FEN field;
+  // absent on FEN load means no restriction.
+  Bitboard lionTradeSquares = Bitboard(0);
   Bitboard edgeInsertLocks[COLOR_NB];
   Square castlingKingSquare[COLOR_NB];
   int castlingRightsMask[SQUARE_NB];
@@ -347,6 +374,8 @@ struct StateInfoDerived {
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
+  // JCSA perpetual-check priority also applies when royal attacks may be ignored.
+  bool       jcsaCheck = false;
 };
 
 struct MoveUndoInfo {
@@ -357,7 +386,8 @@ struct MoveUndoInfo {
   Bitboard   blastPromotedSquares = Bitboard(0);
   Bitboard   laserTransformedSquares = Bitboard(0);
   ReversiblePieceOnSquare captured;
-  ReversiblePieceOnSquare jumpedEnPassantCaptured;
+  // Extra victim beyond st->captured (en-passant potion or two-leg via).
+  ReversiblePieceOnSquare extraCaptured;
   ReversiblePieceState dead;
   Piece      promotionPawn = NO_PIECE;
   Piece      consumedPromotionHandPiece = NO_PIECE;
@@ -392,7 +422,7 @@ struct MoveUndoInfo {
     blastPromotedSquares = Bitboard(0);
     laserTransformedSquares = Bitboard(0);
     captured.clear();
-    jumpedEnPassantCaptured.clear();
+    extraCaptured.clear();
     dead.clear();
     promotionPawn = NO_PIECE;
     consumedPromotionHandPiece = NO_PIECE;
@@ -427,7 +457,7 @@ struct MoveUndoInfo {
         && blastPromotedSquares == Bitboard(0)
         && laserTransformedSquares == Bitboard(0)
         && !captured
-        && !jumpedEnPassantCaptured
+        && !extraCaptured
         && !dead
         && promotionPawn == NO_PIECE
         && consumedPromotionHandPiece == NO_PIECE
@@ -605,6 +635,12 @@ public:
   Bitboard mandatory_promotion_zone(Color c) const;
   Bitboard mandatory_promotion_zone(Color c, PieceType pt) const;
   Bitboard mandatory_promotion_zone(Piece p) const;
+  // Shared move promotion eligibility for generation and legality checks.
+  struct PromotionStatus {
+      bool allowed = false;
+      bool mandatory = false;
+  };
+  PromotionStatus move_promotion_status(Piece mover, Square from, Square to, bool isCapture) const;
   PieceType effective_piece_type(PieceType pt) const { return pt == KING ? king_type() : pt; }
   Square promotion_square(Color c, Square s) const;
   PieceType main_promotion_pawn_type(Color c) const;
@@ -749,6 +785,16 @@ public:
   bool drop_loop() const;
   bool captures_to_hand() const;
   PieceSet capture_to_hand_types() const;
+  bool has_two_leg_moves() const;
+  PieceSet two_leg_piece_types() const;
+  // Bent hook/two-step checks cannot be blocked geometrically like riders;
+  // callers must generate NON_EVASIONS and let legal() filter them (same
+  // conservative pattern as wrapped boards).
+  // Single owner for the "generate NON_EVASIONS and filter with legal()"
+  // fallback: wrapped boards and bent two-leg checks. Used by
+  // generate<LEGAL>, MovePicker evasion staging, and pseudo_legal special-move
+  // validation so the three paths cannot disagree.
+  bool requires_full_evasion_generation() const;
   PieceSet self_destruct_types() const;
   Bitboard self_destruct_region(Color c) const;
   GravityRule gravity() const;
@@ -1037,6 +1083,23 @@ public:
   bool is_jump_capture(Move m) const;
   Square capture_square(Square to) const;
   Square capture_square(Move m) const;
+  Bitboard capture_squares(Move m) const;
+  // For generated or otherwise validated moves; two-leg paths need no re-walk.
+  Bitboard capture_squares_unchecked(Move m) const;
+  bool matches_recapture_square(Move m, Square s) const;
+  // Generic capture summary for move ordering: Position owns victim
+  // knowledge (ordinary, en passant, locust, two-leg, effects) and reports
+  // raw material value plus raw signed variant-points. MovePicker owns all
+  // ordering weights (including the points multiplier).
+  struct CaptureSummary {
+      int value = 0;
+      PieceType highestType = NO_PIECE_TYPE;
+      int points = 0;
+      int count = 0;
+  };
+  CaptureSummary capture_summary(Move m) const;
+  // Direct victim squares: ordinary and jump captures follow capture_square(),
+  // while two-leg moves may report both the bend and destination victims.
   Square secondary_drop_square(Move m) const;
   Square mirrored_pair_drop_square(Square s) const;
   Bitboard jump_capture_mask(Square from, Square to, Bitboard occupied) const;
@@ -1134,6 +1197,23 @@ public:
   void remove_piece(Square s);
 
 private:
+  // detail::TwoLegPath appears here only in private helpers. The public
+  // surface exposes stable semantics (capture_squares(), capture_summary(),
+  // matches_recapture_square()). The two_leg.h include stays because hot-path
+  // inline helpers (capture_square/capture_squares) need the complete walker
+  // result type; the walker implementation itself lives in two_leg_impl.h and
+  // is only included by position.cpp/movegen.cpp.
+  detail::TwoLegPath resolve_two_leg_move(Move m) const;
+  bool sole_pseudo_royal_mated() const;
+  bool lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo, bool isCapture) const;
+  Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
+  Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,
+                             const SimulatedMoveInfo* simulated) const;
+  bool two_leg_promotion_zone(Color c, PieceType pt, Square from, Square to) const;
+  bool two_leg_attacks_square(Color us, PieceType pt, Square from, Square target,
+                               Bitboard occupied, Bitboard friendly) const;
+  Bitboard two_leg_attackers_to(Square s, Bitboard occupied, Color c,
+                                 const SimulatedMoveInfo* simulated = nullptr) const;
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
   void set_state(StateInfo* si) const;
@@ -2244,8 +2324,8 @@ inline bool Position::has_capture() const {
       return st->legalCapture == VALUE_TRUE;
   if (evasion_checkers())
   {
-      for (const auto& mevasion : MoveList<EVASIONS>(*this))
-          if (capture(mevasion) && legal(mevasion))
+      for (const auto& m : MoveList<EVASION_CANDIDATES>(*this))
+          if (capture(m) && legal(m))
           {
               st->legalCapture = VALUE_TRUE;
               return true;
@@ -2269,8 +2349,8 @@ inline bool Position::has_en_passant_capture() const {
       return st->legalEnPassant == VALUE_TRUE;
   if (evasion_checkers())
   {
-      for (const auto& mevasion : MoveList<EVASIONS>(*this))
-          if (type_of(mevasion) == EN_PASSANT && legal(mevasion))
+      for (const auto& m : MoveList<EVASION_CANDIDATES>(*this))
+          if (type_of(m) == EN_PASSANT && legal(m))
           {
               st->legalEnPassant = VALUE_TRUE;
               return true;
@@ -2363,7 +2443,7 @@ inline Bitboard Position::opening_swap_drop_targets(Color c, PieceType pt) const
 }
 
 inline bool Position::is_opening_self_removal_move(Move m) const {
-  return type_of(m) == SPECIAL
+  return is_plain_special(m)
       && from_sq(m) == to_sq(m)
       && (opening_self_removal_targets(side_to_move()) & from_sq(m));
 }
@@ -2416,6 +2496,16 @@ inline bool Position::captures_to_hand() const {
 inline PieceSet Position::capture_to_hand_types() const {
   assert(var != nullptr);
   return var->captureToHandTypes;
+}
+
+inline bool Position::has_two_leg_moves() const {
+  assert(var != nullptr);
+  return var->twoStepPieceTypes || var->hookPieceTypes;
+}
+
+inline PieceSet Position::two_leg_piece_types() const {
+  assert(var != nullptr);
+  return var->twoStepPieceTypes | var->hookPieceTypes;
 }
 
 inline PieceSet Position::self_destruct_types() const {
@@ -3060,8 +3150,13 @@ inline EnclosingRule Position::flip_enclosed_pieces() const {
 
 inline Value Position::stalemate_value(int ply) const {
   assert(var != nullptr);
+  // No-check royal games (Chu/Dai Shogi) have no stalemate draws: a mated
+  // sole royal ends the game via is_immediate_game_end(), and any other
+  // position with no legal moves is a loss for the stalemated player.
+  if (allow_checks() && pseudo_royal_types() && pseudo_royal_value() != VALUE_NONE)
+      return pseudo_royal_value(ply);
   // Check for checkmate of pseudo-royal pieces
-  if (pseudo_royal_types())
+  if (pseudo_royal_types() && !allow_checks())
   {
       Bitboard pseudoRoyals = st->pseudoRoyals & pieces(sideToMove);
       Bitboard pseudoRoyalsTheirs = st->pseudoRoyals & pieces(~sideToMove);
@@ -3497,7 +3592,7 @@ inline Piece Position::moved_piece(Move m) const {
 }
 
 inline bool Position::is_clone_move(Move m) const {
-  if (type_of(m) != SPECIAL || is_gating(m) || from_sq(m) == to_sq(m) || is_first_move_special(m))
+  if (!is_plain_special(m) || is_gating(m) || from_sq(m) == to_sq(m) || is_first_move_special(m))
       return false;
 
   return can_clone(moved_piece(m));
@@ -4338,8 +4433,6 @@ inline Position::HopperSquareProps Position::get_hopper_square_props(Square s, B
 
     PieceType pcPt = type_of(pc);
     props.pcSet = pcPt == NO_PIECE_TYPE ? NO_PIECE_SET : piece_set(pcPt);
-    if (props.isWall) props.pcSet |= PieceSet(1ULL << 62);
-    if (props.isDead) props.pcSet |= PieceSet(1ULL << 61);
 
     props.isFriendly = props.isOccupied && pc != NO_PIECE && color_of(pc) == friendlyColor;
     props.isEnemy = props.isOccupied && pc != NO_PIECE && !props.isFriendly;
@@ -4390,7 +4483,7 @@ inline Bitboard Position::special_rider_bb(const PieceInfo* pi, MoveModality mod
               {
                   Square s = pop_lsb(occ);
                   HopperSquareProps props = get_hopper_square_props(s, occupied, c, piece_at(s, occupied));
-                  if (((hopIt->second.transparentSpecialTypes & props.special) != 0) || (uint64_t(hopIt->second.transparentPieceTypes & props.pcSet) != 0))
+                  if (((hopIt->second.transparentSpecialTypes & props.special) != 0) || bool(hopIt->second.transparentPieceTypes & props.pcSet))
                       transparentPieces |= square_bb(s);
               }
 
@@ -4495,12 +4588,12 @@ inline Bitboard Position::universal_hopper_targets_impl(const std::map<Direction
             }
 
             if (props.isOccupied || props.isWall || props.isDead) {
-                if (((profile.transparentSpecialTypes & props.special) != 0) || (uint64_t(profile.transparentPieceTypes & props.pcSet) != 0)) {
+                if (((profile.transparentSpecialTypes & props.special) != 0) || bool(profile.transparentPieceTypes & props.pcSet)) {
                     distFromLastHurdle++;
                     continue;
                 }
 
-                if (((profile.hurdleSpecialTypes & props.special) != 0) || (uint64_t(profile.hurdlePieceTypes & props.pcSet) != 0)) {
+                if (((profile.hurdleSpecialTypes & props.special) != 0) || bool(profile.hurdlePieceTypes & props.pcSet)) {
                     hurdlesHit++;
                     if (hurdlesHit == 1) distToFirstHurdle = dist;
 
@@ -4948,7 +5041,7 @@ inline Bitboard Position::attacks_from(Color c, PieceType pt, Square s, Bitboard
       return b & (FilterMobility ? board_bb(c, pt) : board_bb());
   }
 
-  const bool needsGenericAttackAssembly = pieceMap.generic_attack_assembly_types() & piece_set(movePt);
+  const bool needsGenericAttackAssembly = bool(pieceMap.generic_attack_assembly_types() & piece_set(movePt));
 
   if (!needsGenericAttackAssembly && fast_attacks() && (pt != KING || king_type() == KING))
   {
@@ -5326,7 +5419,9 @@ inline bool Position::is_chess960() const {
 
 inline bool Position::capture_or_promotion(Move m) const {
   assert(is_ok(m));
-  return is_promotion_move(m) || capture(m);
+  // Two-leg promotions are tactical like pawn promotions. PIECE_PROMOTION
+  // deliberately stays non-tactical, as before.
+  return is_promotion_move(m) || is_two_leg_promotion(m) || capture(m);
 }
 inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square from, Square to, Bitboard occupied) const {
   assert(is_ok(from));
@@ -5408,11 +5503,11 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
 
                   if (props.isOccupied || props.isWall || props.isDead)
                   {
-                      if (((profile.transparentSpecialTypes & props.special) != 0) || (uint64_t(profile.transparentPieceTypes & props.pcSet) != 0))
+                      if (((profile.transparentSpecialTypes & props.special) != 0) || bool(profile.transparentPieceTypes & props.pcSet))
                       {
                           distFromLastHurdle++;
                       }
-                      else if (((profile.hurdleSpecialTypes & props.special) != 0) || (uint64_t(profile.hurdlePieceTypes & props.pcSet) != 0))
+                      else if (((profile.hurdleSpecialTypes & props.special) != 0) || bool(profile.hurdlePieceTypes & props.pcSet))
                       {
                               if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
                                   && props.isFriendly
@@ -5467,12 +5562,12 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
 
                               if (hprops.isOccupied || hprops.isWall || hprops.isDead)
                               {
-                                  if (((profile.transparentSpecialTypes & hprops.special) != 0) || (uint64_t(profile.transparentPieceTypes & hprops.pcSet) != 0))
+                                  if (((profile.transparentSpecialTypes & hprops.special) != 0) || bool(profile.transparentPieceTypes & hprops.pcSet))
                                   {
                                       distFromLastHurdle++;
                                       continue;
                                   }
-                                  if (((profile.hurdleSpecialTypes & hprops.special) != 0) || (uint64_t(profile.hurdlePieceTypes & hprops.pcSet) != 0))
+                                  if (((profile.hurdleSpecialTypes & hprops.special) != 0) || bool(profile.hurdlePieceTypes & hprops.pcSet))
                                   {
                                       if (profile.captureMode == PieceInfo::CAPTURE_LOCUST_ALL
                                           && hprops.isFriendly
@@ -5565,8 +5660,6 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                       Piece hurdlePc = cur == to ? mover : piece_at(cur, occupied);
                       PieceType hurdlePt = type_of(hurdlePc);
                       PieceSet pcSet = (hurdlePt == NO_PIECE_TYPE || !isOccupied) ? NO_PIECE_SET : piece_set(hurdlePt);
-                      if (isWall) pcSet |= PieceSet(1ULL << 62);
-                      if (isDead) pcSet |= PieceSet(1ULL << 61);
                       
                       bool isFriendly = isOccupied && hurdlePc != NO_PIECE && (color_of(hurdlePc) == us);
                       bool isEnemy = isOccupied && hurdlePc != NO_PIECE && !isFriendly;
@@ -5576,10 +5669,10 @@ inline Position::HopperMoveDetails Position::resolve_hopper_move_details(Square 
                                       | (isWall ? PieceInfo::HopperProfile::WALL : 0)
                                       | (isDead ? PieceInfo::HopperProfile::DEAD : 0);
                       
-                      if (((profile.transparentSpecialTypes & special) != 0) || (uint64_t(profile.transparentPieceTypes & pcSet) != 0))
+                      if (((profile.transparentSpecialTypes & special) != 0) || bool(profile.transparentPieceTypes & pcSet))
                           continue;
                       
-                      if (((profile.hurdleSpecialTypes & special) != 0) || (uint64_t(profile.hurdlePieceTypes & pcSet) != 0))
+                      if (((profile.hurdleSpecialTypes & special) != 0) || bool(profile.hurdlePieceTypes & pcSet))
                       {
                           if (isOccupied && !isWall && !isDead && hurdlePc != NO_PIECE)
                               details.locustAllMask |= cur;
@@ -5695,6 +5788,8 @@ inline bool Position::capture(Move m) const {
   assert(is_ok(m));
   if (type_of(m) == EN_PASSANT)
       return true;
+  if (is_two_leg(m))
+      return bool(resolve_two_leg_move(m).captures);
   if (type_of(m) == PULL || type_of(m) == SWAP || is_stack_move(m)
       || is_unstack_move(m) || is_laser_fire(m))
       return false;
@@ -5762,6 +5857,11 @@ inline Square Position::capture_square(Move m) const {
   Square to = to_sq(m);
   if (type_of(m) == EN_PASSANT)
       return capture_square(to);
+  if (is_two_leg(m))
+  {
+      detail::TwoLegPath info = resolve_two_leg_move(m);
+      return info.primary_capture(from_sq(m));
+  }
   if (is_jump_capture(m))
       return jump_capture_square(from_sq(m), to);
 
@@ -5770,6 +5870,84 @@ inline Square Position::capture_square(Move m) const {
       return pushInfo.captures ? pushInfo.tail : SQ_NONE;
 
   return to;
+}
+
+inline Bitboard Position::capture_squares(Move m) const {
+  if (is_two_leg(m))
+      return resolve_two_leg_move(m).captures;
+  if (!capture(m))
+      return Bitboard(0);
+  // Multi-victim locust ordering is out of scope for the two-leg change;
+  // keep pre-existing single-victim search semantics for jump captures.
+  Square cs = capture_square(m);
+  return is_ok(cs) ? square_bb(cs) : Bitboard(0);
+}
+
+inline Bitboard Position::capture_squares_unchecked(Move m) const {
+  if (!is_two_leg(m))
+      return capture_squares(m);
+
+  const Square from = from_sq(m);
+  const Square via = via_sq(m);
+  const Square to = to_sq(m);
+  const Bitboard enemy = pieces(~sideToMove);
+  Bitboard captures = 0;
+
+  // Hook paths never capture on the bend (a first-leg capture blocks the
+  // turn); only two-step paths can capture via. Checking the move kind
+  // keeps recapture matching and ordering precise for generated moves.
+  if (!is_hook(m) && via != from && (enemy & via))
+      captures |= square_bb(via);
+  if (to != from && to != via && (enemy & to))
+      captures |= square_bb(to);
+
+  return captures;
+}
+
+inline bool Position::matches_recapture_square(Move m, Square s) const {
+  return to_sq(m) == s || (is_two_leg(m) && (capture_squares_unchecked(m) & s));
+}
+
+inline Position::PromotionStatus Position::move_promotion_status(Piece mover, Square from, Square to,
+                                                                  bool isCapture) const {
+  PromotionStatus status;
+  if (mover == NO_PIECE)
+      return status;
+  Color us = color_of(mover);
+  PieceType pt = type_of(mover);
+  Bitboard mandatoryZone = mandatory_promotion_zone(mover);
+  status.mandatory = bool((mandatoryZone & to) && !(mandatoryZone & from));
+  PieceType promoTo = promoted_piece_type(pt);
+  if (promoTo == NO_PIECE_TYPE || is_promoted(from))
+      return status;
+  if (!two_leg_promotion_zone(us, pt, from, to) || !promotion_allowed(us, promoTo))
+      return status;
+  if (var->promotionDeclineRule)
+  {
+      Bitboard zone = promotion_zone(us, pt);
+      bool inFrom = bool(zone & from);
+      bool inTo = bool(zone & to);
+      bool entered = !inFrom && inTo;
+      // Chu/Dai: after declining on entry, a capture starting in-zone
+      // re-offers promotion even when the move leaves the zone.
+      bool deferredCapture = inFrom && isCapture && bool(st->promotionDeferred & from);
+      // Configured piece types can get a final non-capture opportunity.
+      bool lastRankRetry = !isCapture && bool(st->promotionDeferred & from)
+                        && (var->promotionDeclineFinalRankRetryTypes & piece_set(pt))
+                        && ((us == WHITE && rank_of(to) == max_rank())
+                            || (us == BLACK && rank_of(to) == RANK_1));
+      if (!entered && !deferredCapture && !lastRankRetry)
+          return status;
+  }
+  if (piece_promotion_on_capture() && !isCapture)
+      return status;
+  status.allowed = true;
+  return status;
+}
+
+inline bool Position::two_leg_promotion_zone(Color c, PieceType pt, Square from, Square to) const {
+  Bitboard pz = promotion_zone(c, pt);
+  return pz & (from | to);
 }
 
 inline bool Position::paired_drop(Move m) const {
@@ -5800,7 +5978,9 @@ inline bool Position::virtual_drop(Move m) const {
 }
 
 inline Piece Position::captured_piece() const {
-  return st->captured.piece.piece;
+  if (st->captured.piece.piece != NO_PIECE)
+      return st->captured.piece.piece;
+  return is_two_leg(st->move) ? st->extraCaptured.piece.piece : NO_PIECE;
 }
 
 inline Bitboard Position::fog_area() const {
@@ -5824,12 +6004,73 @@ inline Piece Position::captured_piece(Move m) const {
   return is_ok(cs) ? piece_on(cs) : NO_PIECE;
 }
 
+inline Position::CaptureSummary Position::capture_summary(Move m) const {
+  CaptureSummary out;
+  auto points_for = [&](Piece captured) {
+      if (!points_counting() || captured == NO_PIECE)
+          return 0;
+      int pts = var->piecePoints[type_of(captured)];
+      int signedPts = 0;
+      switch (points_rule_captures())
+      {
+          case POINTS_US:        signedPts =  pts; break;
+          case POINTS_THEM:      signedPts = -pts; break;
+          case POINTS_OWNER:     signedPts =  color_of(captured) == side_to_move() ? pts : -pts; break;
+          case POINTS_NON_OWNER: signedPts =  color_of(captured) == side_to_move() ? -pts : pts; break;
+          case POINTS_NONE:      signedPts = 0; break;
+      }
+      if (points_goal() > 0)
+      {
+          if (points_goal_value() < VALUE_ZERO)
+              signedPts = -signedPts;
+          else if (points_goal_value() == VALUE_ZERO)
+              signedPts = 0;
+      }
+      return signedPts;
+  };
+  if (!is_two_leg(m))
+  {
+      Piece captured = captured_piece(m);
+      Piece victim = captured != NO_PIECE ? captured : piece_on(to_sq(m));
+      out.value = int(PieceValue[MG][victim]);
+      out.highestType = type_of(victim);
+      out.points = points_for(captured);
+      out.count = captured != NO_PIECE ? 1 : 0;
+      return out;
+  }
+  out.highestType = NO_PIECE_TYPE;
+  int best = 0;
+  Bitboard caps = capture_squares_unchecked(m);
+  while (caps)
+  {
+      Piece p = piece_on(pop_lsb(caps));
+      if (p == NO_PIECE)
+          continue;
+      ++out.count;
+      out.value += int(PieceValue[MG][p]);
+      out.points += points_for(p);
+      int v = int(PieceValue[MG][p]);
+      if (v > best)
+      {
+          best = v;
+          out.highestType = type_of(p);
+      }
+  }
+  if (!out.count)
+  {
+      Piece fallback = piece_on(to_sq(m));
+      out.highestType = type_of(fallback);
+  }
+  return out;
+}
+
 inline std::string Position::piece_to_partner() const {
-  if (!st->captured.piece) return std::string();
-  Color color = color_of(st->captured.piece.piece);
-  Piece piece = st->captured.piece.promoted ?
-      (st->captured.piece.unpromoted ? st->captured.piece.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
-      st->captured.piece.piece;
+  const ReversiblePieceOnSquare& cap = st->captured ? st->captured : st->extraCaptured;
+  if (!cap.piece) return std::string();
+  Color color = color_of(cap.piece.piece);
+  Piece piece = cap.piece.promoted ?
+      (cap.piece.unpromoted ? cap.piece.unpromoted : make_piece(color, main_promotion_pawn_type(color))) :
+      cap.piece.piece;
   return piece_symbol(piece);
 }
 

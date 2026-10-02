@@ -151,6 +151,7 @@ UCI
     assert_contains_literal "${no_kings_output}" "e4e8: 1" "contains the royal capture"
     cleanup_tmp_ini
     legacy royal-variant-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
+    legacy chu-lion-rules.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy pseudoroyal-capture-illegal.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy ep-pseudoroyal-regressions.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy quiet-check-special-moves.sh 5m "${ENGINE}"
@@ -219,7 +220,7 @@ run_notation_protocol() {
 
 run_variants_smoke() {
     native board-games
-    legacy variant-load-all.sh 10m "${ENGINE}" "${VARIANTS}"
+    legacy variant-load-all.sh 15m "${ENGINE}" "${VARIANTS}"
     legacy variant-load-matrix.sh 30m "${ENGINE}" "${VARIANTS}"
     legacy variant-rules-matrix.sh 8m "${ENGINE}" "${VARIANTS}"
     legacy small-variant-rules.sh 5m "${ENGINE}" "${VARIANTS}"

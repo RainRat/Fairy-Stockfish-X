@@ -27,6 +27,65 @@ class TestBindings(unittest.TestCase):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_jcsa_repetition_attacking_moves(self):
+        sf.load_variant_config(
+            "[api-jcsa-repetition:chess]\n"
+            "castling = false\nnFoldRule = 4\nnFoldRuleImmediate = 4\n"
+            "nFoldValue = loss\nchasingRule = all\n"
+            "customPiece1 = j:KAD\ntwoStepMoves = j:*\n"
+        )
+        cases = [
+            # White alternates attacked victims; Black must win, even though
+            # no single pawn is attacked throughout the cycle.
+            ("7k/8/8/pp6/8/8/R7/7K b - - 0 1",
+             ["h8g8", "a2b2", "g8h8", "b2a2"], sf.VALUE_MATE),
+            # An unchanged attack by the stationary rook is not an attacking
+            # king move. The neutral repetition loses for Black to move.
+            ("7k/8/8/pp6/8/8/R7/7K b - - 0 1",
+             ["h8g8", "h1g1", "g8h8", "g1h1"], -sf.VALUE_MATE),
+            # Both sides attack: JCSA's neutral-cycle rule applies, rather
+            # than Xiangqi's mutual-chase draw.
+            ("5k2/7r/8/p7/7P/8/R7/5K2 b - - 0 1",
+             ["h7h6", "a2a3", "h6h7", "a3a2"], -sf.VALUE_MATE),
+            # A cycle need only include an attacking move, not attack on
+            # every move: a2b2 loses the attack, b2a2 restores it.
+            ("7k/8/8/p7/8/8/R7/7K b - - 0 1",
+             ["h8g8", "a2b2", "g8h8", "b2a2"], sf.VALUE_MATE),
+            # Moving the knight exposes the stationary rook's attack.
+            ("7k/8/8/p7/8/8/N7/R6K b - - 0 1",
+             ["h8g8", "a2c3", "g8h8", "c3a2"], sf.VALUE_MATE),
+        ]
+        for fen, cycle, expected in cases:
+            with self.subTest(fen=fen, cycle=cycle):
+                self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 2), sf.VALUE_NONE)
+                self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 3), expected)
+
+        # Quiet jitto repeats after two plies: the sixth ply is already the
+        # fourth occurrence, and the first passer (Black) loses.
+        fen = "4k3/7j/8/8/8/8/J7/4K3 b - - 0 1"
+        cycle = ["h7h8h7", "a2a3a2"]
+        self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 2), sf.VALUE_NONE)
+        self.assertEqual(sf.game_result("api-jcsa-repetition", fen, cycle * 3), -sf.VALUE_MATE)
+
+        sf.load_variant_config(
+            "[api-jcsa-royal-repetition:api-jcsa-repetition]\n"
+            "allowChecks = true\npseudoRoyalTypes = k\nperpetualCheckIllegal = true\n"
+        )
+        # Royal attacks may be ignored in Chu, but continuous checking still
+        # takes precedence when both players also make attacking moves.
+        fen = "R6k/8/8/8/8/6P1/2r3P1/7K b - - 0 1"
+        cycle = ["c2c3", "a8b8", "c3c2", "b8a8"]
+        self.assertEqual(sf.game_result("api-jcsa-royal-repetition", fen, cycle * 3), sf.VALUE_MATE)
+
+        sf.load_variant_config(
+            "[api-jcsa-prince-repetition:api-jcsa-royal-repetition]\n"
+            "commoner = y\npseudoRoyalTypes = ky\n"
+        )
+        # With both King and Prince, aiming at the King is an ordinary attack:
+        # both players attack, so the neutral-cycle loser is Black to move.
+        fen = "R6k/5y2/8/8/8/6P1/2r3P1/7K b - - 0 1"
+        self.assertEqual(sf.game_result("api-jcsa-prince-repetition", fen, cycle * 3), -sf.VALUE_MATE)
+
     def test_move_list_rejects_invalid_move(self):
         # Whole-request contract: one bad token fails the call (contrast the
         # native UCI truncation documented in DEVELOPING.md).
@@ -314,6 +373,7 @@ class TestPublicAPI(unittest.TestCase):
         self.assertNotIn("pieceTypesByRank", info["promotion"])
         self.assertEqual(info["promotion"]["promotedPieceTypes"], {})
         self.assertEqual(info["promotion"]["captureDemotedPieceTypes"], {})
+        self.assertFalse(info["promotion"]["declineRule"])
 
         janggi_info = json.loads(sf.variant_info("janggi"))
         self.assertIn("e2", janggi_info["board"]["diagonalLines"])
@@ -348,6 +408,26 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(drops["gameEnd"]["noCheckmateTypes"], {"white": ["knight"], "black": ["knight"]})
         self.assertEqual(drops["drops"]["oppositeColorTypes"], {"white": ["bishop"], "black": ["bishop"]})
 
+        sf.load_variant_config(
+            "[variantinfotwostep:chess]\n"
+            "customPiece1 = l:ADNWK\n"
+            "twoStepMoves = l:*\n"
+        )
+        twostep = json.loads(sf.variant_info("variantinfotwostep"))
+        self.assertEqual(twostep["movement"]["twoStepMoves"], {"custom1": "*"})
+        self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["twoStepMoves"], {})
+
+        sf.load_variant_config(
+            "[variantinfohook:chess]\n"
+            "customPiece1 = h:0\n"
+            "hookMoves = h:R-sR\n"
+        )
+        hook = json.loads(sf.variant_info("variantinfohook"))
+        self.assertEqual(hook["movement"]["hookMoves"],
+                         {"custom1": {"pairs": "N>E,N>W,S>E,S>W",
+                                      "firstRange": 0, "secondRange": 0}})
+        self.assertEqual(json.loads(sf.variant_info("chess"))["movement"]["hookMoves"], {})
+
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
             sf.variant_info("does-not-exist")
 
@@ -370,6 +450,156 @@ class TestPublicAPI(unittest.TestCase):
         self.assertIsInstance(optional[0], bool)
         self.assertIsInstance(optional[1], int)
         self.assertIsInstance(sf.has_insufficient_material("chess", fen, []), tuple)
+
+    def test_two_leg_pieces_disable_insufficient_material_shortcut(self):
+        sf.load_variant_config(
+            "[lion-api-adjudication:chess]\n"
+            "customPiece1 = h:0\n"
+            "hookMoves = h:R-R\n"
+            "castling = false\n"
+        )
+        fen = "7k/8/8/8/8/8/H7/K7 w - - 0 1"
+        self.assertIn("a2a3b3", sf.legal_moves("lion-api-adjudication", fen, []))
+        self.assertEqual(sf.has_insufficient_material("lion-api-adjudication", fen, []),
+                         (False, False))
+        self.assertEqual(sf.game_result("lion-api-adjudication", fen, []), sf.VALUE_NONE)
+        self.assertEqual(sf.has_insufficient_material("chess", "7k/8/8/8/8/8/8/K7 w - - 0 1", []),
+                         (True, True))
+
+    def test_multiple_pseudo_royals_end_only_when_last_is_captured(self):
+        sf.load_variant_config(
+            "[multi-royal-capture:chess]\n"
+            "customPiece1 = a:K\n"
+            "allowChecks = true\n"
+            "pseudoRoyalTypes = ka\n"
+            "pseudoRoyalCount = 1\n"
+            "pseudoRoyalValue = loss\n"
+        )
+
+        king_and_prince = "7k/8/8/8/8/8/r7/K6A b - - 0 1"
+        prince_and_king = "7k/8/8/8/8/8/7r/K6A b - - 0 1"
+        lone_king = "7k/8/8/8/8/8/r7/K7 b - - 0 1"
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", king_and_prince,
+                                                  ["a2a1"])[0], False)
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", prince_and_king,
+                                                  ["h2h1"])[0], False)
+        self.assertEqual(sf.is_immediate_game_end("multi-royal-capture", lone_king,
+                                                  ["a2a1"])[0], True)
+
+        attacked_king = "1r5k/8/8/8/8/8/8/K7 w - - 0 1"
+        self.assertIn("a1b1", sf.legal_moves("multi-royal-capture", attacked_king, []))
+
+    def test_promotion_decline_persists_until_capture_or_zone_exit(self):
+        sf.load_variant_config(
+            "[promotion-decline:chess]\n"
+            "customPiece1 = a:K\n"
+            "promotionRegionWhite = *7 *8\n"
+            "promotionRegionBlack = *2 *1\n"
+            "promotionPieceTypes = q\n"
+            "promotedPieceType = a:q\n"
+            "promotionDeclineRule = true\n"
+            "mandatoryPawnPromotion = false\n"
+            "mandatoryPiecePromotion = false\n"
+        )
+        self.assertTrue(json.loads(sf.variant_info("promotion-decline"))["promotion"]["declineRule"])
+        fen = "1r5k/8/A7/8/8/8/8/K7 w - - 0 1"
+        self.assertIn("a6a7+", sf.legal_moves("promotion-decline", fen, []))
+
+        after_declining = sf.legal_moves("promotion-decline", fen, ["a6a7", "h8g8"])
+        self.assertIn("a7b7", after_declining)
+        self.assertNotIn("a7b7+", after_declining)
+
+        after_capture = sf.legal_moves("promotion-decline", fen, ["a6a7", "h8g8"])
+        self.assertIn("a7b8+", after_capture)
+
+        after_leaving_and_reentering = sf.legal_moves(
+            "promotion-decline", fen, ["a6a7", "h8g8", "a7a6", "g8h8"])
+        self.assertIn("a6a7+", after_leaving_and_reentering)
+
+    def test_lion_hidden_protector_xray(self):
+        sf.load_variant_config(
+            "[lion-xray:chess]\n"
+            "maxFile = h\n"
+            "customPiece1 = l:KAD\n"
+            "customPiece2 = m:K\n"
+            "king = -\n"
+            "commoner = k\n"
+            "checking = false\n"
+            "castling = false\n"
+            "twoStepMoves = l:* m:*\n"
+            "lionMoveTypes = l m\n"
+            "lionCapturingRule = true\n"
+            "lionInsignificantPieces = p\n"
+        )
+        # Cub b3 blocks rook a3 from lion d3; b3c3d3 (pawn, then lion)
+        # vacates b3 and uncovers the x-ray: illegal.
+        self.assertNotIn("b3c3d3",
+                         sf.legal_moves("lion-xray", "8/8/8/8/8/rMpl4/8/8 w - - 0 1", []))
+        # No rook: the same distant capture is legal.
+        self.assertIn("b3c3d3",
+                      sf.legal_moves("lion-xray", "8/8/8/8/8/1Mpl4/8/8 w - - 0 1", []))
+
+    def test_two_leg_via_royal_ends_game(self):
+        sf.load_variant_config(
+            "[via-royal:chess]\n"
+            "customPiece1 = l:KAD\n"
+            "twoStepMoves = l:*\n"
+            "allowChecks = true\n"
+            "castling = false\n"
+        )
+        # White Lion b2 takes the Black king on c3 and returns (igui).
+        # The royal falls on the bend square, not the destination.
+        ended, _ = sf.is_immediate_game_end(
+            "via-royal", "7k/8/8/8/8/2k5/1L6/K7 w - - 0 1", ["b2c3b2"])
+        self.assertTrue(ended)
+
+    def test_promotion_deferred_fen_roundtrip(self):
+        sf.load_variant_config(
+            "[promotion-decline-fen:chess]\n"
+            "customPiece1 = a:K\n"
+            "promotionRegionWhite = *7 *8\n"
+            "promotionRegionBlack = *2 *1\n"
+            "promotionPieceTypes = q\n"
+            "promotedPieceType = a:q\n"
+            "promotionDeclineRule = true\n"
+            "mandatoryPawnPromotion = false\n"
+            "mandatoryPiecePromotion = false\n"
+        )
+        fen = "1r5k/8/A7/8/8/8/8/K7 w - - 0 1"
+        moves = ["a6a7", "h8g8"]
+        live = sorted(sf.legal_moves("promotion-decline-fen", fen, moves))
+        # a7 already declined once: quiet re-entry offers no promotion.
+        self.assertIn("a7b7", live)
+        self.assertNotIn("a7b7+", live)
+        mid = sf.get_fen("promotion-decline-fen", fen, moves)
+        self.assertIn("D:", mid)
+        reloaded = sorted(sf.legal_moves("promotion-decline-fen", mid, []))
+        self.assertEqual(reloaded, live)
+
+    def test_lion_trade_fen_roundtrip(self):
+        sf.load_variant_config(
+            "[lion-trade-fen:chess]\n"
+            "maxFile = h\n"
+            "customPiece1 = l:KAD\n"
+            "king = -\n"
+            "commoner = k\n"
+            "checking = false\n"
+            "castling = false\n"
+            "twoStepMoves = l:*\n"
+            "lionMoveTypes = l\n"
+            "lionCapturingRule = true\n"
+            "lionInsignificantPieces = p\n"
+        )
+        fen = "8/8/8/8/4l3/8/1L6/1r2R3 b - - 0 1"
+        moves = ["b1b2"]
+        live = sorted(sf.legal_moves("lion-trade-fen", fen, moves))
+        # b1xL captured a Lion: e1e4 (non-Lion takes a different Lion) is barred.
+        self.assertNotIn("e1e4", live)
+        mid = sf.get_fen("lion-trade-fen", fen, moves)
+        self.assertIn(" T:", mid)
+        reloaded = sorted(sf.legal_moves("lion-trade-fen", mid, []))
+        self.assertEqual(reloaded, live)
+        self.assertNotIn("e1e4", reloaded)
 
     def test_validation_and_fog_are_binding_values(self):
         fen = sf.start_fen("chess")

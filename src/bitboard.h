@@ -1372,16 +1372,30 @@ inline int popcount(PieceSet ps) {
 
 #ifndef USE_POPCNT
 
-  union { uint64_t bb; uint16_t u[4]; } v = { (uint64_t)ps };
-  return PopCnt16[v.u[0]] + PopCnt16[v.u[1]] + PopCnt16[v.u[2]] + PopCnt16[v.u[3]];
+  union { uint64_t bb; uint16_t u[4]; } lo = { ps.low };
+#if defined(VERY_LARGE_BOARDS)
+  union { uint64_t bb; uint16_t u[4]; } hi = { ps.high };
+  return PopCnt16[lo.u[0]] + PopCnt16[lo.u[1]] + PopCnt16[lo.u[2]] + PopCnt16[lo.u[3]]
+       + PopCnt16[hi.u[0]] + PopCnt16[hi.u[1]] + PopCnt16[hi.u[2]] + PopCnt16[hi.u[3]];
+#else
+  return PopCnt16[lo.u[0]] + PopCnt16[lo.u[1]] + PopCnt16[lo.u[2]] + PopCnt16[lo.u[3]];
+#endif
 
 #elif defined(_MSC_VER) || defined(__INTEL_COMPILER)
 
-  return (int)_mm_popcnt_u64(ps);
+#if defined(VERY_LARGE_BOARDS)
+  return (int)_mm_popcnt_u64(ps.low) + (int)_mm_popcnt_u64(ps.high);
+#else
+  return (int)_mm_popcnt_u64(ps.low);
+#endif
 
 #else // Assumed gcc or compatible compiler
 
-  return __builtin_popcountll(ps);
+#if defined(VERY_LARGE_BOARDS)
+  return __builtin_popcountll(ps.low) + __builtin_popcountll(ps.high);
+#else
+  return __builtin_popcountll(ps.low);
+#endif
 
 #endif
 }
@@ -1392,12 +1406,22 @@ inline int popcount(PieceSet ps) {
 
 inline PieceType lsb(PieceSet ps) {
   assert(ps);
-  return PieceType(__builtin_ctzll(ps));
+#if defined(VERY_LARGE_BOARDS)
+  return ps.low ? PieceType(__builtin_ctzll(ps.low))
+                : PieceType(64 + __builtin_ctzll(ps.high));
+#else
+  return PieceType(__builtin_ctzll(ps.low));
+#endif
 }
 
 inline PieceType msb(PieceSet ps) {
   assert(ps);
-  return PieceType((PIECE_TYPE_NB - 1) ^ __builtin_clzll(ps));
+#if defined(VERY_LARGE_BOARDS)
+  return ps.high ? PieceType(127 - __builtin_clzll(ps.high))
+                 : PieceType(63 - __builtin_clzll(ps.low));
+#else
+  return PieceType(63 - __builtin_clzll(ps.low));
+#endif
 }
 
 #elif defined(_MSC_VER)  // MSVC
@@ -1407,15 +1431,35 @@ inline PieceType msb(PieceSet ps) {
 inline PieceType lsb(PieceSet ps) {
   assert(ps);
   unsigned long idx;
-  _BitScanForward64(&idx, ps);
+#if defined(VERY_LARGE_BOARDS)
+  if (ps.low)
+  {
+      _BitScanForward64(&idx, ps.low);
+      return (PieceType) idx;
+  }
+  _BitScanForward64(&idx, ps.high);
+  return (PieceType) (idx + 64);
+#else
+  _BitScanForward64(&idx, ps.low);
   return (PieceType) idx;
+#endif
 }
 
 inline PieceType msb(PieceSet ps) {
   assert(ps);
   unsigned long idx;
-  _BitScanReverse64(&idx, ps);
+#if defined(VERY_LARGE_BOARDS)
+  if (ps.high)
+  {
+      _BitScanReverse64(&idx, ps.high);
+      return (PieceType) (idx + 64);
+  }
+  _BitScanReverse64(&idx, ps.low);
   return (PieceType) idx;
+#else
+  _BitScanReverse64(&idx, ps.low);
+  return (PieceType) idx;
+#endif
 }
 
 #else  // MSVC, WIN32
@@ -1424,25 +1468,44 @@ inline PieceType lsb(PieceSet ps) {
   assert(ps);
   unsigned long idx;
 
-  if (ps & 0xffffffff) {
-      _BitScanForward(&idx, uint32_t(ps));
+#if defined(VERY_LARGE_BOARDS)
+  if (ps.low & 0xffffffff) {
+      _BitScanForward(&idx, uint32_t(ps.low));
       return PieceType(idx);
-  } else {
-      _BitScanForward(&idx, uint32_t(ps >> 32));
+  } else if (ps.low) {
+      _BitScanForward(&idx, uint32_t(ps.low >> 32));
       return PieceType(idx + 32);
   }
+  if (ps.high & 0xffffffff) {
+      _BitScanForward(&idx, uint32_t(ps.high));
+      return PieceType(idx + 64);
+  }
+  _BitScanForward(&idx, uint32_t(ps.high >> 32));
+  return PieceType(idx + 96);
+#else
+  if (ps.low & 0xffffffff) {
+      _BitScanForward(&idx, uint32_t(ps.low));
+      return PieceType(idx);
+  }
+  _BitScanForward(&idx, uint32_t(ps.low >> 32));
+  return PieceType(idx + 32);
+#endif
 }
 
 inline PieceType msb(PieceSet ps) {
   assert(ps);
   unsigned long idx;
-  if (ps >> 32) {
-      _BitScanReverse(&idx, uint32_t(ps >> 32));
-      return PieceType(idx + 32);
-  } else {
-      _BitScanReverse(&idx, uint32_t(ps));
-      return PieceType(idx);
-  }
+#if defined(VERY_LARGE_BOARDS)
+  if (ps.high >> 32) { _BitScanReverse(&idx, uint32_t(ps.high >> 32)); return PieceType(idx + 96); }
+  if (ps.high) { _BitScanReverse(&idx, uint32_t(ps.high)); return PieceType(idx + 64); }
+  if (ps.low >> 32) { _BitScanReverse(&idx, uint32_t(ps.low >> 32)); return PieceType(idx + 32); }
+  _BitScanReverse(&idx, uint32_t(ps.low));
+  return PieceType(idx);
+#else
+  if (ps.low >> 32) { _BitScanReverse(&idx, uint32_t(ps.low >> 32)); return PieceType(idx + 32); }
+  _BitScanReverse(&idx, uint32_t(ps.low));
+  return PieceType(idx);
+#endif
 }
 
 #endif
@@ -1458,7 +1521,14 @@ inline PieceType msb(PieceSet ps) {
 inline PieceType pop_lsb(PieceSet& ps) {
   assert(ps);
   const PieceType pt = lsb(ps);
-  ps &= PieceSet(ps - 1);
+#if defined(VERY_LARGE_BOARDS)
+  if (pt < 64)
+      ps.low &= ps.low - 1;
+  else
+      ps.high &= ps.high - 1;
+#else
+  ps.low &= ps.low - 1;
+#endif
   return pt;
 }
 
