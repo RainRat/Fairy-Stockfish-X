@@ -827,6 +827,17 @@ struct PieceSet {
       return low;
 #endif
   }
+  // Bit count without the PopCnt16 table: Variant::conclude() runs during
+  // static init, before Bitboards::init() fills the table. Do not replace
+  // with popcount() here.
+  constexpr int count() const {
+      int n = 0;
+      for (uint64_t bits = low; bits; bits &= bits - 1) ++n;
+#if defined(VERY_LARGE_BOARDS)
+      for (uint64_t bits = high; bits; bits &= bits - 1) ++n;
+#endif
+      return n;
+  }
 };
 #if !defined(VERY_LARGE_BOARDS)
 static_assert(sizeof(PieceSet) == sizeof(uint64_t), "standard PieceSet must stay one word");
