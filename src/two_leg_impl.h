@@ -6,10 +6,7 @@
 #include "two_leg.h"
 #include "direction_pair.h"
 
-#include <algorithm>
-#include <array>
 #include <cstdlib>
-#include <utility>
 
 namespace Stockfish::detail {
 
@@ -35,8 +32,13 @@ struct TwoLegWalker {
   uint64_t mask = pos.variant()->twoStepMoves[pt].byColor[us];
   if (!mask || !(pos.board_bb() & from))
       return false;
-  std::array<std::pair<Square, Square>, 64> seen{};
-  int seenCount = 0;
+  // A wrapped board can map several first-leg directions onto the same via
+  // square, which would repeat every (via, to) pair. A plain board gives each
+  // d1 its own via square, so the mask only runs when it can collapse anything.
+  // Pair indices are d1-major, so only the first pair of each d1 (d2 == 0) can
+  // start a new first-leg direction.
+  int usedViaMask = 0;
+  const bool wrapped = pos.topology_wraps();
   Bitboard remaining = Bitboard(mask);
   while (remaining)
   {
@@ -46,6 +48,12 @@ struct TwoLegWalker {
       Square via;
       if (!step_destination(pos, from, KingDirections[d1], via))
           continue;
+      if (wrapped && d2 == 0)
+      {
+          if (usedViaMask & (1 << d1))
+              continue;
+          usedViaMask |= 1 << d1;
+      }
       if (viaTarget != SQ_NONE && via != viaTarget)
           continue;
       if (!(pos.board_bb() & via) || (friendly & via))
@@ -60,10 +68,6 @@ struct TwoLegWalker {
       if (!(pos.board_bb() & to) || (to != from && (friendly & to))
           || !(pos.board_bb(us, pt) & to))
           continue;
-      const auto key = std::pair{via, to};
-      if (std::find(seen.begin(), seen.begin() + seenCount, key) != seen.begin() + seenCount)
-          continue;
-      seen[seenCount++] = key;
       TwoLegPath path;
       path.kind = TwoLegKind::TWO_STEP;
       path.via = via;

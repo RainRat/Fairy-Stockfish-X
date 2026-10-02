@@ -946,6 +946,23 @@ namespace {
       return std::string{char('a' + file_of(sq))} + std::to_string(int(rank_of(sq)) + 1);
   }
 
+  // Deferred-promotion and Lion-trade state cannot be reconstructed from the
+  // board alone, so fen() appends each as an optional trailing field
+  // (" D:...", " T:..."). Absence on load means no squares/restriction.
+  inline void append_fen_square_list(std::ostream& ss, char tag, Bitboard squares) {
+      if (!bool(squares))
+          return;
+      ss << " " << tag << ":";
+      bool first = true;
+      for (Bitboard b = squares; b; )
+      {
+          if (!first)
+              ss << ",";
+          first = false;
+          ss << fen_square(pop_lsb(b));
+      }
+  }
+
   inline Square parse_fen_square(const Position& pos, const std::string& spec) {
       if (spec.size() < 2 || spec[0] < 'a' || spec[0] > 'a' + pos.max_file())
           return SQ_NONE;
@@ -1008,7 +1025,8 @@ namespace {
       return true;
   }
 
-  inline bool parse_potion_cooldowns(const std::string& content, std::array<int, 4>& parsed) {      // Order: white-freeze, white-jump, black-freeze, black-jump.
+  inline bool parse_potion_cooldowns(const std::string& content, std::array<int, 4>& parsed) {
+      // Order: white-freeze, white-jump, black-freeze, black-jump.
       parsed = {0, 0, 0, 0};
 
       std::istringstream ss(content);
@@ -2849,24 +2867,10 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       ss << " " << gamePly + 1;
       // Extended SFEN: preserve lion-family history that standard SFEN cannot
       // represent. Appended only when set, so ordinary positions are unaffected.
-      // Uses the fixed FEN square spelling shared with parse_fen_square().
-      auto appendFenSquareList = [&](char tag, Bitboard squares) {
-          if (!bool(squares))
-              return;
-          ss << " " << tag << ":";
-          bool first = true;
-          for (Bitboard b = squares; b; )
-          {
-              if (!first)
-                  ss << ",";
-              first = false;
-              ss << fen_square(pop_lsb(b));
-          }
-      };
       if (var->promotionDeclineRule)
-          appendFenSquareList('D', st->promotionDeferred);
+          append_fen_square_list(ss, 'D', st->promotionDeferred);
       if (var->lionCapturingRule)
-          appendFenSquareList('T', st->lionTradeSquares);
+          append_fen_square_list(ss, 'T', st->lionTradeSquares);
       return ss.str();
   }
 
@@ -3045,27 +3049,10 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
       }
   }
 
-  // Deferred-promotion and Lion-trade state cannot be reconstructed from the
-  // board alone, so serialize each as an optional trailing field (" D:...",
-  // " T:...") when set. Absence on load means no squares/restriction.
-  // Fixed square spelling keeps FEN independent of move-notation protocol.
-  auto appendSquareList = [&](char tag, Bitboard squares) {
-      if (!bool(squares))
-          return;
-      ss << " " << tag << ":";
-      bool first = true;
-      for (Bitboard b = squares; b; )
-      {
-          if (!first)
-              ss << ",";
-          first = false;
-          ss << fen_square(pop_lsb(b));
-      }
-  };
   if (var->promotionDeclineRule)
-      appendSquareList('D', st->promotionDeferred);
+      append_fen_square_list(ss, 'D', st->promotionDeferred);
   if (var->lionCapturingRule)
-      appendSquareList('T', st->lionTradeSquares);
+      append_fen_square_list(ss, 'T', st->lionTradeSquares);
 
   return ss.str();
 }
@@ -5951,12 +5938,12 @@ bool Position::legal(Move m) const {
   if ((type_of(m) == PIECE_PROMOTION || is_two_leg_promotion(m))
       && (is_promoted(from) || !promotion_allowed(us, promoted_piece_type(type_of(moved_piece(m))))))
       return false;
-  // Ordinary shogi-style promotions go through the same shared eligibility
-  // function as two-leg promotions, so hand-constructed/TT moves cannot
-  // bypass the decline rule (entry, deferred capture, last-rank retry).
-  // Generation has a fast-path specialization of this rule in movegen.cpp;
-  // legal() is authoritative.
-  if (!is_two_leg(m) && type_of(m) == PIECE_PROMOTION && !dropMove && !passMove
+  // Ordinary shogi-style promotions must honour the decline rule too, so
+  // hand-constructed/TT moves cannot bypass it. Scoped to decline-rule
+  // variants: without that setting the pre-existing promotion checks above
+  // are the complete legality test.
+  if (var->promotionDeclineRule && !is_two_leg(m) && type_of(m) == PIECE_PROMOTION
+      && !dropMove && !passMove
       && !move_promotion_status(moverPiece, from, to, isCapture).allowed)
       return false;
   if (is_two_leg(m) && isCapture)
@@ -6496,7 +6483,7 @@ bool Position::legal(Move m) const {
       {
           const bool blastOnCapture = blast_on_capture(m);
           Square kto = rifleShot ? from : to;
-      Square blastCenter = (isCapture || rifleShot) ? captureBlastCenter : kto;
+          Square blastCenter = (isCapture || rifleShot) ? captureBlastCenter : kto;
           Square rfrom = SQ_NONE, rto = SQ_NONE;
           Bitboard occupied = rifleShot ? pieces() : (!dropMove && !cloneMove ? pieces() ^ from : pieces());
           Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
@@ -8260,16 +8247,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   {
       Square via = twoLegInfo.via;
       if (twoLegInfo.captures_via())
-      {
-          Piece capVia = piece_on(via);
-          bool viaPromoted = is_promoted(via);
-          Piece viaUnpromoted = unpromoted_piece_on(via);
-          st->extraCaptured.set(capVia, viaPromoted, viaUnpromoted, via);
-      }
-      else
-      {
-          st->extraCaptured.clear();
-      }
+          st->extraCaptured.set(piece_on(via), is_promoted(via), unpromoted_piece_on(via), via);
 
       captured = twoLegInfo.captures_to(from) ? piece_on(to) : NO_PIECE;
   }
@@ -9508,9 +9486,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           // capture_square(m) is empty-aware and goes stale once the via
           // victim is removed above; prefer the stored squares instead.
           Square blastCenterSq = blast_on_capture_mover_center() ? moverSq
-                               : captured ? st->captured.square
-                               : secondaryCapture ? st->extraCaptured.square
-                               : capture_square(m);
+                                                                : captured ? st->captured.square
+                                                                : secondaryCapture ? st->extraCaptured.square
+                                                                : capture_square(m);
           blast_mask = (blastOnCapture || blast_on_move() || blast_on_self_destruct()) ? blast_squares(blastCapture ? blastCenterSq : to)
               : (var->petrifyOnCaptureTypes & type_of(pc) ? square_bb(moverSq) : Bitboard(0));
           if (blastCapture && blastOnCapture
@@ -10180,10 +10158,10 @@ void Position::undo_move(Move m) {
   Piece pc = piece_on(moverSq);
   PieceType exchange = exchange_piece(m);
   bool wasOpeningSelfRemoval = opening_self_removal()
-                             && gamePly <= 2
-                             && is_plain_special(m)
-                             && from == to
-                             && !st->pass;
+                            && gamePly <= 2
+                            && is_plain_special(m)
+                            && from == to
+                            && !st->pass;
 
   assert(is_drop_move(m) || empty(from) || type_of(m) == CASTLING || is_gating(m)
          || (is_promotion_move(m) && sittuyin_promotion())
@@ -10580,9 +10558,6 @@ void Position::undo_move(Move m) {
           undo_capture_transfer(st, transferPiece);
       };
 
-      if (!is_two_leg(m))
-          restore_extra_capture(st->extraCaptured);
-
       if (st->captured)
       {
           Square capsq = st->captured.square != SQ_NONE ? st->captured.square : to;
@@ -10602,10 +10577,9 @@ void Position::undo_move(Move m) {
               undo_capture_transfer(st, transferPiece);
       }
 
-      if (is_two_leg(m) && st->extraCaptured)
-      {
-          restore_extra_capture(st->extraCaptured);
-      }
+      // A two-leg via victim and a jumped en passant pawn always sit on their
+      // own square, so either restore order is fine.
+      restore_extra_capture(st->extraCaptured);
   }
 
   if (flip_enclosed_pieces())
@@ -11348,9 +11322,9 @@ bool Position::sole_pseudo_royal_mated() const {
       StateInfo nextState;
       ScopedProbeMove probe(*this, m, nextState);
       Color mover = ~sideToMove;
-      // Capturing the last enemy royal wins outright.
-      if (!(st->pseudoRoyals & pieces(sideToMove))
-          && popcount(pieces(sideToMove) & st->pseudoRoyalCandidates) == 0)
+      // Capturing the last enemy royal wins outright. pseudoRoyals is a subset
+      // of the candidates, so the candidate test alone is the royal-loss test.
+      if (!(pieces(sideToMove) & st->pseudoRoyalCandidates))
           return false;
       Bitboard ours = st->pseudoRoyalCandidates & pieces(mover);
       if (!ours)
@@ -11495,8 +11469,6 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           Piece extraPiece = piece_on(extraSq);
           Piece otherRoyalPiece = piece_on(otherRoyalSq);
           bool lionInvolved = var->lionCapturingRule
-                           && (barePiece != NO_PIECE || extraPiece != NO_PIECE
-                               || otherRoyalPiece != NO_PIECE)
                            && (((barePiece != NO_PIECE
                                  && (var->lionMoveTypes & piece_set(type_of(barePiece))))
                                 || (extraPiece != NO_PIECE

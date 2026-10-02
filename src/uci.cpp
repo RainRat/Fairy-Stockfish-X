@@ -662,13 +662,12 @@ std::string UCI::square(const Position& pos, Square s) {
 #ifdef LARGEBOARDS
   if (CurrentProtocol == USI)
   {
-      // USI files are 1-2 digit numbers; width depends on the file number,
-      // not the rank (files 10+ need two digits on any rank).
-      int fileNum = int(pos.max_file()) - int(file_of(s)) + 1;
-      return fileNum < 10 ? std::string{ char('1' + pos.max_file() - file_of(s)), char('a' + pos.max_rank() - rank_of(s)) }
-                          : std::string{ char('0' + (pos.max_file() - file_of(s) + 1) / 10),
-                                         char('0' + (pos.max_file() - file_of(s) + 1) % 10),
-                                         char('a' + pos.max_rank() - rank_of(s)) };
+    // USI spells files as 1-2 digit numbers, so the width follows the file.
+    // The rank is always a single letter.
+    int fileNum = int(pos.max_file()) - int(file_of(s)) + 1;
+    char rankLetter = char('a' + pos.max_rank() - rank_of(s));
+    return fileNum < 10 ? std::string{ char('0' + fileNum), rankLetter }
+                        : std::string{ char('0' + fileNum / 10), char('0' + fileNum % 10), rankLetter };
   }
   else if (pos.max_rank() == RANK_10 && CurrentProtocol != UCI_GENERAL)
       return std::string{ char('a' + file_of(s)), char('0' + rank_of(s)) };

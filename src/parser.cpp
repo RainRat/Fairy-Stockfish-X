@@ -23,6 +23,7 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <cstring>
 #include <memory>
 
 #include "apiutil.h"
@@ -238,16 +239,17 @@ namespace {
     }
 
     int parse_king_step_direction(const std::string& token) {
-        std::string s;
-        for (char c : token)
-            s += char(std::tolower(static_cast<unsigned char>(c)));
         // Index order matches KingDirections; see king_step_name in direction_pair.h.
         for (int i = 0; i < 8; ++i)
         {
-            std::string name = king_step_name(i);
-            for (char& c : name)
-                c = char(std::tolower(static_cast<unsigned char>(c)));
-            if (s == name)
+            const char* name = king_step_name(i);
+            if (token.size() != std::strlen(name))
+                continue;
+            bool match = true;
+            for (size_t j = 0; j < token.size() && match; ++j)
+                match = std::tolower(static_cast<unsigned char>(token[j]))
+                     == std::tolower(static_cast<unsigned char>(name[j]));
+            if (match)
                 return i;
         }
         return -1;
@@ -2823,6 +2825,42 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "edgeInsertTypes requires pieceDrops=true." << std::endl;
+        valid = false;
+    }
+    if (v->lionCapturingRule && !v->lionMoveTypes)
+    {
+        if (DoCheck)
+            std::cerr << "lionCapturingRule=true requires lionMoveTypes." << std::endl;
+        valid = false;
+    }
+    if (v->lionMoveTypes && !v->lionCapturingRule)
+    {
+        if (DoCheck)
+            std::cerr << "lionMoveTypes requires lionCapturingRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->lionCounterstrikeIfUnprotected && !v->lionCapturingRule)
+    {
+        if (DoCheck)
+            std::cerr << "lionCounterstrikeIfUnprotected=true requires lionCapturingRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->promotionDeclineFinalRankRetryTypes && !v->promotionDeclineRule)
+    {
+        if (DoCheck)
+            std::cerr << "promotionDeclineFinalRankRetryTypes requires promotionDeclineRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->bareKingExemptTypes && !v->bareKingRule)
+    {
+        if (DoCheck)
+            std::cerr << "bareKingExemptTypes requires bareKingRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->bareKingDeadTypes && !v->bareKingRule)
+    {
+        if (DoCheck)
+            std::cerr << "bareKingDeadTypes requires bareKingRule=true." << std::endl;
         valid = false;
     }
     if (v->openingSwapDrop

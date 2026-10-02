@@ -187,26 +187,28 @@ static void test_persistent_jump_and_short_cast() {
 
 template<GenType Type>
 static void expect_unique_generation(const Position& pos, const char* label) {
-    ExtMove moves[MOVEGEN_OVERFLOW_CAPACITY];
-    const ExtMove* end = generate<Type>(pos, moves);
+    // Heap-allocated: two MOVEGEN_OVERFLOW_CAPACITY buffers exceed the default
+    // 8 MiB stack on VERY_LARGE_BOARDS builds (MAX_MOVES=65536).
+    auto moves = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+    const ExtMove* end = generate<Type>(pos, moves.get());
     std::set<Move> seen;
-    for (const ExtMove* it = moves; it != end; ++it)
+    for (const ExtMove* it = moves.get(); it != end; ++it)
         expect(seen.insert(it->move).second, label);
 }
 
 template<GenType Type>
 static void expect_split_potion_generation_matches(const Position& pos, const char* label) {
-    ExtMove complete[MOVEGEN_OVERFLOW_CAPACITY];
-    ExtMove split[MOVEGEN_OVERFLOW_CAPACITY];
-    const ExtMove* completeEnd = generate<Type>(pos, complete);
-    ExtMove* baseEnd = generate_without_potions<Type>(pos, split);
-    const ExtMove* splitEnd = append_potions<Type>(pos, split, baseEnd);
+    auto complete = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+    auto split = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+    const ExtMove* completeEnd = generate<Type>(pos, complete.get());
+    ExtMove* baseEnd = generate_without_potions<Type>(pos, split.get());
+    const ExtMove* splitEnd = append_potions<Type>(pos, split.get(), baseEnd);
 
     std::set<std::string> completeMoves;
     std::set<std::string> splitMoves;
-    for (const ExtMove* move = complete; move != completeEnd; ++move)
+    for (const ExtMove* move = complete.get(); move != completeEnd; ++move)
         completeMoves.insert(UCI::move(pos, *move));
-    for (const ExtMove* move = split; move != splitEnd; ++move)
+    for (const ExtMove* move = split.get(); move != splitEnd; ++move)
         splitMoves.insert(UCI::move(pos, *move));
     expect(completeMoves == splitMoves, label);
 }
@@ -264,10 +266,12 @@ static void test_qsearch_keeps_freeze_capture_defense() {
     expect(defense != MOVE_NONE, "freeze-capture defense failed to parse");
     expect(MoveList<LEGAL>(pos).contains(defense), "freeze-capture defense is not legal");
 
-    GateHistory gateHistory{};
-    CapturePieceToHistory captureHistory{};
-    MovePicker picker(pos, MOVE_NONE, DEPTH_QS_CHECKS, nullptr, &gateHistory,
-                      &captureHistory, nullptr, SQ_NONE);
+    // Heap-allocated: CapturePieceToHistory is ~16 MiB on
+    // VERY_LARGE_BOARDS builds and overflows the stack by value.
+    auto gateHistory = std::make_unique<GateHistory>();
+    auto captureHistory = std::make_unique<CapturePieceToHistory>();
+    MovePicker picker(pos, MOVE_NONE, DEPTH_QS_CHECKS, nullptr, gateHistory.get(),
+                      captureHistory.get(), nullptr, SQ_NONE);
     bool foundDefense = false;
     for (Move move; (move = picker.next_move()) != MOVE_NONE; )
         foundDefense |= move == defense;
@@ -326,9 +330,10 @@ static void test_freeze_move_picker_prunes_dominated_targets() {
     expect(legalMoves.contains(dominated) && legalMoves.contains(retained),
            "freeze dominance changed the complete legal move list");
 
-    ExtMove split[MOVEGEN_OVERFLOW_CAPACITY];
-    ExtMove* baseEnd = generate_without_potions<QUIETS>(pos, split);
-    const ExtMove* prunedEnd = append_potions<QUIETS>(pos, split, baseEnd, true);
+    // Heap-allocated: see expect_unique_generation above.
+    auto split = std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY);
+    ExtMove* baseEnd = generate_without_potions<QUIETS>(pos, split.get());
+    const ExtMove* prunedEnd = append_potions<QUIETS>(pos, split.get(), baseEnd, true);
     bool foundDominated = false;
     bool foundRetained = false;
     for (const ExtMove* move = baseEnd; move != prunedEnd; ++move)
@@ -395,10 +400,11 @@ static void test_jump_move_picker_prunes_dominated_targets() {
     std::string captureStr = "j@a4,a1a8";
     const Move capture = UCI::to_move(capturePos, captureStr);
     expect(capture != MOVE_NONE, "short Jump capture failed to parse for MovePicker");
-    GateHistory captureGateHistory{};
-    CapturePieceToHistory captureHistoryForQsearch{};
+    // Heap-allocated: see test_qsearch_keeps_freeze_capture_defense above.
+    auto captureGateHistory = std::make_unique<GateHistory>();
+    auto captureHistoryForQsearch = std::make_unique<CapturePieceToHistory>();
     MovePicker capturePicker(capturePos, MOVE_NONE, DEPTH_QS_CHECKS, nullptr,
-                             &captureGateHistory, &captureHistoryForQsearch,
+                             captureGateHistory.get(), captureHistoryForQsearch.get(),
                              nullptr, SQ_NONE);
     bool foundCapture = false;
     for (Move move; (move = capturePicker.next_move()) != MOVE_NONE; )
@@ -406,10 +412,10 @@ static void test_jump_move_picker_prunes_dominated_targets() {
     expect(foundCapture,
            "quiescence search pruned a Jump capture that crosses its target");
 
-    GateHistory probcutGateHistory{};
-    CapturePieceToHistory probcutCaptureHistory{};
+    auto probcutGateHistory = std::make_unique<GateHistory>();
+    auto probcutCaptureHistory = std::make_unique<CapturePieceToHistory>();
     MovePicker probcutPicker(capturePos, MOVE_NONE, Value(-VALUE_INFINITE + 1),
-                             &probcutGateHistory, &probcutCaptureHistory);
+                             probcutGateHistory.get(), probcutCaptureHistory.get());
     bool foundProbcutCapture = false;
     for (Move move; (move = probcutPicker.next_move()) != MOVE_NONE; )
         foundProbcutCapture |= move == capture;

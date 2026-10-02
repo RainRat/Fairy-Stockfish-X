@@ -1197,7 +1197,7 @@ public:
   void put_piece(Piece pc, Square s, bool isPromoted = false, Piece unpromotedPc = NO_PIECE, bool markNotMoved = false);
   void remove_piece(Square s);
 
- private:
+private:
   // detail::TwoLegPath appears here only in private helpers. The public
   // surface exposes stable semantics (capture_squares(), capture_summary(),
   // matches_recapture_square()). The two_leg.h include stays because hot-path
@@ -2322,18 +2322,10 @@ inline bool Position::has_capture() const {
   // Check for cached value
   if (st->legalCapture != NO_VALUE)
       return st->legalCapture == VALUE_TRUE;
-  // A via Royal capture ends the game immediately; suppress further capture
-  // generation there. Guarded to two-leg variants so unrelated variants keep
-  // the original path with no extra immediate-end scan.
-  if (has_two_leg_moves() && is_immediate_game_end())
-  {
-      st->legalCapture = VALUE_FALSE;
-      return false;
-  }
   if (evasion_checkers())
   {
       for (const auto& m : MoveList<EVASION_CANDIDATES>(*this))
-          if (capture(m) && legal(m) && !virtual_drop(m))
+          if (capture(m) && legal(m))
           {
               st->legalCapture = VALUE_TRUE;
               return true;
@@ -2355,15 +2347,10 @@ inline bool Position::has_capture() const {
 inline bool Position::has_en_passant_capture() const {
   if (st->legalEnPassant != NO_VALUE)
       return st->legalEnPassant == VALUE_TRUE;
-  if (has_two_leg_moves() && is_immediate_game_end())
-  {
-      st->legalEnPassant = VALUE_FALSE;
-      return false;
-  }
   if (evasion_checkers())
   {
       for (const auto& m : MoveList<EVASION_CANDIDATES>(*this))
-          if (type_of(m) == EN_PASSANT && legal(m) && !virtual_drop(m))
+          if (type_of(m) == EN_PASSANT && legal(m))
           {
               st->legalEnPassant = VALUE_TRUE;
               return true;
@@ -5955,7 +5942,6 @@ inline Position::PromotionStatus Position::move_promotion_status(Piece mover, Sq
   if (piece_promotion_on_capture() && !isCapture)
       return status;
   status.allowed = true;
-  status.mandatory |= mandatory_piece_promotion();
   return status;
 }
 

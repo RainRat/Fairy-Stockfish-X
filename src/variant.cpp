@@ -2449,10 +2449,11 @@ Variant* Variant::conclude() {
             nnueKing = NO_PIECE_TYPE;
     }
     int nnueSquares = (maxRank + 1) * (maxFile + 1);
-    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && pieceTypes.count() != 1))) || seirawanGating;
+    const int pieceTypeCount = popcount(pieceTypes);
+    nnueUsePockets = (pieceDrops && (captureType == HAND || (!(mustDrop[WHITE] || mustDrop[BLACK]) && pieceTypeCount != 1))) || seirawanGating;
     int nnuePockets = nnueUsePockets ? 2 * int(maxFile + 1) : 0;
-    int nnueNonDropPieceIndices = (2 * pieceTypes.count() - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
-    int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (pieceTypes.count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
+    int nnueNonDropPieceIndices = (2 * pieceTypeCount - (nnueKing != NO_PIECE_TYPE)) * nnueSquares;
+    int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (pieceTypeCount - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
     bool nnueHasWalls = wallingRule != NO_WALLING
                      || petrifyOnCaptureTypes != NO_PIECE_SET
                      || startFen.find('*') != std::string::npos;
