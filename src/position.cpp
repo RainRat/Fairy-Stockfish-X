@@ -2332,16 +2332,33 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 
   // Optional deferred-promotion field emitted by fen() (" D:sq,sq,...").
   // Only parsed for promotion-decline variants; absence means no deferred
-  // squares (backward compatible). A malformed field is reported and leaves
-  // no deferred squares rather than silently loading different rights.
+  // squares (backward compatible). A malformed field is reported and drops
+  // all extended history (both D: and T:): the stream is recovered so the
+  // following field is still diagnosed, but neither field is trusted, since
+  // a partially loaded history (e.g. valid T: after malformed D:) would
+  // change Lion retaliation and promotion legality.
+  bool historyOk = true;
   if (var->promotionDeclineRule && !parse_optional_square_list(*this, ss, 'D', st->promotionDeferred))
-      std::cerr << "Invalid deferred-promotion field in FEN; ignoring 'D' squares." << std::endl;
+  {
+      std::cerr << "Invalid deferred-promotion field in FEN; ignoring extended history." << std::endl;
+      historyOk = false;
+      ss.clear();
+  }
 
   // Optional Lion-trade field emitted by fen() (" T:sq,sq,..."). Only parsed
   // for lion-capture variants; absence means no restriction (backward
   // compatible, and the normal case for a fresh FEN with no preceding move).
   if (var->lionCapturingRule && !parse_optional_square_list(*this, ss, 'T', st->lionTradeSquares))
-      std::cerr << "Invalid lion-trade field in FEN; ignoring 'T' squares." << std::endl;
+  {
+      std::cerr << "Invalid lion-trade field in FEN; ignoring extended history." << std::endl;
+      historyOk = false;
+      ss.clear();
+  }
+  if (!historyOk)
+  {
+      st->promotionDeferred = Bitboard(0);
+      st->lionTradeSquares = Bitboard(0);
+  }
 
   chess960 = isChess960 || v->chess960;
   tsumeMode = Options["TsumeMode"];

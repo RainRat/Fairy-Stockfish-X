@@ -1158,7 +1158,6 @@ public:
   Thread* this_thread() const;
   bool is_immediate_game_end() const;
   bool is_immediate_game_end(Value& result, int ply = 0) const;
-  bool sole_pseudo_royal_mated() const;
   bool has_legal_move() const;
   bool has_legal_move_ignoring_immediate_end() const;
   bool is_optional_game_end() const;
@@ -1205,6 +1204,7 @@ private:
   // result type; the walker implementation itself lives in two_leg_impl.h and
   // is only included by position.cpp/movegen.cpp.
   detail::TwoLegPath resolve_two_leg_move(Move m) const;
+  bool sole_pseudo_royal_mated() const;
   bool lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo, bool isCapture) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons,

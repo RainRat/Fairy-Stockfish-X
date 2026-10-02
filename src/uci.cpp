@@ -751,9 +751,8 @@ string UCI::move(const Position& pos, Move m) {
 
   if (is_two_leg(m))
   {
-      // Canonical three-square spelling from+via+to. Input is canonical-only:
-      // to_move() matches against generated legal moves, while pseudo_legal()
-      // may accept alias routes that never appear here.
+      // Canonical three-square spelling from+via+to. Alternative quiet
+      // routes for the same destination are normalized in to_move().
       std::string s = UCI::square(pos, from) + UCI::square(pos, via_sq(m)) + UCI::square(pos, to);
       if (is_any_promotion(m))
           s += "+";
@@ -976,6 +975,57 @@ Move UCI::to_move(const Position& pos, string& str) {
           || (!move_str_short_wall.empty() && str == move_str_short_wall)
           || (is_pass(m) && str == UCI::square(pos, from_sq(m)) + UCI::square(pos, to_sq(m))))
           return m;
+  }
+
+  // Accept non-canonical two-leg routes and normalize to the generated
+  // move. The generator merges equivalent quiet routes, but pseudo_legal()
+  // recognizes each valid route. An alias shares from/to with the canonical
+  // move; captures and promotion must also match, since the intermediate
+  // victim of a double capture matters.
+  if (pos.has_two_leg_moves())
+  {
+      for (const auto& m : MoveList<LEGAL>(pos))
+      {
+          if (!is_two_leg(m))
+              continue;
+          std::string canonical = UCI::move(pos, m);
+          bool promotes = is_two_leg_promotion(m);
+          bool strPromotes = !str.empty() && str.back() == '+';
+          if (promotes != strPromotes)
+              continue;
+          std::string aliasBase = promotes ? str.substr(0, str.size() - 1) : str;
+          std::string canonicalBase = promotes ? canonical.substr(0, canonical.size() - 1) : canonical;
+          if (aliasBase == canonicalBase)
+              continue;
+          std::string fromS = UCI::square(pos, from_sq(m));
+          std::string toS = UCI::square(pos, to_sq(m));
+          if (aliasBase.size() <= fromS.size() + toS.size()
+              || aliasBase.compare(0, fromS.size(), fromS) != 0
+              || aliasBase.compare(aliasBase.size() - toS.size(), toS.size(), toS) != 0)
+              continue;
+          std::string mid = aliasBase.substr(fromS.size(),
+                                             aliasBase.size() - fromS.size() - toS.size());
+          Square via = SQ_NONE;
+          for (Square s = SQ_A1; s < SQUARE_NB; ++s)
+          {
+              if (!(pos.board_bb() & s))
+                  continue;
+              if (UCI::square(pos, s) == mid)
+              {
+                  via = s;
+                  break;
+              }
+          }
+          if (via == SQ_NONE || via == via_sq(m))
+              continue;
+          Move alias = is_two_step(m) ? make_two_step(from_sq(m), via, to_sq(m), promotes)
+                                      : make_hook(from_sq(m), via, to_sq(m), promotes);
+          if (!pos.pseudo_legal(alias))
+              continue;
+          if (pos.capture_squares(alias) != pos.capture_squares(m))
+              continue;
+          return m;
+      }
   }
 
   return MOVE_NONE;
