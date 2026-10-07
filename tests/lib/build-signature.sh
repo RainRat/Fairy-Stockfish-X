@@ -90,41 +90,35 @@ fsx_build_profile() {
 }
 
 fsx_build_config_file() {
-  local root_dir="$1"
-  printf '%s/src/.build-config\n' "$root_dir"
+  printf '%s/src/.build-config\n' "$1"
 }
 
-# Object-dir config: the flag set that produced the shared src/*.o on disk.
-# Tracked globally (not per EXE) because sequential named builds share objects;
-# a matching per-EXE signature with wrong-family objects is the silent-misbuild
-# hole this closes. Same-config rebuilds keep incrementals.
+# Named executables share src/*.o. Track the object configuration independently
+# of the output name, retaining every other argument and environment flag.
 fsx_build_object_config() {
-  local root_dir="$1"
+  local root_dir="$1" arg
   shift
-
-  {
-    printf 'profile=%s\n' "$(fsx_build_profile "$@")"
-    printf 'compiler-version=%s\n' "$(fsx_build_compiler_version)"
-    printf 'CXXFLAGS=%s\n' "${CXXFLAGS:-}"
-    printf 'LDFLAGS=%s\n' "${LDFLAGS:-}"
-    printf 'makefile=%s\n' "$(fsx_build_hash_file "${root_dir}/src/Makefile")"
-  }
+  local -a object_args=()
+  for arg in "$@"; do
+    case "$arg" in
+      EXE=*) ;;
+      *) object_args+=("$arg") ;;
+    esac
+  done
+  fsx_build_signature "$root_dir" shared-objects "${object_args[@]}"
 }
 
 fsx_build_object_config_matches() {
-  local root_dir="$1"
-  local config_file expected
+  local root_dir="$1" config_file expected
+  shift
   config_file=$(fsx_build_config_file "$root_dir")
-  expected=$(fsx_build_object_config "$root_dir" "${@:2}")
-  [[ -f "$config_file" ]] || return 1
-  [[ "$(cat "$config_file")" == "$expected" ]]
+  expected=$(fsx_build_object_config "$root_dir" "$@")
+  [[ -f "$config_file" && "$(cat "$config_file")" == "$expected" ]]
 }
 
 fsx_build_write_object_config() {
-  local root_dir="$1"
+  local root_dir="$1" config_file temp_file
   shift
-  local config_file temp_file
-
   config_file=$(fsx_build_config_file "$root_dir")
   temp_file="${config_file}.tmp.$$"
   fsx_build_object_config "$root_dir" "$@" >"$temp_file"

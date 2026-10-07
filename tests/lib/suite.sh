@@ -244,6 +244,7 @@ run_search_evaluation() {
     legacy nnue-variant-dimension-guard.sh 2m "${ENGINE}"
     legacy nnue-affine-regression.sh 2m
     legacy nnue-export-failure.sh 2m "${ENGINE}"
+    suite_case nnue-loading 2m python3 "${SUITE_ROOT}/tests/nnue-loading.py" "${ENGINE}"
     legacy engine-search-regressions.sh 15m "${ENGINE}" "${VARIANTS}"
 }
 

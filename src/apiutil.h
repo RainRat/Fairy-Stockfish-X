@@ -1380,12 +1380,13 @@ inline Validation check_number_of_kings(const std::string& fenBoard, const std::
         std::cerr << "Invalid number of black kings. Maximum: 1. Given: " << nbBlackKings << std::endl;
         return NOK;
     }
-    if (nbWhiteKings != nbWhiteKingsStart)
+    const bool capturableKing = v->allowChecks && (v->pseudoRoyalTypes & KING);
+    if (!capturableKing && nbWhiteKings != nbWhiteKingsStart)
     {
         std::cerr << "Invalid number of white kings. Expected: " << nbWhiteKingsStart << ". Given: " << nbWhiteKings << std::endl;
         return NOK;
     }
-    if (nbBlackKings != nbBlackKingsStart)
+    if (!capturableKing && nbBlackKings != nbBlackKingsStart)
     {
         std::cerr << "Invalid number of black kings. Expected: " << nbBlackKingsStart << ". Given: " << nbBlackKings << std::endl;
         return NOK;
@@ -1520,6 +1521,29 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
             s.pop_back();
     };
     rtrim(modifiedFen);
+    // History follows all other extensions, in D: then T: order.
+    char lastHistoryTag = 'Z';
+    while (!modifiedFen.empty())
+    {
+        size_t space = modifiedFen.find_last_of(' ');
+        std::string field = modifiedFen.substr(space == std::string::npos ? 0 : space + 1);
+        if (field.size() < 2 || field[1] != ':' || (field[0] != 'D' && field[0] != 'T'))
+            break;
+        if (field[0] >= lastHistoryTag
+            || (field[0] == 'D' && !v->promotionDeclineRule)
+            || (field[0] == 'T' && !v->lionCapturingRule))
+            return FEN_INVALID_CHAR;
+        lastHistoryTag = field[0];
+        std::string squares = field.substr(2);
+        if (squares.empty() || squares.front() == ',' || squares.back() == ','
+            || squares.find(",,") != std::string::npos)
+            return FEN_INVALID_CHAR;
+        for (const auto& square : get_fen_parts(squares, ','))
+            if (square.empty() || square == "-" || check_en_passant_square(square, v) == NOK)
+                return FEN_INVALID_CHAR;
+        modifiedFen.erase(space == std::string::npos ? 0 : space);
+        rtrim(modifiedFen);
+    }
     if (!modifiedFen.empty() && modifiedFen.back() == '>')
     {
         size_t open = modifiedFen.find_last_of('<');
@@ -1554,7 +1578,8 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
 
     // check for number of parts
     const unsigned int maxNumberFenParts = 6 + v->checkCounting;
-    if (fenParts.size() < 1 || fenParts.size() > maxNumberFenParts)
+    if (fenParts.empty() || fenParts.size() > maxNumberFenParts
+        || (lastHistoryTag != 'Z' && fenParts.size() != maxNumberFenParts))
     {
         std::cerr << "Invalid number of fen parts. Expected: >= 1 and <= " << maxNumberFenParts
                   << " Actual: " << fenParts.size() << std::endl;
@@ -1597,7 +1622,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
             return FEN_INVALID_NUMBER_OF_KINGS;
 
         // check for touching kings if there are exactly two royal kings on the board (excluding pocket)
-        if (   v->kingType == KING
+        if (   v->kingType == KING && !v->allowChecks
             && piece_count(fenParts[0], WHITE, KING, v) - piece_count(pocket, WHITE, KING) == 1
             && piece_count(fenParts[0], BLACK, KING, v) - piece_count(pocket, BLACK, KING) == 1)
         {

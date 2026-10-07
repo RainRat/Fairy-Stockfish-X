@@ -337,9 +337,6 @@ struct StateInfoCopied {
   Bitboard lionTradeSquares = Bitboard(0);
   Bitboard edgeInsertLocks[COLOR_NB];
   Square castlingKingSquare[COLOR_NB];
-  int castlingRightsMask[SQUARE_NB];
-  Square castlingRookSquare[CASTLING_RIGHT_NB];
-  Bitboard castlingPath[CASTLING_RIGHT_NB];
   Bitboard wallSquares;
   Bitboard deadSquares;
   Bitboard gatesBB[COLOR_NB];
@@ -412,6 +409,10 @@ struct MoveUndoInfo {
   bool       replacedPromoted = false;
   Piece      stackBasePiece = NO_PIECE;
   Piece      stackResultPiece = NO_PIECE;
+  bool       castlingGeometryChanged = false;
+  int        castlingRightsMask[SQUARE_NB];
+  Square     castlingRookSquare[CASTLING_RIGHT_NB];
+  Bitboard   castlingPath[CASTLING_RIGHT_NB];
 
   void clear() {
     bycatchSquares = Bitboard(0);
@@ -434,6 +435,7 @@ struct MoveUndoInfo {
     replacedPromoted = false;
     stackBasePiece = NO_PIECE;
     stackResultPiece = NO_PIECE;
+    castlingGeometryChanged = false;
     dropHandColor = COLOR_NB;
     forcedJumpStep = 0;
     removedGatingType = NO_PIECE_TYPE;
@@ -458,6 +460,7 @@ struct MoveUndoInfo {
         && laserTransformedSquares == Bitboard(0)
         && !captured
         && !extraCaptured
+        && !castlingGeometryChanged
         && !dead
         && promotionPawn == NO_PIECE
         && consumedPromotionHandPiece == NO_PIECE
@@ -1215,7 +1218,7 @@ private:
   Bitboard two_leg_attackers_to(Square s, Bitboard occupied, Color c,
                                  const SimulatedMoveInfo* simulated = nullptr) const;
   // Initialization helpers (used while setting up a position)
-  void set_castling_right(Color c, Square rfrom);
+  void set_castling_right(Color c, Square rfrom, bool saveUndo = false);
   void set_state(StateInfo* si) const;
   void recompute_state_hashes_and_material(StateInfo* si) const;
   Key compute_material_key() const;

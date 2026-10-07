@@ -80,20 +80,20 @@ validate_build_output() {
         echo "FAILED: ${EXE} build did not produce a runnable, non-empty executable" >&2
         exit 1
     fi
+    if [[ "${COMPILER_KIND}" == mingw ]]; then
+        case "$(uname -s)" in
+            MINGW*|MSYS*|CYGWIN*) ;;
+            *) echo "Skipping runtime board-family probe for MinGW cross-build."; return ;;
+        esac
+    fi
     verify_build_board_family
 }
 
 echo "Building ${EXE}..."
 
-NEED_CLEAN=""
-if ! fsx_build_object_config_matches "$ROOT_DIR" "$@"; then
-    echo "Object configuration changed; cleaning objects..."
-    NEED_CLEAN=1
-elif ! fsx_build_signature_matches "$ROOT_DIR" "$OUTPUT_FILE" "$BUILD_SIGNATURE" "$BUILD_PROFILE"; then
+if ! fsx_build_object_config_matches "$ROOT_DIR" "$@" \
+    || ! fsx_build_signature_matches "$ROOT_DIR" "$OUTPUT_FILE" "$BUILD_SIGNATURE" "$BUILD_PROFILE"; then
     echo "Build configuration changed or artifact is unverified; cleaning objects..."
-    NEED_CLEAN=1
-fi
-if [[ -n "${NEED_CLEAN}" ]]; then
     rm -f "${OUTPUT_FILE}"
     # Drop the generated dependency file as well: it can reference headers
     # that no longer exist after refactors, which breaks the build outright.
@@ -104,6 +104,9 @@ if [[ -n "${NEED_CLEAN}" ]]; then
         exit 1
     fi
 fi
+
+# A failed build can leave mixed objects; only a successful build certifies them.
+rm -f "$(fsx_build_config_file "$ROOT_DIR")"
 
 if [[ "${VERBOSE:-0}" == 1 ]]; then
     make -C "${ROOT_DIR}/src" -j $(nproc 2>/dev/null || echo 2) build "$@"

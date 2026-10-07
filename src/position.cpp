@@ -2375,9 +2375,16 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
 /// Position::set_castling_right() is a helper function used to set castling
 /// rights given the corresponding color and the rook starting square.
 
-void Position::set_castling_right(Color c, Square rfrom) {
+void Position::set_castling_right(Color c, Square rfrom, bool saveUndo) {
 
   assert(st->castlingKingSquare[c] != SQ_NONE);
+  if (saveUndo && !st->castlingGeometryChanged)
+  {
+      std::copy(std::begin(castlingRightsMask), std::end(castlingRightsMask), std::begin(st->castlingRightsMask));
+      std::copy(std::begin(castlingRookSquare), std::end(castlingRookSquare), std::begin(st->castlingRookSquare));
+      std::copy(std::begin(castlingPath), std::end(castlingPath), std::begin(st->castlingPath));
+      st->castlingGeometryChanged = true;
+  }
   Square kfrom = st->castlingKingSquare[c];
   CastlingRights cr = c & (kfrom < rfrom ? KING_SIDE: QUEEN_SIDE);
 
@@ -2392,10 +2399,6 @@ void Position::set_castling_right(Color c, Square rfrom) {
   castlingPath[cr] =   (between_bb(rfrom, rto) | between_bb(kfrom, kto))
                     & ~(kfrom | rfrom);
 
-  st->castlingRightsMask[kfrom] |= cr;
-  st->castlingRightsMask[rfrom] |= cr;
-  st->castlingRookSquare[cr] = rfrom;
-  st->castlingPath[cr] = castlingPath[cr];
 }
 
 
@@ -7382,6 +7385,21 @@ bool Position::push_move(Move m) const {
 
 bool Position::gives_check(Move m) const {
 
+  assert(is_ok(m));
+  if (var->simpleLegality && !allow_checks() && type_of(m) == NORMAL && !is_gating(m)
+      && !topology_wraps() && !has_two_leg_moves() && count<KING>(~sideToMove) == 1)
+  {
+      const Square from = from_sq(m), to = to_sq(m);
+      const Piece mover = piece_on(from);
+      if (mover != NO_PIECE && from != to && !(check_squares(type_of(mover)) & from))
+      {
+          assert(color_of(mover) == sideToMove);
+          return (check_squares(type_of(mover)) & to)
+              || ((blockers_for_king(~sideToMove) & from)
+                  && !aligned(from, to, square<KING>(~sideToMove)));
+      }
+  }
+
 #ifdef NDEBUG
   return gives_check_impl(m);
 #else
@@ -8228,7 +8246,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   Square moverSq = rifleShot ? from : to;
   auto set_castling_right_hashed = [&](Color c, Square sq) {
       int oldRights = st->castlingRights;
-      set_castling_right(c, sq);
+      set_castling_right(c, sq, true);
       if (st->castlingRights != oldRights)
           k ^= Zobrist::castling[oldRights] ^ Zobrist::castling[st->castlingRights];
   };
@@ -8318,6 +8336,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   const Piece secondaryCaptured = is_two_leg(m) ? st->extraCaptured.piece.piece : NO_PIECE;
   const bool directCapture = captured != NO_PIECE || secondaryCaptured != NO_PIECE;
+  const bool declinedPromotion = var->promotionDeclineRule && !dropMove
+                              && !is_any_promotion(m) && from != SQ_NONE
+                              && move_promotion_status(pc, from, to, directCapture).allowed;
   // Effects defined for one captured piece use the destination victim when
   // present, otherwise the two-leg via victim.
   const Piece effectCaptured = captured != NO_PIECE ? captured : secondaryCaptured;
@@ -10008,10 +10029,9 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           deferred &= ~square_bb(to);
 
           const bool declinedEntry = !inFrom && inTo
-                                  && !is_promotion_move(m) && !is_two_leg_promotion(m)
-                                  && move_promotion_status(pc, from, to, directCapture).allowed;
+                                  && declinedPromotion;
           const bool remainsDeferred = wasDeferred && inFrom && inTo
-                                    && !is_promotion_move(m) && !is_two_leg_promotion(m);
+                                    && !is_any_promotion(m);
           if ((declinedEntry || remainsDeferred) && piece_on(to) != NO_PIECE
               && color_of(piece_on(to)) == us)
               deferred |= square_bb(to);
@@ -10612,14 +10632,14 @@ void Position::undo_move(Move m) {
       }
   }
 
-  // Finally point our state pointer back to the previous state
-  st = st->previous;
-  if (castling_dropped_piece() || var->castlingPromotedPiece)
+  if (st->castlingGeometryChanged)
   {
       std::copy(std::begin(st->castlingRightsMask), std::end(st->castlingRightsMask), std::begin(castlingRightsMask));
       std::copy(std::begin(st->castlingRookSquare), std::end(st->castlingRookSquare), std::begin(castlingRookSquare));
       std::copy(std::begin(st->castlingPath), std::end(st->castlingPath), std::begin(castlingPath));
   }
+  // Finally point our state pointer back to the previous state
+  st = st->previous;
   --gamePly;
   updatePawnCheckZone();
 
@@ -11500,8 +11520,9 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           }
           else
           {
-              for (const auto& m : MoveList<LEGAL>(*this))
-                  if (from_sq(m) == bareSq)
+              // LEGAL would re-enter this adjudication before generating moves.
+              for (const auto& m : MoveList<NON_EVASIONS>(*this))
+                  if (from_sq(m) == bareSq && legal(m) && !virtual_drop(m))
                   {
                       Bitboard caps = is_two_leg(m) ? capture_squares(m)
                                                    : (capture(m) ? square_bb(capture_square(m))

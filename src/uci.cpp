@@ -1020,7 +1020,7 @@ Move UCI::to_move(const Position& pos, string& str) {
               continue;
           Move alias = is_two_step(m) ? make_two_step(from_sq(m), via, to_sq(m), promotes)
                                       : make_hook(from_sq(m), via, to_sq(m), promotes);
-          if (!pos.pseudo_legal(alias))
+          if (!pos.pseudo_legal(alias) || !pos.legal(alias))
               continue;
           if (pos.capture_squares(alias) != pos.capture_squares(m))
               continue;

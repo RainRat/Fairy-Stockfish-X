@@ -37,6 +37,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "types.h"
 #include "uci.h"
 #include "variant.h"
+#include "nnue/features/half_ka_v2_variants.h"
 #include "test_engine_init.hpp"
 
 using namespace Stockfish;
@@ -70,6 +71,18 @@ laserEmitters = white@a1:0, black@h8:2
 laser_r = D/D/D/D
 laser_k = D/D/D/D
 castling = true
+
+[castling-geometry-drop:crazyhouse]
+castlingDroppedPiece = true
+
+[check-cache-ignore:chess]
+allowChecks = true
+
+[castling-geometry-promotion:chess]
+castlingPromotedPiece = true
+castlingRank = 8
+promotionPieceTypes = r
+startFen = 4K2R/P7/8/8/8/8/8/4k3 w K - 0 1
 
 [test-lion-state:chess]
 customPiece1 = l:ADNWK
@@ -242,6 +255,18 @@ static void test_null_move_clears_undo_payload() {
     StateInfo next{};
     pos.do_null_move(next);
 
+    // Null moves have no dirty entries; stale piece slots must not trigger a
+    // king refresh (the slots can also be uninitialized on the search stack).
+    assert(next.dirtyPiece.dirty_num == 0);
+    for (Color c : {WHITE, BLACK})
+    {
+        next.dirtyPiece.piece[0] = make_piece(c, pos.nnue_king());
+        assert(!Eval::NNUE::Features::HalfKAv2Variants::requires_refresh(&next, c, pos));
+        next.dirtyPiece.dirty_num = 1;
+        assert(Eval::NNUE::Features::HalfKAv2Variants::requires_refresh(&next, c, pos));
+        next.dirtyPiece.dirty_num = 0;
+    }
+
     assert(pos.pos_is_ok());
 
     pos.undo_null_move();
@@ -406,6 +431,100 @@ static void test_gating_special_collision() {
         assert(!is_gating(m));
         assert(via_sq(m) == Square(via));
     }
+}
+
+static void test_castling_geometry_mutation_undo() {
+    for (bool drop : {false, true})
+    {
+        StateInfo root{}, granted{}, reply{}, child{};
+        Position pos;
+        pos.set(variants.get(drop ? "castling-geometry-drop" : "castling-geometry-promotion"),
+                drop ? "4k3/8/8/8/8/8/8/4K2R[R] w K - 0 1"
+                     : "4K2R/P7/8/8/8/8/8/4k3 w K - 0 1", false, &root, nullptr);
+        const std::string fen = pos.fen();
+        const Key key = pos.key();
+        int masks[SQUARE_NB];
+        Square rooks[CASTLING_RIGHT_NB];
+        Bitboard paths[CASTLING_RIGHT_NB];
+        std::copy(std::begin(pos.castlingRightsMask), std::end(pos.castlingRightsMask), masks);
+        std::copy(std::begin(pos.castlingRookSquare), std::end(pos.castlingRookSquare), rooks);
+        std::copy(std::begin(pos.castlingPath), std::end(pos.castlingPath), paths);
+
+        std::string grantText = drop ? "R@a1" : "a7a8r";
+        const Move grant = UCI::to_move(pos, grantText);
+        assert(grant != MOVE_NONE && pos.legal(grant));
+        pos.do_move(grant, granted);
+        assert(granted.castlingGeometryChanged);
+        assert(pos.state()->castlingRights == (WHITE_OO | WHITE_OOO));
+
+        const Move kingReply = make<NORMAL>(drop ? SQ_E8 : SQ_E1, drop ? SQ_D8 : SQ_D1);
+        assert(pos.legal(kingReply));
+        pos.do_move(kingReply, reply);
+        assert(!reply.castlingGeometryChanged);
+        assert(MoveList<LEGAL>(pos).contains(make<CASTLING>(drop ? SQ_E1 : SQ_E8,
+                                                        drop ? SQ_A1 : SQ_A8)));
+        const Move rookMove = make<NORMAL>(drop ? SQ_A1 : SQ_A8, drop ? SQ_B1 : SQ_B8);
+        assert(pos.legal(rookMove));
+        pos.do_move(rookMove, child);
+        assert(!child.castlingGeometryChanged);
+        pos.undo_move(rookMove);
+        pos.undo_move(kingReply);
+        pos.undo_move(grant);
+
+        assert(pos.fen() == fen && pos.key() == key);
+        assert(std::equal(std::begin(pos.castlingRightsMask), std::end(pos.castlingRightsMask), masks));
+        assert(std::equal(std::begin(pos.castlingRookSquare), std::end(pos.castlingRookSquare), rooks));
+        assert(std::equal(std::begin(pos.castlingPath), std::end(pos.castlingPath), paths));
+        pos.do_null_move(granted);
+        assert(!granted.castlingGeometryChanged);
+        pos.undo_null_move();
+    }
+}
+
+static void test_cached_check_detection() {
+    const char* fens[] = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10",
+        "4k3/8/8/8/8/8/4B3/K3R3 w - - 0 1",
+        "7k/8/8/8/3R3p/8/8/K7 w - - 0 1",
+        "8/8/8/R3Pp1k/8/8/8/K7 w - f6 0 1",
+        "k7/6P1/8/8/8/8/8/K7 w - - 0 1",
+        "5k2/8/8/8/8/8/8/1K5R w H - 0 1"
+    };
+    for (const char* name : {"chess", "check-cache-ignore"})
+        for (const char* fen : fens)
+        {
+            StateInfo root{};
+            Position pos;
+            pos.set(variants.get(name), fen, true, &root, nullptr);
+            const std::string before = pos.fen();
+            for (Move m : MoveList<LEGAL>(pos))
+            {
+                const bool predicted = pos.gives_check(m);
+                StateInfo child{};
+                pos.do_move(m, child);
+                const bool actual = bool(pos.attackers_to_king(pos.square<KING>(pos.side_to_move()),
+                                                               ~pos.side_to_move()));
+                assert(predicted == actual);
+                pos.undo_move(m);
+                assert(pos.fen() == before);
+            }
+        }
+
+    // A loaded position can already attack the opponent king. Sliding away
+    // along the same line must keep that attack even beyond the cached ray.
+    StateInfo root{};
+    Position pos;
+    pos.set(variants.get("check-cache-ignore"), "4k3/8/8/8/4R3/8/8/K7 w - - 0 1",
+            false, &root, nullptr);
+    assert(pos.gives_check(make<NORMAL>(SQ_E4, SQ_E2)));
+
+    // When checks are allowed, an unchanged checker can satisfy the generic
+    // discovered-check probe even if the moving blocker stays on its line.
+    pos.set(variants.get("check-cache-ignore"), "4k2R/8/8/8/8/8/4K3/4R3 w - - 0 1",
+            false, &root, nullptr);
+    assert(pos.legal(make<NORMAL>(SQ_E2, SQ_E3)));
+    assert(pos.gives_check(make<NORMAL>(SQ_E2, SQ_E3)));
 }
 
 static void test_two_leg_tt_move_roundtrip() {
@@ -1084,6 +1203,8 @@ int main() {
     test_spell_chess_null_move_decays();
     test_stack_piece_transforms_and_undo();
     test_castling_preserves_piece_state();
+    test_castling_geometry_mutation_undo();
+    test_cached_check_detection();
     test_gating_special_collision();
     test_two_leg_tt_move_roundtrip();
     test_must_drop_evasion_to_two_leg_check();

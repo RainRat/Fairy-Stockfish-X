@@ -550,7 +550,7 @@ class TestPublicAPI(unittest.TestCase):
         # White Lion b2 takes the Black king on c3 and returns (igui).
         # The royal falls on the bend square, not the destination.
         ended, _ = sf.is_immediate_game_end(
-            "via-royal", "7k/8/8/8/8/2k5/1L6/K7 w - - 0 1", ["b2c3b2"])
+            "via-royal", "8/8/8/8/8/2k5/1L6/K7 w - - 0 1", ["b2c3b2"])
         self.assertTrue(ended)
 
     def test_promotion_deferred_fen_roundtrip(self):
@@ -600,6 +600,39 @@ class TestPublicAPI(unittest.TestCase):
         reloaded = sorted(sf.legal_moves("lion-trade-fen", mid, []))
         self.assertEqual(reloaded, live)
         self.assertNotIn("e1e4", reloaded)
+
+    def test_two_leg_alias_preserves_royal_route_safety(self):
+        sf.load_variant_config(
+            "[api-royal-route:chess]\nking = k:0\n"
+            "twoStepMoves = k:NW>NE,NE>NW\n"
+            "royalPieceNoThroughCheck = true\ncastling = false\n"
+        )
+        fen = "k7/8/2b5/8/4K3/8/8/8 w - - 0 1"
+        self.assertIn("e4f5e6", sf.legal_moves("api-royal-route", fen, []))
+        self.assertEqual(sf.validate_position("api-royal-route", fen, ["e4f5e6"]), 1)
+        self.assertNotEqual(sf.validate_position("api-royal-route", fen, ["e4d5e6"]), 1)
+
+    def test_chu_review_regressions(self):
+        if "chu_shogi" not in sf.variants():
+            self.skipTest("Chu requires a very-large-board extension")
+        variant = "chu_shogi"
+        rows = sf.start_fen(variant).split()[0].split("/")
+        self.assertEqual(rows[1], "l'1b1b'k'h'b'1b1l'")
+        self.assertEqual(rows[10], "L'1B1B'H'K'B'1B1L'")
+        bare = "11k/12/12/12/12/12/5j'6/12/12/12/12/K11 w - - 0 1"
+        self.assertEqual(sf.legal_moves(variant, bare, []), [])
+        self.assertTrue(sf.is_immediate_game_end(variant, bare, [])[0])
+        fen = "11k/P11/12/12/12/7b4/12/12/12/12/12/11K w - - 0 1 D:a11"
+        promoted = sf.get_fen(variant, fen, ["a11a12+"])
+        self.assertNotIn(" D:", promoted)
+        self.assertEqual(sf.validate_fen(promoted, variant), 1)
+        for suffix in ["", " T:b2"]:
+            self.assertEqual(sf.validate_fen(fen + suffix, variant), 1)
+        for suffix in [" D:a11", " T:b2 D:a11", " T:", " T:a1,,b2", " T:m1", " T:a13"]:
+            self.assertNotEqual(sf.validate_fen(fen + suffix, variant), 1)
+        prince = "11k/12/12/12/12/12/12/12/12/12/12/Y11 w - - 0 1"
+        self.assertEqual(sf.validate_fen(prince, variant), 1)
+        self.assertNotEqual(sf.validate_fen("7k/8/8/8/8/8/8/8 w - - 0 1", "chess"), 1)
 
     def test_validation_and_fog_are_binding_values(self):
         fen = sf.start_fen("chess")
