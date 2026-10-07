@@ -70,6 +70,7 @@ jobs:
           const ffish = await createFfish({
             wasmBinary: readFileSync(new URL('./ffish.wasm', import.meta.url)),
           });
+          ffish.loadVariantConfig(readFileSync(new URL('../../src/variants.ini', import.meta.url), 'utf8'));
           const variants = ffish.variants().split(' ');
           for (const variant of ['chu_shogi', 'dai_shogi'])
             if (!variants.includes(variant))
