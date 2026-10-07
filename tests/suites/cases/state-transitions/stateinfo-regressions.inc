@@ -33,6 +33,7 @@ cat > "${HARNESS_CPP}" <<'EOF'
 #include "types.h"
 #include "uci.h"
 #include "variant.h"
+#include "nnue/features/half_ka_v2_variants.h"
 #include "test_engine_init.hpp"
 
 using namespace Stockfish;
@@ -108,6 +109,18 @@ static void test_null_move_clears_undo_payload() {
     const Key beforeMaterialKey = pos.state()->materialKey;
     StateInfo next{};
     pos.do_null_move(next);
+
+    // Null moves have no dirty entries; stale piece slots must not trigger a
+    // king refresh (the slots can also be uninitialized on the search stack).
+    assert(next.dirtyPiece.dirty_num == 0);
+    for (Color c : {WHITE, BLACK})
+    {
+        next.dirtyPiece.piece[0] = make_piece(c, pos.nnue_king());
+        assert(!Eval::NNUE::Features::HalfKAv2Variants::requires_refresh(&next, c, pos));
+        next.dirtyPiece.dirty_num = 1;
+        assert(Eval::NNUE::Features::HalfKAv2Variants::requires_refresh(&next, c, pos));
+        next.dirtyPiece.dirty_num = 0;
+    }
 
     assert(pos.pos_is_ok());
 
