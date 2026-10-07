@@ -60,13 +60,16 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import { createRequire } from 'node:module';
+          import { readFileSync } from 'node:fs';
           import { dirname } from 'node:path';
           import { fileURLToPath } from 'node:url';
           globalThis.require = createRequire(import.meta.url);
           globalThis.__dirname = dirname(fileURLToPath(import.meta.url));
           globalThis.fetch = undefined;
           const { default: createFfish } = await import('./ffish.js');
-          const ffish = await createFfish();
+          const ffish = await createFfish({
+            wasmBinary: readFileSync(new URL('./ffish.wasm', import.meta.url)),
+          });
           const variants = ffish.variants().split(' ');
           for (const variant of ['chu_shogi', 'dai_shogi'])
             if (!variants.includes(variant))
