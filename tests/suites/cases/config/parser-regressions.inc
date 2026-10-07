@@ -605,6 +605,16 @@ twoStepMoves = l:N>N
 twoStepMoves = l:-
 twoBoards = true
 castling = false
+
+[bad-bare-king-without-royals:chess]
+bareKingRule = true
+
+[bare-king-with-royals:chess]
+bareKingRule = true
+pseudoRoyalTypes = k
+
+[bad-bare-king-cleared-royals:bare-king-with-royals]
+pseudoRoyalTypes = -
 INI
 
 cat > "${unsupported_bent_rose_modifier_ini}" <<'INI'
@@ -947,6 +957,13 @@ assert_not_contains "${inherited_hook_cleared_output}" "unknown variant 'inherit
 inherited_lion_cleared_output=$(run_uci "$ENGINE" "$bad_hook_ini" "inherited-lion-cleared" </dev/null 2>&1 || true)
 assert_not_contains "${inherited_lion_cleared_output}" "unknown variant 'inherited-lion-cleared'"
 
+for variant in bad-bare-king-without-royals bad-bare-king-cleared-royals; do
+  bare_king_output=$(run_uci "$ENGINE" "$bad_hook_ini" "$variant" </dev/null 2>&1 || true)
+  assert_contains "$bare_king_output" "unknown variant '$variant'; keeping 'chess'"
+done
+bare_king_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bare-king-with-royals" </dev/null 2>&1 || true)
+assert_not_contains "$bare_king_output" "unknown variant 'bare-king-with-royals'"
+
 bad_hook_check_output=$("${ENGINE}" check "${bad_hook_ini}" 2>&1 || true)
 assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
 assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook leg"
@@ -956,6 +973,7 @@ assert_contains "${bad_hook_check_output}" "twoStepMoves - Empty direction pair 
 assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
 assert_contains "${bad_hook_check_output}" "twoBoards is not supported with multi-capture twoStepMoves."
 assert_contains "${bad_hook_check_output}" "mandatoryPiecePromotion with pieceDemotion is not supported with twoStepMoves or hookMoves."
+assert_contains "${bad_hook_check_output}" "bareKingRule=true requires pseudoRoyalTypes."
 
 run_uci "$ENGINE" "$bad_hook_ini" "hook-twoboards-single" </dev/null >/dev/null
 run_uci "$ENGINE" "$bad_hook_ini" "hook-bounded-diagonal-legs" </dev/null >/dev/null

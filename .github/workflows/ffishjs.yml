@@ -44,6 +44,14 @@ jobs:
       - name: Run unit tests
         working-directory: tests/js
         run: npm test
+      - name: Build very-large-board module
+        working-directory: src
+        run: make -f Makefile_js clean && make -f Makefile_js build verylargeboards=yes
+      - name: Run very-large-board unit tests
+        working-directory: tests/js
+        env:
+          FSX_REQUIRE_VLB: '1'
+        run: npm test
       - name: Build very-large-board ES6 module
         working-directory: src
         run: make -f Makefile_js clean && make -f Makefile_js build verylargeboards=yes es6=yes
@@ -59,6 +67,10 @@ jobs:
           globalThis.fetch = undefined;
           const { default: createFfish } = await import('./ffish.js');
           const ffish = await createFfish();
+          const variants = ffish.variants().split(' ');
+          for (const variant of ['chu_shogi', 'dai_shogi'])
+            if (!variants.includes(variant))
+              throw new Error(`Missing required VLB variant: ${variant}`);
           const board = new ffish.Board('omega');
           if (board.fen() !== 'w**********w/*crnbqkbnrc*/*pppppppppp*/*10*/*10*/*10*/*10*/*10*/*10*/*PPPPPPPPPP*/*CRNBQKBNRC*/W**********W w KQkq - 0 1')
             throw new Error(`Unexpected omega start FEN: ${board.fen()}`);

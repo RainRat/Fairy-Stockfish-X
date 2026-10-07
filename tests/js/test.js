@@ -1074,6 +1074,12 @@ describe('ffish.variants()', function () {
     chai.expect(ffish.variants().includes("crazyhouse")).to.equal(true);
     chai.expect(ffish.variants().includes("dragon")).to.equal(true);
     chai.expect(ffish.variants().includes("janggi")).to.equal(true);
+    if (process.env.FSX_REQUIRE_VLB === '1') {
+      const variants = ffish.variants().split(' ');
+      for (const variant of ['chu_shogi', 'dai_shogi']) {
+        chai.expect(variants, `required VLB variant ${variant}`).to.include(variant);
+      }
+    }
   });
 });
 

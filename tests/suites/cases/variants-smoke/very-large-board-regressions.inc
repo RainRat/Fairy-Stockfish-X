@@ -51,6 +51,13 @@ if ! probe_variant_available "${ENGINE}" "hex-16x16" "${VARIANTS}"; then
   exit 1
 fi
 
+for variant in chu_shogi dai_shogi; do
+  if ! probe_variant_available "${ENGINE}" "${variant}" "${VARIANTS}"; then
+    echo "VLB engine ${ENGINE} cannot load required variant ${variant}; refusing to skip Chu/Dai coverage" >&2
+    exit 1
+  fi
+done
+
 test_vlb_gale_smoke() {
   local output
   output=$(FSX_SHOW_VARIANT_LOAD_SUMMARIES=1 run_uci "$ENGINE" "$VARIANTS" gale <<'EOF' 2>&1
@@ -81,10 +88,6 @@ position fen K10k/12/12/12/12/5p6/5p6/5W'6/12/12/12/12 w - - 0 1
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu and Dai lion moves require VERY_LARGE_BOARDS"
-    return 0
-  fi
   assert_contains_literal "$output" "f5f6f7: 1"
 
   output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
@@ -130,10 +133,6 @@ position fen K11/12/12/12/5D'6/12/12/12/12/12/1p10/11k w - - 0 1 moves f8e9+ l1k
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu/Dai promotion wiring requires VERY_LARGE_BOARDS"
-    return 0
-  fi
   assert_contains_literal "$output" "e9e10e9: 1"
 
   # Chu Drunk Knight promotes to Soaring Eagle (double capture NE>NE).
@@ -150,10 +149,6 @@ position fen K14/15/15/15/15/5D'9/15/15/15/15/15/15/15/1p13/k14 w - - 0 1 moves 
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
-    echo "skip: Dai promotion wiring requires VERY_LARGE_BOARDS"
-    return 0
-  fi
   assert_contains_literal "$output" "e11e12e11: 1"
 
   # Dai Drunk Knight promotes to Soaring Eagle (double capture NE>NE).
@@ -173,10 +168,6 @@ position fen 11k/P11/12/12/12/12/12/12/12/12/12/K11 w - - 0 1
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu and Dai dead-piece rules require VERY_LARGE_BOARDS"
-    return 0
-  fi
   assert_contains_literal "$output" "a11a12: 1"
 
   output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
@@ -477,10 +468,6 @@ position fen 11k/5${piece}6/12/12/12/12/12/12/12/12/12/K11 w - - 0 1 D:f11
 go perft 1
 EOF
 )
-      if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-        echo "skip: Chu promotion retry subvariants require VERY_LARGE_BOARDS"
-        return 0
-      fi
       if [[ "$piece" == P && "$variant" != chu_shogi_no_final_rank_retry
          || "$piece" == "G'" && "$variant" == chu_shogi_go_between_retry
          || "$piece" == L && "$variant" == chu_shogi_correspondence ]]; then
@@ -500,10 +487,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu/Dai promotion tables require VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   # Every production Chu promotion mapping end to end: step into the zone
   # with `+`, reply with the corner King, then play a move only the
@@ -548,10 +531,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
-    echo "skip: Dai promotion table requires VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   # Every production Dai promotion mapping end to end (zone ranks 11-15).
   while IFS='|' read -r from entry move; do
@@ -608,10 +587,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu/Dai movement tables require VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   # One signature move per Chu starting piece type from the center:
   # catches typos in the production Betza tables, not just engine machinery.
@@ -667,10 +642,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
-    echo "skip: Dai movement table requires VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   while IFS='|' read -r piece move; do
     output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<EOF 2>&1
@@ -741,10 +712,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu sole-royal mate requires VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   # Mated sole King with a remote movable piece: the go-between's moves do
   # not save the King, so there is no legal reply at all.
@@ -780,10 +747,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu protected-Kirin First-Lion requires VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   # A Kirin captures a Lion on zone entry and promotes to a protected Lion:
   # First-Lion is established and the non-Lion recapture is illegal.
@@ -810,10 +773,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'chu_shogi'"* || "$output" == *"No such variant: chu_shogi"* ]]; then
-    echo "skip: Chu/Dai Lion-trading distinction requires VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   # Chu restricts the immediate non-Lion retaliation on a protected Lion.
   output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
@@ -829,10 +788,6 @@ position fen 14k/15/15/15/15/15/15/7j'7/7R7/15/1r13/1J'13/15/15/K3B10 w - - 0 1 
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
-    echo "skip: Dai Lion-trading distinction requires VERY_LARGE_BOARDS"
-    return 0
-  fi
   assert_contains_literal "$output" "b5b4: 1"
 }
 
@@ -843,10 +798,6 @@ position startpos
 go perft 1
 EOF
 )
-  if [[ "$output" == *"unknown variant 'dai_shogi'"* || "$output" == *"No such variant: dai_shogi"* ]]; then
-    echo "skip: Dai dead-piece depth requires VERY_LARGE_BOARDS"
-    return 0
-  fi
 
   # A bare King loses against a live knight.
   output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1

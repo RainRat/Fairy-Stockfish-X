@@ -2851,6 +2851,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "promotionDeclineFinalRankRetryTypes requires promotionDeclineRule=true." << std::endl;
         valid = false;
     }
+    if (v->bareKingRule && !v->pseudoRoyalTypes)
+    {
+        if (DoCheck)
+            std::cerr << "bareKingRule=true requires pseudoRoyalTypes." << std::endl;
+        valid = false;
+    }
     if (v->bareKingExemptTypes && !v->bareKingRule)
     {
         if (DoCheck)
