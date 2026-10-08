@@ -162,9 +162,16 @@ namespace {
     int secResolution = Options["usemillisec"] ? 1 : 1000;
 
     while (is >> token)
+    {
         if (token == "searchmoves") // Needs to be the last command on the line
+        {
+            // Note: unmatched tokens are queued as MOVE_NONE, which matches
+            // no legal move. A list with no legal match must search no moves
+            // (bestmove (none)), so do not filter them out here.
             while (is >> token)
                 limits.searchmoves.push_back(UCI::to_move(pos, token));
+            break;
+        }
 
         else if (token == "wtime")     is >> limits.time[isUsi ? BLACK : WHITE];
         else if (token == "btime")     is >> limits.time[isUsi ? WHITE : BLACK];
@@ -188,10 +195,35 @@ namespace {
         {
             int byoyomi = 0;
             is >> byoyomi;
+            if (is.fail() || byoyomi < 0)
+            {
+                sync_cout << "info string error: invalid argument for 'byoyomi'" << sync_endl;
+                return;
+            }
             limits.inc[WHITE] = limits.inc[BLACK] = byoyomi;
             limits.time[WHITE] += byoyomi;
             limits.time[BLACK] += byoyomi;
         }
+
+        // Like upstream, refuse to start a search on malformed numeric input
+        // rather than searching with indeterminate limits. Unlike upstream's
+        // abort, ignore just this command: there is no error channel that all
+        // GUIs handle, and killing the engine loses the game.
+        if (is.fail())
+        {
+            sync_cout << "info string error: invalid argument for '" << token << "'" << sync_endl;
+            return;
+        }
+    }
+
+    if (   limits.depth < 0 || limits.mate < 0 || limits.perft < 0 || limits.movestogo < 0
+        || limits.nodes < 0 || limits.movetime < 0
+        || limits.time[WHITE] < 0 || limits.time[BLACK] < 0
+        || limits.inc[WHITE] < 0 || limits.inc[BLACK] < 0)
+    {
+        sync_cout << "info string error: negative search limit" << sync_endl;
+        return;
+    }
 
     Threads.start_thinking(pos, states, limits, ponderMode);
   }
@@ -629,10 +661,14 @@ string UCI::wdl(Value v, int ply) {
 std::string UCI::square(const Position& pos, Square s) {
 #ifdef LARGEBOARDS
   if (CurrentProtocol == USI)
-      return rank_of(s) < RANK_10 ? std::string{ char('1' + pos.max_file() - file_of(s)), char('a' + pos.max_rank() - rank_of(s)) }
-                                  : std::string{ char('0' + (pos.max_file() - file_of(s) + 1) / 10),
-                                                 char('0' + (pos.max_file() - file_of(s) + 1) % 10),
-                                                 char('a' + pos.max_rank() - rank_of(s)) };
+  {
+    // USI spells files as 1-2 digit numbers, so the width follows the file.
+    // The rank is always a single letter.
+    int fileNum = int(pos.max_file()) - int(file_of(s)) + 1;
+    char rankLetter = char('a' + pos.max_rank() - rank_of(s));
+    return fileNum < 10 ? std::string{ char('0' + fileNum), rankLetter }
+                        : std::string{ char('0' + fileNum / 10), char('0' + fileNum % 10), rankLetter };
+  }
   else if (pos.max_rank() == RANK_10 && CurrentProtocol != UCI_GENERAL)
       return std::string{ char('a' + file_of(s)), char('0' + rank_of(s)) };
   else
@@ -712,6 +748,16 @@ string UCI::move(const Position& pos, Move m) {
 
   if (is_self_destruct(m))
       return UCI::square(pos, from) + UCI::square(pos, to) + "x";
+
+  if (is_two_leg(m))
+  {
+      // Canonical three-square spelling from+via+to. Alternative quiet
+      // routes for the same destination are normalized in to_move().
+      std::string s = UCI::square(pos, from) + UCI::square(pos, via_sq(m)) + UCI::square(pos, to);
+      if (is_any_promotion(m))
+          s += "+";
+      return s;
+  }
 
   if (m == MOVE_NULL)
       return "0000";
@@ -929,6 +975,57 @@ Move UCI::to_move(const Position& pos, string& str) {
           || (!move_str_short_wall.empty() && str == move_str_short_wall)
           || (is_pass(m) && str == UCI::square(pos, from_sq(m)) + UCI::square(pos, to_sq(m))))
           return m;
+  }
+
+  // Accept non-canonical two-leg routes and normalize to the generated
+  // move. The generator merges equivalent quiet routes, but pseudo_legal()
+  // recognizes each valid route. An alias shares from/to with the canonical
+  // move; captures and promotion must also match, since the intermediate
+  // victim of a double capture matters.
+  if (pos.has_two_leg_moves())
+  {
+      for (const auto& m : MoveList<LEGAL>(pos))
+      {
+          if (!is_two_leg(m))
+              continue;
+          std::string canonical = UCI::move(pos, m);
+          bool promotes = is_two_leg_promotion(m);
+          bool strPromotes = !str.empty() && str.back() == '+';
+          if (promotes != strPromotes)
+              continue;
+          std::string aliasBase = promotes ? str.substr(0, str.size() - 1) : str;
+          std::string canonicalBase = promotes ? canonical.substr(0, canonical.size() - 1) : canonical;
+          if (aliasBase == canonicalBase)
+              continue;
+          std::string fromS = UCI::square(pos, from_sq(m));
+          std::string toS = UCI::square(pos, to_sq(m));
+          if (aliasBase.size() <= fromS.size() + toS.size()
+              || aliasBase.compare(0, fromS.size(), fromS) != 0
+              || aliasBase.compare(aliasBase.size() - toS.size(), toS.size(), toS) != 0)
+              continue;
+          std::string mid = aliasBase.substr(fromS.size(),
+                                             aliasBase.size() - fromS.size() - toS.size());
+          Square via = SQ_NONE;
+          for (Square s = SQ_A1; s < SQUARE_NB; ++s)
+          {
+              if (!(pos.board_bb() & s))
+                  continue;
+              if (UCI::square(pos, s) == mid)
+              {
+                  via = s;
+                  break;
+              }
+          }
+          if (via == SQ_NONE || via == via_sq(m))
+              continue;
+          Move alias = is_two_step(m) ? make_two_step(from_sq(m), via, to_sq(m), promotes)
+                                      : make_hook(from_sq(m), via, to_sq(m), promotes);
+          if (!pos.pseudo_legal(alias) || !pos.legal(alias))
+              continue;
+          if (pos.capture_squares(alias) != pos.capture_squares(m))
+              continue;
+          return m;
+      }
   }
 
   return MOVE_NONE;

@@ -7,11 +7,20 @@ CXX=${CXX:-${COMPILER:-g++}}
 SUITE_DIR="${ROOT_DIR}/tests/suites"
 VARIANTS=${VARIANTS:-${ROOT_DIR}/src/variants.ini}
 RUN_DIR="${ROOT_DIR}/.local/build/test-run"
+source "${ROOT_DIR}/tests/lib/build-signature.sh"
+# Default harness/test parallelism to all cores; children (.inc cases,
+# engine-rules) inherit this. Override with JOBS=N.
+export JOBS="${JOBS:-$(nproc 2>/dev/null || echo 2)}"
 
+# Outer suite timeouts are backstops only: each must comfortably exceed the
+# sum of its inner case timeouts in tests/lib/suite.sh (currently 12/46/48/
+# 52/24/40/12/91/42/5 min), so a slow-but-progressing machine fails individual
+# cases on their own limits instead of tripping the suite wrapper first.
+# Keep this invariant (~1.5x inner sum) when adding cases.
 declare -A SUITE_TIMEOUT=(
-  [config]=300 [movement]=900 [royal-legality]=900 [captures-effects]=600
-  [promotion-drops]=600 [state-transitions]=900 [notation-protocol]=300
-  [variants-smoke]=2400 [search-evaluation]=900 [spells]=300
+  [config]=1200 [movement]=4200 [royal-legality]=4500 [captures-effects]=4800
+  [promotion-drops]=2400 [state-transitions]=3600 [notation-protocol]=1200
+  [variants-smoke]=8400 [search-evaluation]=3900 [spells]=600
 )
 declare -A SUITE_FAMILY=(
   [config]=large [movement]=large [royal-legality]=large [captures-effects]=large
@@ -35,6 +44,37 @@ default_engine() {
         echo "${ROOT_DIR}/src/stockfish-large"
     else
         echo "${ROOT_DIR}/src/stockfish"
+    fi
+}
+
+check_named_engine_artifact() {
+    local engine="$1" profile expected_board expected_all
+    case "$engine" in
+        "${ROOT_DIR}/src/stockfish-large") expected_board=large; expected_all="" ;;
+        "${ROOT_DIR}/src/stockfish-allvars") expected_board=large; expected_all=yes ;;
+        "${ROOT_DIR}/src/stockfish-vlb") expected_board=very-large; expected_all=yes ;;
+        *) return 0 ;;
+    esac
+    [[ -x "$engine" ]] || return 0
+    if ! fsx_build_artifact_is_current "$ROOT_DIR" "$engine" \
+        || find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+            -newer "$engine" -print -quit | grep -q .; then
+        echo "stale or unverified engine: $engine; rebuild it with tests/build.sh" >&2
+        return 1
+    fi
+    profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$engine")
+    if [[ ";${profile};" != *";board=${expected_board};"* ]] \
+        || { [[ -n "$expected_all" ]] && [[ ";${profile};" != *";all=${expected_all};"* ]]; }; then
+        echo "engine profile does not match its named role: $engine; rebuild it with tests/build.sh" >&2
+        return 1
+    fi
+}
+
+check_named_engines() {
+    check_named_engine_artifact "$1"
+    if [[ " ${SUITES_TO_RUN[*]} " == *" movement "* \
+        || " ${SUITES_TO_RUN[*]} " == *" variants-smoke "* ]]; then
+        check_named_engine_artifact "${ROOT_DIR}/src/stockfish-vlb"
     fi
 }
 
@@ -80,6 +120,23 @@ check_engine() {
     fi
 }
 
+check_engine_freshness() {
+    local engine="$1"
+    [[ "${FSX_ALLOW_STALE_ENGINE:-0}" == 1 ]] && return 0
+    # Wrapper-built and verified current: no staleness possible.
+    if fsx_build_artifact_is_current "$ROOT_DIR" "$engine" 2>/dev/null; then
+        return 0
+    fi
+    # Otherwise (direct make, copied binary, or stale wrapper artifact) fail
+    # only when the sources are actually newer than the binary. Board-size
+    # mixing is still caught by the family check above.
+    if find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+        -newer "$engine" -print -quit 2>/dev/null | grep -q .; then
+        echo "stale engine: ${engine} is older than its sources; rebuild with tests/build.sh" >&2
+        return 1
+    fi
+}
+
 check_prerequisites() {
     local suite="$1" prereq
     IFS=',' read -ra prereqs <<<"${SUITE_PREREQS[$suite]}"
@@ -103,7 +160,13 @@ print_list() {
 run_one() {
     local suite="$1" engine="$2" variants="$3" log_dir="${4:-}" log=""
     check_engine "$suite" "$engine"
+    check_engine_freshness "$engine"
     check_prerequisites "$suite"
+    case "${SUITE_FAMILY[$suite]}" in
+        normal) export FSX_EXPECTED_BOARD="7 7" ;;
+        large) export FSX_EXPECTED_BOARD="11 9" ;;
+        very-large) export FSX_EXPECTED_BOARD="15 15" ;;
+    esac
     if [[ -n "$log_dir" ]]; then
         log="${log_dir}/${suite}.log"
         if timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants" >"$log" 2>&1; then
@@ -195,8 +258,8 @@ prepare_shared_objects() {
     source "${ROOT_DIR}/tests/lib/harness-build.sh"
     fsx_harness_init "${engine}" "${ROOT_DIR}"
     if [[ "${VERBOSE:-0}" == 1 ]]; then
-        fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-2}"
-    elif fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-2}" >"${log}" 2>&1; then
+        fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-$(nproc 2>/dev/null || echo 2)}"
+    elif fsx_harness_prepare_objects_cached "${RUN_DIR}/objects" "shared test objects" "${JOBS:-$(nproc 2>/dev/null || echo 2)}" >"${log}" 2>&1; then
         echo "ok: shared test objects"
     else
         echo "FAILED: shared test objects" >&2
@@ -217,12 +280,21 @@ run_fast_parallel() {
     local log_dir
     log_dir=$(mktemp -d "${RUN_DIR}/fast-XXXXXX")
     export FSX_CASE_LOG_ROOT="${log_dir}/cases"
+    # Config runs Python and many engine processes; avoid competing suites.
+    if [[ " ${SUITES_TO_RUN[*]} " == *" config "* ]]; then
+        if ! run_one config "$engine" "$variants" "$log_dir"; then
+            echo "${profile} profile failed; logs: ${log_dir}" >&2
+            return 1
+        fi
+    fi
     declare -A pids=()
     for suite in "${SUITES_TO_RUN[@]}"; do
+        [[ "$suite" == config ]] && continue
         run_one "$suite" "$engine" "$variants" "$log_dir" &
         pids[$suite]=$!
     done
     for suite in "${SUITES_TO_RUN[@]}"; do
+        [[ "$suite" == config ]] && continue
         pid=${pids[$suite]}
         if ! wait "$pid"; then status=1; fi
     done
@@ -247,6 +319,7 @@ case "$command" in
         engine=$(normalize_engine "${2:-$(default_engine)}")
         [[ -x "$engine" ]] || { echo "missing executable: $engine" >&2; exit 1; }
         [[ "$command" == fast ]] && SUITES_TO_RUN=("${FAST_SUITES[@]}") || SUITES_TO_RUN=("${ALL_SUITES[@]}")
+        check_named_engines "$engine"
         prepare_python
         export CXX
         prepare_shared_objects "$engine"
@@ -276,10 +349,13 @@ case "$command" in
         for suite in "${SUITES_TO_RUN[@]}"; do
             [[ -n "${SUITE_TIMEOUT[$suite]:-}" ]] || { echo "unknown suite: $suite" >&2; exit 2; }
         done
+        # Normalize early so harness builds and signature lookups see the
+        # same absolute engine path that the suites will test.
+        engine=$(normalize_engine "$engine")
+        check_named_engines "$engine"
         prepare_python
         export CXX
         prepare_shared_objects "$engine"
-        engine=$(normalize_engine "$engine")
         if [[ "${VERBOSE:-0}" == 1 ]]; then
             unset FSX_QUIET_VARIANT_LOAD_SUMMARIES
         else

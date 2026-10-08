@@ -123,12 +123,13 @@ namespace Eval {
     }
 
     currentNnueVariant = selectedVariant;
-    // The feature layout and header hash depend on the active variant. A
-    // variant switch must revalidate even when it selects the same filename.
+    // A reload replaces the parameter storage even if reading fails. Forget
+    // the old filename before trying, so selecting it again reloads its data.
+    // Variant switches must also revalidate the feature layout and header.
     const uint32_t selectedNnueHash = NNUE::hash_value();
-    if (eval_file_loaded == eval_file
-        && (loadedNnueHash != selectedNnueHash
-            || loadedNnueDimensions != selectedVariant->nnueDimensions))
+    if (eval_file_loaded != eval_file
+        || loadedNnueHash != selectedNnueHash
+        || loadedNnueDimensions != selectedVariant->nnueDimensions)
         eval_file_loaded = "None";
 
     #if defined(DEFAULT_NNUE_DIRECTORY)

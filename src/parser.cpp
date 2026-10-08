@@ -23,9 +23,11 @@
 #include <array>
 #include <cctype>
 #include <charconv>
+#include <cstring>
 #include <memory>
 
 #include "apiutil.h"
+#include "direction_pair.h"
 #include "parser.h"
 #include "piece.h"
 #include "types.h"
@@ -229,6 +231,225 @@ namespace {
             if (to == NO_PIECE_TYPE && rawTo != "-")
                 return false;
             parsed[from] = to;
+        }
+        if (!sawEntry || !only_trailing_space(ss))
+            return false;
+        std::copy(std::begin(parsed), std::end(parsed), target);
+        return true;
+    }
+
+    int parse_king_step_direction(const std::string& token) {
+        // Index order matches KingDirections; see king_step_name in direction_pair.h.
+        for (int i = 0; i < 8; ++i)
+        {
+            const char* name = king_step_name(i);
+            if (token.size() != std::strlen(name))
+                continue;
+            bool match = true;
+            for (size_t j = 0; j < token.size() && match; ++j)
+                match = std::tolower(static_cast<unsigned char>(token[j]))
+                     == std::tolower(static_cast<unsigned char>(name[j]));
+            if (match)
+                return i;
+        }
+        return -1;
+    }
+
+    template <bool DoCheck>
+    bool parse_two_step_moves(const std::string& optionName,
+                              const std::string& value,
+                              const Variant* v,
+                              DirectionPairSpec target[PIECE_TYPE_NB]) {
+        std::string entry;
+        std::stringstream ss(value);
+        DirectionPairSpec parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
+        bool sawEntry = false;
+        while (ss >> entry)
+        {
+            sawEntry = true;
+            auto [pieceToken, rawPairs] = split_piece_entry(entry);
+            PieceType pt = parse_piece_type_token(v, pieceToken);
+            if (pt == NO_PIECE_TYPE || rawPairs.empty())
+            {
+                if (DoCheck)
+                    std::cerr << optionName << " - Invalid piece token: " << pieceToken << std::endl;
+                return false;
+            }
+
+            if (rawPairs == "-")
+            {
+                parsed[pt] = {};
+            }
+            else if (rawPairs == "*")
+            {
+                parsed[pt].relative = ~0ULL;
+            }
+            else
+            {
+                if (rawPairs.front() == ',' || rawPairs.back() == ',')
+                {
+                    if (DoCheck)
+                        std::cerr << optionName << " - Empty direction pair in list" << std::endl;
+                    return false;
+                }
+                uint64_t mask = 0;
+                std::stringstream pss(rawPairs);
+                std::string pairToken;
+                while (std::getline(pss, pairToken, ','))
+                {
+                    pairToken = trim(pairToken);
+                    if (pairToken.empty())
+                    {
+                        if (DoCheck)
+                            std::cerr << optionName << " - Empty direction pair in list" << std::endl;
+                        return false;
+                    }
+                    size_t sep = pairToken.find('>');
+                    if (sep == std::string::npos)
+                    {
+                        if (DoCheck)
+                            std::cerr << optionName << " - Malformed direction pair: " << pairToken << std::endl;
+                        return false;
+                    }
+                    std::string s1 = pairToken.substr(0, sep);
+                    std::string s2 = pairToken.substr(sep + 1);
+                    int d1_start = 0, d1_end = 7;
+                    if (s1 != "*")
+                    {
+                        int d1 = parse_king_step_direction(s1);
+                        if (d1 < 0)
+                        {
+                            if (DoCheck)
+                                std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
+                            return false;
+                        }
+                        d1_start = d1_end = d1;
+                    }
+                    int d2_start = 0, d2_end = 7;
+                    if (s2 != "*")
+                    {
+                        int d2 = parse_king_step_direction(s2);
+                        if (d2 < 0)
+                        {
+                            if (DoCheck)
+                                std::cerr << optionName << " - Invalid direction in pair: " << pairToken << std::endl;
+                            return false;
+                        }
+                        d2_start = d2_end = d2;
+                    }
+                    for (int d1 = d1_start; d1 <= d1_end; ++d1)
+                        for (int d2 = d2_start; d2 <= d2_end; ++d2)
+                            mask |= two_leg_direction_pair_bit(d1, d2);
+                }
+                parsed[pt].relative = mask;
+            }
+        }
+        if (!sawEntry || !only_trailing_space(ss))
+            return false;
+        std::copy(std::begin(parsed), std::end(parsed), target);
+        return true;
+    }
+
+    // Hook leg: [f|b|s](R|B)[range], White-relative absolute directions.
+    // f = forward (N,NE,NW), b = backward (S,SE,SW), s = sideways (E,W);
+    // bare R/B allows all 8. Range is a trailing max leg length (absent =
+    // unlimited). The leg type restricts geometry (R orthogonal, B diagonal).
+    bool parse_hook_leg(const std::string& token, int& dirBits, int& range) {
+        std::string s;
+        for (char c : token)
+            s += char(std::tolower(static_cast<unsigned char>(c)));
+        size_t i = 0;
+        int filter = 0xFF;
+        if (i < s.size() && (s[i] == 'f' || s[i] == 's'
+            || (s[i] == 'b' && i + 1 < s.size() && (s[i + 1] == 'r' || s[i + 1] == 'b'))))
+        {
+            filter = s[i] == 'f' ? KingForwardDirections
+                   : s[i] == 'b' ? KingBackwardDirections
+                                 : KingSidewaysDirections;
+            ++i;
+        }
+        if (i >= s.size() || (s[i] != 'r' && s[i] != 'b'))
+            return false;
+        int geom = s[i] == 'r' ? KingOrthogonalDirections : KingDiagonalDirections;
+        ++i;
+        int parsedRange = 0;
+        size_t digits = 0;
+        while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i])))
+        {
+            const int digit = s[i] - '0';
+            if (parsedRange > (255 - digit) / 10)
+                return false;
+            parsedRange = parsedRange * 10 + digit;
+            ++i;
+            ++digits;
+        }
+        if (i != s.size())
+            return false;
+        dirBits = filter & geom;
+        if (dirBits == 0)
+            return false;
+        if (digits > 0 && parsedRange <= 0)
+            return false;
+        range = parsedRange;
+        return true;
+    }
+
+    template <bool DoCheck>
+    bool parse_hook_moves(const std::string& optionName,
+                          const std::string& value,
+                          const Variant* v,
+                          HookMoveSpec target[PIECE_TYPE_NB]) {
+        std::string entry;
+        std::stringstream ss(value);
+        HookMoveSpec parsed[PIECE_TYPE_NB];
+        std::copy(target, target + PIECE_TYPE_NB, std::begin(parsed));
+        auto fail = [&](const std::string& msg, const std::string& detail) {
+            if (DoCheck)
+                std::cerr << optionName << " - " << msg << ": " << detail << std::endl;
+            return false;
+        };
+        bool sawEntry = false;
+        while (ss >> entry)
+        {
+            sawEntry = true;
+            auto [pieceToken, rawSpec] = split_piece_entry(entry);
+            PieceType pt = parse_piece_type_token(v, pieceToken);
+            if (pt == NO_PIECE_TYPE || rawSpec.empty())
+                return fail("Invalid piece token", pieceToken);
+
+            if (rawSpec == "-")
+            {
+                parsed[pt] = {};
+                continue;
+            }
+
+            // Hooks are single-capture bent paths; no :1|:2 suffix.
+            std::string legsPart = rawSpec;
+            size_t colon = rawSpec.rfind(':');
+            if (colon != std::string::npos)
+                return fail("Invalid hook capture limit (hook moves stop on capture; no :1|:2 suffix)", rawSpec);
+            size_t dash = legsPart.find('-');
+            if (dash == std::string::npos || legsPart.find('-', dash + 1) != std::string::npos)
+                return fail("Malformed hook legs (expected <leg1>-<leg2>)", rawSpec);
+            int bits1 = 0, range1 = 0, bits2 = 0, range2 = 0;
+            if (!parse_hook_leg(trim(legsPart.substr(0, dash)), bits1, range1)
+                || !parse_hook_leg(trim(legsPart.substr(dash + 1)), bits2, range2))
+                return fail("Invalid hook leg (expected [f|b|s](R|B)[range])", rawSpec);
+            const bool sameGeometry = bool(bits1 & KingOrthogonalDirections)
+                                   == bool(bits2 & KingOrthogonalDirections);
+            uint64_t mask = 0;
+            for (int d1 = 0; d1 < 8; ++d1)
+                if (bits1 & (1 << d1))
+                    for (int d2 = 0; d2 < 8; ++d2)
+                        if ((bits2 & (1 << d2))
+                            && (!sameGeometry || (d2 - d1 + 8) % 8 == 2 || (d2 - d1 + 8) % 8 == 6))
+                            mask |= two_leg_direction_pair_bit(d1, d2);
+            if (!mask)
+                return fail("Hook legs have no valid direction pairs", rawSpec);
+            parsed[pt].directions.relative = mask;
+            parsed[pt].firstRange = range1;
+            parsed[pt].secondRange = range2;
         }
         if (!sawEntry || !only_trailing_space(ss))
             return false;
@@ -565,6 +786,7 @@ namespace {
     template <> bool set(const std::string& value, ChasingRule& target) {
         static constexpr auto values = std::array{
             std::pair{"axf", AXF_CHASING},
+            std::pair{"all", ALL_ATTACKS_CHASING},
             std::pair{"none", NO_CHASING},
         };
         return parse_named_value(value, target, values);
@@ -1563,6 +1785,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("toroidal", v->toroidal);
     parse_attribute("startFen", v->startFen);
     parse_color_setting("promotionRegion", v->promotionRegion);
+    parse_attribute("promotionDeclineRule", v->promotionDeclineRule);
+    parse_attribute("promotionDeclineFinalRankRetryTypes", v->promotionDeclineFinalRankRetryTypes, v);
     parse_color_setting("mandatoryPromotionRegion", v->mandatoryPromotionRegion);
     // Take the first promotionPawnTypes as the main promotionPawnType
     if (!parse_color_setting_first_piece("promotionPawnTypes", v->mainPromotionPawnType, v)) return false;
@@ -1760,6 +1984,22 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         if (!parse_non_negative_piece_int_map<DoCheck>("pullingStrength", it_pull_strength->second, v, v->pullingStrength))
             return false;
     }
+    auto it_two_step = config.find("twoStepMoves");
+    if (it_two_step != config.end())
+    {
+        if (!parse_two_step_moves<DoCheck>("twoStepMoves", it_two_step->second, v, v->twoStepMoves))
+            return false;
+    }
+    parse_attribute("lionMoveTypes", v->lionMoveTypes, v);
+    parse_attribute("lionInsignificantPieces", v->lionInsignificantPieces, v);
+    parse_attribute("lionCapturingRule", v->lionCapturingRule);
+    parse_attribute("lionCounterstrikeIfUnprotected", v->lionCounterstrikeIfUnprotected);
+    auto it_hook = config.find("hookMoves");
+    if (it_hook != config.end())
+    {
+        if (!parse_hook_moves<DoCheck>("hookMoves", it_hook->second, v, v->hookMoves))
+            return false;
+    }
     parse_attribute("pushFirstColor", v->pushFirstColor);
     parse_attribute("pushingRemoves", v->pushingRemoves);
     parse_attribute("pushChainEnemyOnly", v->pushChainEnemyOnly);
@@ -1930,6 +2170,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("nMoveHardLimitRuleValue", v->nMoveHardLimitRuleValue);
     parse_attribute("nFoldRule", v->nFoldRule);
     parse_attribute("nFoldRuleImmediate", v->nFoldRuleImmediate);
+    parse_attribute("bareKingRule", v->bareKingRule);
+    parse_attribute("bareKingExemptTypes", v->bareKingExemptTypes, v);
+    parse_attribute("bareKingDeadTypes", v->bareKingDeadTypes, v);
     parse_attribute("nonRoyalDrawThreshold", v->nonRoyalDrawThreshold);
     parse_color_setting("nFoldValue", v->nFoldValue);
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
@@ -2591,6 +2834,48 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "edgeInsertTypes requires pieceDrops=true." << std::endl;
         valid = false;
     }
+    if (v->lionCapturingRule && !v->lionMoveTypes)
+    {
+        if (DoCheck)
+            std::cerr << "lionCapturingRule=true requires lionMoveTypes." << std::endl;
+        valid = false;
+    }
+    if (v->lionMoveTypes && !v->lionCapturingRule)
+    {
+        if (DoCheck)
+            std::cerr << "lionMoveTypes requires lionCapturingRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->lionCounterstrikeIfUnprotected && !v->lionCapturingRule)
+    {
+        if (DoCheck)
+            std::cerr << "lionCounterstrikeIfUnprotected=true requires lionCapturingRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->promotionDeclineFinalRankRetryTypes && !v->promotionDeclineRule)
+    {
+        if (DoCheck)
+            std::cerr << "promotionDeclineFinalRankRetryTypes requires promotionDeclineRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->bareKingRule && !v->pseudoRoyalTypes)
+    {
+        if (DoCheck)
+            std::cerr << "bareKingRule=true requires pseudoRoyalTypes." << std::endl;
+        valid = false;
+    }
+    if (v->bareKingExemptTypes && !v->bareKingRule)
+    {
+        if (DoCheck)
+            std::cerr << "bareKingExemptTypes requires bareKingRule=true." << std::endl;
+        valid = false;
+    }
+    if (v->bareKingDeadTypes && !v->bareKingRule)
+    {
+        if (DoCheck)
+            std::cerr << "bareKingDeadTypes requires bareKingRule=true." << std::endl;
+        valid = false;
+    }
     if (v->openingSwapDrop
         && (!v->pieceDrops
             || !v->mustDrop
@@ -2649,6 +2934,48 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "laserGame is not supported on wrapped or hexagonal boards." << std::endl;
+        valid = false;
+    }
+
+    // Hook rays stop at board edges; wrapping topologies would need
+    // wrap-around rays with triple-level dedup, which is not implemented.
+    const bool hasTwoStepMoves = std::any_of(std::begin(v->twoStepMoves), std::end(v->twoStepMoves),
+                                             [](const DirectionPairSpec& spec) { return spec.relative != 0; });
+    const bool hasHookMoves = std::any_of(std::begin(v->hookMoves), std::end(v->hookMoves),
+                                          [](const HookMoveSpec& spec) { return spec.directions.relative != 0; });
+
+    PieceSet twoLegPieceTypes = NO_PIECE_SET;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        if (v->twoStepMoves[pt].relative || v->hookMoves[pt].directions.relative)
+            twoLegPieceTypes |= piece_set(pt);
+    bool hasDemotingTwoLegPiece = false;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        if (v->promotedPieceType[pt] != NO_PIECE_TYPE
+            && (twoLegPieceTypes & v->promotedPieceType[pt]))
+            hasDemotingTwoLegPiece = true;
+
+    if (hasDemotingTwoLegPiece && v->pieceDemotion
+        && (v->mandatoryPiecePromotion.get(WHITE) || v->mandatoryPiecePromotion.get(BLACK)))
+    {
+        if (DoCheck)
+            std::cerr << "mandatoryPiecePromotion with pieceDemotion is not supported with twoStepMoves or hookMoves." << std::endl;
+        valid = false;
+    }
+
+    if (hasHookMoves && (v->cylindrical || v->toroidal))
+    {
+        if (DoCheck)
+            std::cerr << "hookMoves is not supported on wrapped boards." << std::endl;
+        valid = false;
+    }
+
+    // Two-step moves can capture two pieces, while twoBoards
+    // transfers only one captured piece to the partner board.
+    // Hooks are single-capture and remain allowed there.
+    if (v->twoBoards && hasTwoStepMoves)
+    {
+        if (DoCheck)
+            std::cerr << "twoBoards is not supported with multi-capture twoStepMoves." << std::endl;
         valid = false;
     }
 

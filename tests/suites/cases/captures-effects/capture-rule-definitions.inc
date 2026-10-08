@@ -12,6 +12,9 @@ test_changing_color_locality() {
   tmp_ini=$(mktemp "${TMPDIR:-/tmp}/fsx-changing-color-locality-XXXXXX.ini")
   cat >"${tmp_ini}" <<'INI'
 [surround-color:chess]
+king = -
+commoner = k
+castling = false
 surroundCaptureIntervene = true
 changingColorTrigger = capture
 changingColorPieceTypes = *
@@ -192,6 +195,8 @@ EOF
 test_custom_en_passant_passed_squares() {
   load_inline_variants <<'INI'
 [custom-ep-all:chess]
+king = -
+castling = false
 customPiece1 = a:mWifemR3
 customPiece2 = s:fK
 pawn = -
@@ -217,7 +222,7 @@ UCI
   )
   assert_contains_literal "$out" " b - d3d4d5 " "all passed squares are serialized"
   out=$(run_uci "$ENGINE" "$FSX_TMP_INI" custom-ep-all <<'UCI'
-position fen 8/8/8/2s1s3/8/8/3A4/8 b - d3d4d5 0 1
+position fen 8/8/8/2sAs3/8/8/8/8 b - d3d4d5 0 1
 go perft 1
 UCI
   )
@@ -231,7 +236,7 @@ UCI
   )
   assert_contains_literal "$out" " b - d3 " "first passed square is serialized"
   out=$(run_uci "$ENGINE" "$FSX_TMP_INI" custom-ep-first <<'UCI'
-position fen 8/8/8/2s1s3/8/8/3A4/8 b - d3 0 1
+position fen 8/8/8/2sAs3/8/8/8/8 b - d3 0 1
 go perft 1
 UCI
   )

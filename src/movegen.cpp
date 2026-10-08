@@ -22,6 +22,7 @@
 
 #include "movegen.h"
 #include "position.h"
+#include "two_leg_impl.h"
 #include "thread.h"
 
 namespace Stockfish {
@@ -51,6 +52,7 @@ template struct MoveList<CAPTURES>;
 template struct MoveList<QUIETS>;
 template struct MoveList<QUIET_CHECKS>;
 template struct MoveList<EVASIONS>;
+template struct MoveList<EVASION_CANDIDATES>;
 template struct MoveList<NON_EVASIONS>;
 #endif
 
@@ -944,6 +946,24 @@ namespace {
                 promotionTargets |= jumpCaptures;
             pawnPromotions = promotionTargets & promotion_zone;
         }
+        if (pos.variant()->promotionDeclineRule && (promotion_zone & from))
+        {
+            if (pos.state()->promotionDeferred & from)
+            {
+                // Configured types reaching the last rank get a final non-capture
+                // opportunity (mirrors move_promotion_status lastRankRetry).
+                // Applies to both promotion paths: b2 covers shogi-style (+)
+                // promotions for any piece type, pawnPromotions the pawn path.
+                Bitboard lastRank = (pos.variant()->promotionDeclineFinalRankRetryTypes & piece_set(Pt))
+                                  ? rank_bb(Us == WHITE ? pos.max_rank() : RANK_1) : Bitboard(0);
+                b2 &= captureSquares | jumpCaptures | lastRank;
+                pawnPromotions &= captureSquares | jumpCaptures | lastRank;
+            }
+            else
+            {
+                b2 = pawnPromotions = 0;
+            }
+        }
         Bitboard pushMoves = 0;
         if (pos.pushing_strength(Pt) > 0)
         {
@@ -1022,7 +1042,7 @@ namespace {
             && !pieceInfo->has_explicit_initial_moves())
         {
             Square oneAhead = from + Up;
-            if (is_ok(oneAhead) && (quiets & oneAhead))
+            if (is_ok(oneAhead) && (quiets & oneAhead) && !(pos.pieces() & oneAhead))
             {
                 Square twoAhead = oneAhead + Up;
                 if (   (pos.double_step_region(Us, Pt) & from)
@@ -1098,6 +1118,162 @@ namespace {
 
 
   template<Color Us, GenType Type>
+  ExtMove* emit_two_leg_candidate(const Position& pos, ExtMove* moveList, PieceType pt,
+                                  TwoLegKind kind, Square from, Square via, Square to,
+                                  bool capVia, bool capTo, Bitboard target, Bitboard checkers) {
+    bool isCapture = capVia || capTo;
+
+    Piece mover = pos.piece_on(from);
+    Position::PromotionStatus promoStatus = pos.move_promotion_status(mover, from, to, isCapture);
+    bool allowsPromo = promoStatus.allowed;
+
+    // Mirror Position::legal() mandatory handling: a non-promoting
+    // entry into the mandatory zone from outside is illegal, so
+    // suppress the non-promo move only in that case.
+    bool mandatoryPromo = promoStatus.mandatory;
+
+    // Like ordinary pawn pushes, quiet promotions belong in CAPTURES even
+    // though they capture nothing; quiet non-promotions do not. QUIETS keeps
+    // the non-promoting version but must not duplicate the promotion
+    // (MovePicker searches both stages). QUIET_CHECKS also excludes promotions
+    // already searched in CAPTURES; the gives_check filter below applies.
+    if constexpr (Type == CAPTURES)
+    {
+        if (!isCapture && !allowsPromo)
+            return moveList;
+    }
+    else if constexpr (Type == QUIETS || Type == QUIET_CHECKS)
+    {
+        if (isCapture)
+            return moveList;
+    }
+    else if constexpr (Type == EVASIONS)
+    {
+        const PieceType royal = pos.royal_piece_type(Us);
+        if (pt != royal)
+        {
+            if (more_than_one(checkers))
+            {
+                if (!((capVia && (checkers & via)) || (capTo && (checkers & to))))
+                    return moveList;
+            }
+            else
+            {
+                if (!((capVia && (checkers & via)) || (capTo && (checkers & to)) || (target & to)))
+                    return moveList;
+            }
+        }
+    }
+
+    if (allowsPromo && Type != QUIETS && Type != QUIET_CHECKS)
+    {
+        Move mPromo = kind == TwoLegKind::TWO_STEP
+                    ? make_two_step(from, via, to, true)
+                    : make_hook(from, via, to, true);
+        *moveList++ = mPromo;
+    }
+
+    if (!mandatoryPromo)
+    {
+        // CAPTURES keeps quiet promotions but not quiet non-promotions.
+        if constexpr (Type == CAPTURES)
+        {
+            if (!isCapture)
+                return moveList;
+        }
+        Move m = kind == TwoLegKind::TWO_STEP
+               ? make_two_step(from, via, to)
+               : make_hook(from, via, to);
+        if constexpr (Type == QUIET_CHECKS)
+        {
+            if (pos.gives_check(m))
+                *moveList++ = m;
+        }
+        else
+        {
+            *moveList++ = m;
+        }
+    }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
+  ExtMove* generate_two_leg_moves(const Position& pos, ExtMove* moveList, Bitboard target,
+                                   Bitboard forcedFromMask, bool restrictToForcedJumper) {
+    // Variants without two-leg moves skip generation entirely.
+    if (!pos.has_two_leg_moves())
+        return moveList;
+    PieceSet pieceTypes = pos.two_leg_piece_types();
+    const Color them = ~Us;
+    const Bitboard checkers = pos.evasion_checkers();
+
+    while (pieceTypes)
+    {
+        PieceType pt = pop_lsb(pieceTypes);
+        Bitboard piecesBb = pos.pieces(Us, pt);
+        if (restrictToForcedJumper)
+            piecesBb &= forcedFromMask;
+
+        while (piecesBb)
+        {
+            Square from = pop_lsb(piecesBb);
+            if (pos.freeze_squares() & from)
+                continue;
+
+            // Deduplicate equivalent routes within each movement subtype.
+            // Keyed by (kind, capture-via, to): quiet routes sharing the same
+            // destination collapse, while distinct via captures stay separate.
+            // Small linear table avoids a Bitboard-per-square table (≈16KB on
+            // VLB) on the stack for every two-leg piece. 512 covers 2 kinds x
+            // SQUARE_NB destinations; overflow only emits duplicates, which
+            // legal() filters, so the bound is safe rather than exact.
+            std::array<std::pair<int, int>, 512> seenPairs;
+            int seenCount = 0;
+            Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces()) & ~pos.pieces();
+            directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
+            if ((pos.clone_move_types() & pt) || pos.gating() || pos.walling(Us))
+                directTargets = 0;
+            const bool routeSensitive = pos.variant()->royalPieceNoThroughCheck
+                                     && pt == pos.royal_piece_type(Us);
+            detail::TwoLegWalker::for_each_two_leg_path(pos, Us, pt, from, pos.pieces(), pos.pieces(Us),
+                [&](const detail::TwoLegPath& path) {
+                    bool capVia = bool(path.captures & path.via);
+                    bool capTo = path.to != from && bool(path.captures & path.to);
+                    bool direct = (!capVia || path.via == path.to)
+                               && path.to != from && (directTargets & path.to);
+                    if (direct && !routeSensitive)
+                        return false;
+                    int kindIdx = path.kind == TwoLegKind::TWO_STEP ? 0 : 1;
+                    int captureVia = capVia ? int(path.via) : SQUARE_NB;
+                    int toIdx = int(path.to);
+                    bool duplicate = false;
+                    if (!routeSensitive)
+                    {
+                        for (int i = 0; i < seenCount; ++i)
+                            if (seenPairs[i].first == (kindIdx * (SQUARE_NB + 1) + captureVia)
+                                && seenPairs[i].second == toIdx)
+                            {
+                                duplicate = true;
+                                break;
+                            }
+                    }
+                    if (duplicate)
+                        return false;
+                    if (!routeSensitive && seenCount < int(seenPairs.size()))
+                        seenPairs[seenCount++] = {kindIdx * (SQUARE_NB + 1) + captureVia, toIdx};
+                    moveList = emit_two_leg_candidate<Us, Type>(pos, moveList, pt, path.kind, from,
+                                                                 path.via, path.to, capVia, capTo,
+                                                                 target, checkers);
+                    return false;
+                });
+        }
+    }
+
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
   ExtMove* generate_all_impl(const Position& pos, ExtMove* moveList) {
 
     static_assert(Type != LEGAL, "Unsupported type in generate_all()");
@@ -1106,7 +1282,7 @@ namespace {
     const PieceType royalPt = pos.royal_piece_type(Us);
     const Square royalSq = pos.royal_square(Us);
     const Bitboard checkers = pos.evasion_checkers();
-    Bitboard target;
+    Bitboard target = Bitboard(0);
     Bitboard captureTarget = Bitboard(0);
     Bitboard forcedFromMask = AllSquares;
     bool restrictToForcedJumper = false;
@@ -1520,6 +1696,8 @@ namespace {
 
     }
 
+    moveList = generate_two_leg_moves<Us, Type>(pos, moveList, target, forcedFromMask, restrictToForcedJumper);
+
     // Royal moves must not be restricted to checker capture/interposition targets.
     if (royalPt != NO_PIECE_TYPE && royalSq != SQ_NONE
         && !(pos.freeze_squares() & royalSq)
@@ -1789,7 +1967,14 @@ namespace {
             {
                 if (!pos.variant()->freezePieceTypes)
                 {
+                    // Heap-leased: a full overflow buffer is ~2 MiB on
+                    // VERY_LARGE_BOARDS builds and overflows the stack.
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+                    MoveBufferLease allBuffer(pos);
+                    ExtMove* allMoves = allBuffer.get();
+#else
                     ExtMove allMoves[MOVEGEN_OVERFLOW_CAPACITY];
+#endif
                     ExtMove* allEnd = generate_all_impl<Us, NON_EVASIONS>(pos, allMoves);
                     assert(allEnd - allMoves <= MOVEGEN_OVERFLOW_CAPACITY);
                     for (ExtMove* it = allMoves; it != allEnd; ++it)
@@ -2009,18 +2194,24 @@ namespace {
       }
 
       ScopedSpellContext spellScope(potion.freezeExtra, potion.jumpRemoved);
+      // Heap-leased: see the EVASIONS freeze-potion buffer above.
+#ifdef USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
+      MoveBufferLease baseBuffer(pos);
+      ExtMove* baseMoves = baseBuffer.get();
+#else
       ExtMove baseMoves[MOVEGEN_OVERFLOW_CAPACITY];
+#endif
       const bool broadenFreezeEvasion = pos.evasion_checkers()
                                      && !pos.topology_wraps()
                                      && potion.potion == Variant::POTION_FREEZE
                                      && !pos.variant()->freezePieceTypes;
-      ExtMove* baseEnd = pos.evasion_checkers() && !pos.topology_wraps() && !broadenFreezeEvasion
-                       ? generate_without_potions<EVASIONS>(pos, baseMoves)
+      ExtMove* baseEnd = pos.evasion_checkers() && !broadenFreezeEvasion
+                       ? generate_without_potions<EVASION_CANDIDATES>(pos, baseMoves)
                        : generate_without_potions<NON_EVASIONS>(pos, baseMoves);
 
       for (ExtMove* it = baseMoves; it != baseEnd; ++it)
           if (it->move == base)
-              return !pos.evasion_checkers() || pos.topology_wraps()
+              return !pos.evasion_checkers() || pos.requires_full_evasion_generation()
                   || potion_move_matches<EVASIONS>(pos, base, m);
 
       return false;
@@ -2046,7 +2237,8 @@ ExtMove* generate(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate()");
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+         || (Type == NON_EVASIONS && pos.evasion_checkers()
+             && (pos.anti_royal_types() || pos.requires_full_evasion_generation())));
   Color us = pos.side_to_move();
   const SpellContext* current = current_spell_context();
   ScopedSpellContext jumpScope(
@@ -2063,7 +2255,8 @@ ExtMove* generate_without_potions(const Position& pos, ExtMove* moveList) {
 
   static_assert(Type != LEGAL, "Unsupported type in generate_without_potions()");
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+         || (Type == NON_EVASIONS && pos.evasion_checkers()
+             && (pos.anti_royal_types() || pos.requires_full_evasion_generation())));
   Color us = pos.side_to_move();
   const SpellContext* current = current_spell_context();
   ScopedSpellContext jumpScope(
@@ -2082,7 +2275,8 @@ ExtMove* append_potions(const Position& pos, ExtMove* listBegin, ExtMove* baseEn
   if (!pos.potions_enabled())
       return baseEnd;
   assert((Type == EVASIONS) == (bool)pos.evasion_checkers()
-         || (pos.topology_wraps() && Type == NON_EVASIONS && pos.evasion_checkers()));
+         || (Type == NON_EVASIONS && pos.evasion_checkers()
+             && (pos.anti_royal_types() || pos.requires_full_evasion_generation())));
   Color us = pos.side_to_move();
   const SpellContext* current = current_spell_context();
   ScopedSpellContext jumpScope(
@@ -2110,6 +2304,24 @@ template ExtMove* append_potions<EVASIONS>(const Position&, ExtMove*, ExtMove*, 
 template ExtMove* append_potions<QUIET_CHECKS>(const Position&, ExtMove*, ExtMove*, bool);
 template ExtMove* append_potions<NON_EVASIONS>(const Position&, ExtMove*, ExtMove*, bool);
 
+template<bool WithPotions>
+static ExtMove* generate_evasion_candidates(const Position& pos, ExtMove* moveList) {
+  return (pos.anti_royal_types() || pos.requires_full_evasion_generation())
+       ? (WithPotions ? generate<NON_EVASIONS>(pos, moveList)
+                      : generate_without_potions<NON_EVASIONS>(pos, moveList))
+       : (WithPotions ? generate<EVASIONS>(pos, moveList)
+                      : generate_without_potions<EVASIONS>(pos, moveList));
+}
+
+template<>
+ExtMove* generate<EVASION_CANDIDATES>(const Position& pos, ExtMove* moveList) {
+  return generate_evasion_candidates<true>(pos, moveList);
+}
+
+template<>
+ExtMove* generate_without_potions<EVASION_CANDIDATES>(const Position& pos, ExtMove* moveList) {
+  return generate_evasion_candidates<false>(pos, moveList);
+}
 
 /// generate<LEGAL> generates all the legal moves in the given position
 
@@ -2121,10 +2333,8 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   ExtMove* cur = moveList;
 
-  const bool useWrappedFallback = pos.topology_wraps() && pos.evasion_checkers();
-  const bool useNonEvasions = pos.anti_royal_types() || useWrappedFallback;
-  moveList = (pos.evasion_checkers() && !useNonEvasions) ? generate<EVASIONS    >(pos, moveList)
-                                                         : generate<NON_EVASIONS>(pos, moveList);
+  moveList = pos.evasion_checkers() ? generate<EVASION_CANDIDATES>(pos, moveList)
+                                    : generate<NON_EVASIONS>(pos, moveList);
   while (cur != moveList)
       if (!pos.legal(*cur) || pos.virtual_drop(*cur))
           *cur = *--moveList;

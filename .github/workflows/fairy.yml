@@ -64,8 +64,12 @@ jobs:
 
       - name: Build all variants
         run: |
-          make clean
-          make -j2 ARCH=x86-64 largeboards=yes all=yes debug=yes EXE=stockfish-allvars build
+          ../tests/build.sh ARCH=x86-64 largeboards=yes all=yes debug=yes EXE=stockfish-allvars
+
+      - name: Build very-large-board and normal-board engines
+        run: |
+          ../tests/build.sh ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes debug=yes EXE=stockfish-vlb
+          ../tests/build.sh ARCH=x86-64 debug=yes EXE=stockfish
 
       - name: Test variants.ini
         run: |
