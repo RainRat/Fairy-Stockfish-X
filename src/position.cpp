@@ -7962,7 +7962,7 @@ void Position::apply_gravity(Key& k) {
 }
 
 CaptureTransferTarget Position::capture_transfer_target(Piece transferPiece, bool suppressedCaptureTransfer) const {
-    if (suppressedCaptureTransfer || !captures_to_hand())
+    if (transferPiece == NO_PIECE || suppressedCaptureTransfer || !captures_to_hand())
         return {};
     if (!(capture_to_hand_types() & type_of(transferPiece)))
         return {};
