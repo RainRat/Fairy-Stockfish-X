@@ -7665,6 +7665,7 @@ bool Position::gives_check_impl(Move m) const {
       discCheckSq |= square_bb(via_sq(m));
 
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion
+          || var->freezePieceTypes
           || var->hookPieceTypes)
          || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
@@ -7878,7 +7879,7 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
             }
             attackedTargets &= sameType;
         }
-        frozen |= attacks_from<false, false>(~c, pt, freezer, occupied) & attackedTargets;
+        frozen |= attacks_from(~c, pt, freezer, occupied) & attackedTargets;
         if ((var->twoStepPieceTypes | var->hookPieceTypes) & piece_set(pt))
         {
             Bitboard friendly = (simulated ? simulated->colorOccupancy[~c] : pieces(~c)) & occupied;

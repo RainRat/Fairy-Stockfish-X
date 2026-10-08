@@ -824,8 +824,8 @@ namespace {
 
             Bitboard b = pawns & pawn_attacks_bb(Them, epSquare);
 
-            // En passant square is already disabled for non-fairy variants if there is no attacker
-            assert(b || !pos.fast_attacks());
+            // The stored target requires a geometric attacker, which can be frozen.
+            assert((pos.pieces(Us, PAWN) & pawn_attacks_bb(Them, epSquare)) || !pos.fast_attacks());
 
             while (b)
                 moveList = make_move_and_gating<EN_PASSANT, Type>(pos, moveList, Us, pop_lsb(b), epSquare);
