@@ -7618,8 +7618,9 @@ bool Position::gives_check_impl(Move m) const {
       && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
       && !((var->petrifyOnCaptureTypes & pt) && capture(m)))
   {
-      // Physical-king attacks were already tested with rule filters above.
-      if (!usingPhysicalKingTarget && !(var->captureForbiddenByColor[sideToMove][pt] & royalType))
+      if (!(var->captureForbiddenByColor[sideToMove][pt] & royalType)
+          && !(anti_royal_king_mutually_immune() && royalType == king_type()
+               && (anti_royal_types() & piece_set(pt))))
       {
           if (pt == JANGGI_CANNON)
           {
@@ -7634,6 +7635,11 @@ bool Position::gives_check_impl(Move m) const {
           else if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
           {
               if ((check_squares(pt) & attackFrom) && (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq))
+                  return true;
+          }
+          else if (usingPhysicalKingTarget)
+          {
+              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq)
                   return true;
           }
           else if (check_squares(pt) & attackFrom)
