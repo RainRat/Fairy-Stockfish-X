@@ -12683,6 +12683,24 @@ bool Position::see_pruning_unreliable(Move m) const {
          == (var->seePruningPolicy != SeePruningPolicy::RELIABLE));
 #endif
 
+  if (is_two_leg(m))
+      return true;
+  if (var->seePruningPolicy == SeePruningPolicy::RELIABLE)
+      return false;
+  if (var->seePruningPolicy == SeePruningPolicy::ALWAYS_UNRELIABLE)
+      return true;
+  if (type_of(moved_piece(m)) == KING)
+      return true;
+
+  return see_pruning_unreliable(m, gives_check(m));
+}
+
+bool Position::see_pruning_unreliable(Move m, bool givesCheck) const {
+#ifndef NDEBUG
+  assert(see_pruning_unreliable()
+         == (var->seePruningPolicy != SeePruningPolicy::RELIABLE));
+#endif
+
   // SEE cannot model both victims of a two-leg capture.
   if (is_two_leg(m))
       return true;
@@ -12696,7 +12714,7 @@ bool Position::see_pruning_unreliable(Move m) const {
   if (type_of(moved_piece(m)) == KING)
       return true;
 
-  if (gives_check(m))
+  if (givesCheck)
       return true;
 
   PieceType captured = type_of(piece_on(to_sq(m)));

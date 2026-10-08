@@ -4,6 +4,13 @@
 
 Use `tests/build.sh` to build test binaries. It tracks build options and binary signatures in `.local/build/signatures/`. If build flags change, it automatically cleans old build files before rebuilding. Direct `make` builds still require `make clean` when changing the compiler, CPU architecture, debug options, or board size settings.
 
+Named executables are written to `src/<EXE>` and share the same `src/*.o`
+files. The wrapper tracks the object configuration separately from each
+binary, cleans shared objects when that configuration changes, and checks the
+finished binary's advertised board family. Use it when building test binaries
+so the test runner can verify that the selected executable has the expected
+profile.
+
 For the standard large-board and all-variant test binary:
 
 ```sh

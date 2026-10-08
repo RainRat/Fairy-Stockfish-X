@@ -1333,12 +1333,12 @@ moves_loop: // When in check, search starts from here
               // Capture history based pruning when the move doesn't give check
               if (   !givesCheck
                   && lmrDepth < 1
-                  && !pos.see_pruning_unreliable(move)
+                  && !pos.see_pruning_unreliable(move, givesCheck)
                   && captureHistory[movedPiece][to_sq(move)][captured_type(pos, move)] < 0)
                   continue;
 
               // SEE based pruning
-              if (!pos.see_pruning_unreliable(move)
+              if (!pos.see_pruning_unreliable(move, givesCheck)
                   && !pos.see_ge(move, Value(-218 - 120 * pos.captures_to_hand()) * depth)) // (~25 Elo)
                   continue;
           }
@@ -1363,7 +1363,7 @@ moves_loop: // When in check, search starts from here
 
               // Prune moves with negative SEE (~20 Elo)
               if (!(pos.walling_rule() == DUCK)
-                  && !pos.see_pruning_unreliable(move)
+                  && !pos.see_pruning_unreliable(move, givesCheck)
                   && !pos.see_ge(move, Value(-(30 - std::min(lmrDepth, 18) + 10 * !!pos.flag_region(pos.side_to_move())) * lmrDepth * lmrDepth)))
                   continue;
           }
@@ -1860,7 +1860,7 @@ moves_loop: // When in check, search starts from here
       // Futility pruning and moveCount pruning
       if (    bestValue > VALUE_TB_LOSS_IN_MAX_PLY
           && !givesCheck
-          && !pos.see_pruning_unreliable(move)
+          && !pos.see_pruning_unreliable(move, givesCheck)
           && !(   pos.extinction_value(~pos.side_to_move()) == -VALUE_MATE
                && victim != NO_PIECE
                && (pos.extinction_piece_types(~pos.side_to_move()) & type_of(victim)))
@@ -1880,7 +1880,7 @@ moves_loop: // When in check, search starts from here
           }
 
           if (futilityBase <= alpha
-              && !pos.see_pruning_unreliable(move)
+              && !pos.see_pruning_unreliable(move, givesCheck)
               && !pos.see_ge(move, VALUE_ZERO + 1))
           {
               bestValue = std::max(bestValue, futilityBase);
@@ -1890,7 +1890,7 @@ moves_loop: // When in check, search starts from here
 
       // Do not search moves with negative SEE values
       if (    bestValue > VALUE_TB_LOSS_IN_MAX_PLY
-          && !pos.see_pruning_unreliable(move)
+          && !pos.see_pruning_unreliable(move, givesCheck)
           && !pos.see_ge(move))
           continue;
 

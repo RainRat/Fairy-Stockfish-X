@@ -1173,6 +1173,7 @@ public:
   bool has_repeated() const;
   bool see_pruning_unreliable() const;
   bool see_pruning_unreliable(Move m) const;
+  bool see_pruning_unreliable(Move m, bool givesCheck) const;
   Bitboard chased() const;
   int count_limit(Color sideToCount) const;
   int board_honor_counting_ply(int countStarted) const;
