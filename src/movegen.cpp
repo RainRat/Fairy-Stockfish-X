@@ -1042,7 +1042,7 @@ namespace {
             && !pieceInfo->has_explicit_initial_moves())
         {
             Square oneAhead = from + Up;
-            if (is_ok(oneAhead) && (quiets & oneAhead))
+            if (is_ok(oneAhead) && (quiets & oneAhead) && !(pos.pieces() & oneAhead))
             {
                 Square twoAhead = oneAhead + Up;
                 if (   (pos.double_step_region(Us, Pt) & from)

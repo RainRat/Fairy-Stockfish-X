@@ -9865,7 +9865,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       && (!dropMove || captureHappened)
       && piece_on(moverSq) != NO_PIECE
       && color_of(piece_on(moverSq)) == us
-      && (var->changingColorPieceTypes & type_of(piece_on(moverSq))))
+      && (var->changingColorPieceTypes & piece_set(type_of(piece_on(moverSq)))))
   {
       Piece cur = piece_on(moverSq);
       Piece changed = make_piece(them, type_of(cur));
