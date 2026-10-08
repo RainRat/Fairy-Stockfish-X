@@ -7816,6 +7816,10 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     if (!var->freezePieceTypes)
         return Bitboard(0);
 
+    SimulatedMoveInfoGuard simulatedView(*this);
+    if (simulated)
+        simulatedView.set(*simulated);
+
     Bitboard freezers;
     Bitboard targets;
     Bitboard occupied = byTypeBB[ALL_PIECES];
@@ -7875,6 +7879,16 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
             attackedTargets &= sameType;
         }
         frozen |= attacks_from<false, false>(~c, pt, freezer, occupied) & attackedTargets;
+        if ((var->twoStepPieceTypes | var->hookPieceTypes) & piece_set(pt))
+        {
+            Bitboard friendly = (simulated ? simulated->colorOccupancy[~c] : pieces(~c)) & occupied;
+            auto freezeCaptures = [&](const detail::TwoLegPath& path) {
+                frozen |= path.captures & attackedTargets;
+                return false;
+            };
+            detail::TwoLegWalker::for_each_two_leg_path(*this, ~c, pt, freezer, occupied,
+                                                        friendly, freezeCaptures);
+        }
     }
     return frozen;
 }
