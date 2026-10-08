@@ -48,13 +48,16 @@ tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EX
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 ```
 
+Build these named test binaries with the wrapper so the test runner can verify their build profiles.
+
 The very-large-board regressions resolve `stockfish-vlb` (via `VLB_ENGINE`
 or a sibling of the suite engine) and the VLB overlap-parity check resolves
 a normal-board `stockfish` (via `NORMAL_ENGINE` or a sibling); both fail
 loudly when the binary is missing. Set `FSX_ALLOW_SMALL_BOARD=1` only for
 intentional small-board runs where board-size skips are expected.
 Set `FSX_ALLOW_STALE_ENGINE=1` only to bypass the sources-newer-than-binary
-staleness check (never for results you intend to keep).
+staleness check (never for results you intend to keep). It does not bypass
+wrapper verification or profile checks for named regression engines.
 
 If you prefer standard make, compile from `src/` using `make -j build ...`.
 
@@ -83,6 +86,8 @@ bash tests/fast-regression.sh src/stockfish-allvars
 tests/protocol.sh src/stockfish-allvars
 tests/perft.sh all src/stockfish-allvars
 ```
+
+Use the named binary for each broad check and report the binary actually tested. A run with a different binary does not establish whether the documented check passes. The fast suite may also use `src/stockfish-vlb` when it exists; rebuild that binary from current sources before running the suite.
 
 Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 tests/python/test_pyffish_api.py`.
 
@@ -193,3 +198,4 @@ The fast and full suites preserve signature-based artifacts under `.local/build`
 * Config parses; changed rules are documented; old keys remain compatible where practical.
 * Positions load and search; relevant perft, protocol, regression, and upstream checks pass.
 * Performance-sensitive changes have before/after notes; only intended files are staged.
+* When asked to update an existing PR, commit and push the intended changes, refresh the PR description and test status, then verify that the remote head and PR reflect the update.

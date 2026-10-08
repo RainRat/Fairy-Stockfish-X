@@ -7549,7 +7549,9 @@ bool Position::gives_check_impl(Move m) const {
   if (!is_ok(attackFrom))
       return false;
 
-  if (topology_wraps()
+  // King setup can preserve an existing attack on the opponent's royal.
+  if ((must_drop() && count_in_hand(KING))
+      || topology_wraps()
       || laser_game()
       || has_pushing()
       || has_adjacent_swapping()
@@ -7618,7 +7620,9 @@ bool Position::gives_check_impl(Move m) const {
       && !is_promotion_move(m) && type_of(m) != PIECE_PROMOTION && type_of(m) != PIECE_DEMOTION && type_of(m) != CASTLING
       && !((var->petrifyOnCaptureTypes & pt) && capture(m)))
   {
-      if (!(var->captureForbiddenByColor[sideToMove][pt] & royalType))
+      if (!(var->captureForbiddenByColor[sideToMove][pt] & royalType)
+          && !(anti_royal_king_mutually_immune() && royalType == king_type()
+               && (anti_royal_types() & piece_set(pt))))
       {
           if (pt == JANGGI_CANNON)
           {
@@ -7962,7 +7966,7 @@ void Position::apply_gravity(Key& k) {
 }
 
 CaptureTransferTarget Position::capture_transfer_target(Piece transferPiece, bool suppressedCaptureTransfer) const {
-    if (suppressedCaptureTransfer || !captures_to_hand())
+    if (transferPiece == NO_PIECE || suppressedCaptureTransfer || !captures_to_hand())
         return {};
     if (!(capture_to_hand_types() & type_of(transferPiece)))
         return {};
@@ -9865,7 +9869,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       && (!dropMove || captureHappened)
       && piece_on(moverSq) != NO_PIECE
       && color_of(piece_on(moverSq)) == us
-      && (var->changingColorPieceTypes & type_of(piece_on(moverSq))))
+      && (var->changingColorPieceTypes & piece_set(type_of(piece_on(moverSq)))))
   {
       Piece cur = piece_on(moverSq);
       Piece changed = make_piece(them, type_of(cur));

@@ -143,19 +143,14 @@ fsx_harness_prepare_objects() {
     return 0
   fi
 
-  # Keep the caller's engine available while refreshing the object family.
-  # objclean removes $(EXE), and the harness must not invalidate the engine it
-  # is about to test.
+  # Refresh harness objects without deleting or relinking the tested engine.
+  # Its wrapper-recorded profile and binary hash must remain valid.
   # Drop the generated dependency file too: it can reference headers removed
   # by refactors, which breaks the build outright until regenerated.
-  rm -f "${FSX_HARNESS_ROOT_DIR}/src/.depend"
-  make -C "${FSX_HARNESS_ROOT_DIR}/src" -s EXE= objclean
-  make -C "${FSX_HARNESS_ROOT_DIR}/src" -s -j"${jobs}" build "${FSX_HARNESS_BUILD_ARGS[@]}"
-
-  if [[ ! -x "${FSX_HARNESS_ROOT_DIR}/src/${FSX_HARNESS_BUILD_EXE}" ]]; then
-    echo "harness build did not produce ${FSX_HARNESS_BUILD_EXE}" >&2
-    return 1
-  fi
+  rm -f "${FSX_HARNESS_ROOT_DIR}/src/.depend" "$(fsx_build_config_file "${FSX_HARNESS_ROOT_DIR}")"
+  make -C "${FSX_HARNESS_ROOT_DIR}/src" -s EXE= objclean || return 1
+  make -C "${FSX_HARNESS_ROOT_DIR}/src" -s -j"${jobs}" build-objects "${FSX_HARNESS_BUILD_ARGS[@]}" || return 1
+  fsx_build_write_object_config "${FSX_HARNESS_ROOT_DIR}" "${FSX_HARNESS_BUILD_ARGS[@]}"
 }
 
 fsx_harness_prepare_objects_cached() {
@@ -192,7 +187,8 @@ fsx_harness_prepare_objects_cached() {
     return 0
   fi
 
-  fsx_harness_prepare_objects "${jobs}"
+  fsx_harness_prepare_objects "${jobs}" || return 1
+  object_signature=$(fsx_harness_object_signature)
   local tmp_desired="${cache_dir}/desired.sig.tmp.$$"
   local tmp_objects="${cache_dir}/objects.sig.tmp.$$"
   printf '%s\n' "${desired_signature}" > "${tmp_desired}"

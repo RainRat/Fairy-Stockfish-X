@@ -735,12 +735,15 @@ else
 endif
 
 
-.PHONY: help build profile-build strip install clean net objclean profileclean \
+.PHONY: help build build-objects objects profile-build strip install clean net objclean profileclean \
         config-sanity icc-profile-use icc-profile-make gcc-profile-use gcc-profile-make \
         clang-profile-use clang-profile-make
 
 build: $(load_net) config-sanity
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) all
+
+build-objects: $(load_net) config-sanity
+	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) objects
 
 profile-build: $(load_net) config-sanity objclean profileclean
 	@echo ""
@@ -824,6 +827,8 @@ default:
 ### ==========================================================================
 
 all: $(EXE) .depend
+
+objects: $(filter-out main.o,$(OBJS)) .depend
 
 config-sanity: $(load_net)
 	@echo ""
