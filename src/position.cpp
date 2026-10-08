@@ -7664,8 +7664,12 @@ bool Position::gives_check_impl(Move m) const {
   if (is_two_leg(m) && capture(m))
       discCheckSq |= square_bb(via_sq(m));
 
+  const bool freezingChanged = var->freezePieceTypes
+      && (var->freezeAttackedSquares
+          || simulated.freezerOccupancy[WHITE] != pieces(WHITE, var->freezePieceTypes)
+          || simulated.freezerOccupancy[BLACK] != pieces(BLACK, var->freezePieceTypes));
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion
-          || var->freezePieceTypes
+          || freezingChanged
           || var->hookPieceTypes)
          || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
@@ -7817,10 +7821,6 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     if (!var->freezePieceTypes)
         return Bitboard(0);
 
-    SimulatedMoveInfoGuard simulatedView(*this);
-    if (simulated)
-        simulatedView.set(*simulated);
-
     Bitboard freezers;
     Bitboard targets;
     Bitboard occupied = byTypeBB[ALL_PIECES];
@@ -7857,15 +7857,19 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     }
 
     Bitboard frozen = 0;
+    if (!var->freezeAttackedSquares)
+    {
+        while (freezers)
+            frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
+        return frozen;
+    }
+
+    SimulatedMoveInfoGuard simulatedView(*this);
+    if (simulated)
+        simulatedView.set(*simulated);
     while (freezers)
     {
         Square freezer = pop_lsb(freezers);
-        if (!var->freezeAttackedSquares)
-        {
-            frozen |= adjacent_squares(*this, freezer, var->freezeDiagonals) & targets;
-            continue;
-        }
-
         PieceType pt = type_of(piece_at(freezer, occupied));
         Bitboard attackedTargets = targets;
         if (var->freezeSameType)
