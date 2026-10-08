@@ -1934,6 +1934,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("freezePieceTypes", v->freezePieceTypes, v);
     parse_attribute("freezeImmunePieceTypes", v->freezeImmunePieceTypes, v);
     parse_attribute("freezeDiagonals", v->freezeDiagonals);
+    parse_attribute("freezeAttackedSquares", v->freezeAttackedSquares);
+    parse_attribute("freezeSameType", v->freezeSameType);
+    if (v->freezeSameType && !v->freezeAttackedSquares) {
+        if (DoCheck)
+            std::cerr << "freezeSameType requires freezeAttackedSquares." << std::endl;
+        return false;
+    }
     parse_attribute("trapRegion", v->trapRegion);
     parse_attribute("trapProtection", v->trapProtection);
     parse_attribute("doubleStep", v->doubleStep);

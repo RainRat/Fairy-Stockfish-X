@@ -7664,7 +7664,12 @@ bool Position::gives_check_impl(Move m) const {
   if (is_two_leg(m) && capture(m))
       discCheckSq |= square_bb(via_sq(m));
 
+  const bool freezingChanged = var->freezePieceTypes
+      && (var->freezeAttackedSquares
+          || simulated.freezerOccupancy[WHITE] != pieces(WHITE, var->freezePieceTypes)
+          || simulated.freezerOccupancy[BLACK] != pieces(BLACK, var->freezePieceTypes));
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion
+          || freezingChanged
           || var->hookPieceTypes)
          || (non_sliding_riders() & pieces(sideToMove)))
       && (attackers_to_king(royalSq, occupied, sideToMove, janggiCannons,
@@ -7818,13 +7823,20 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
 
     Bitboard freezers;
     Bitboard targets;
+    Bitboard occupied = byTypeBB[ALL_PIECES];
     if (simulated)
     {
         freezers = simulated->freezerOccupancy[~c];
         targets = simulated->colorOccupancy[c] & ~simulated->freezeImmuneOccupancy[c];
+        occupied = simulated->occupiedAfterEffects;
     }
     else if (simulatedMove != MOVE_NONE)
     {
+        if (var->freezeAttackedSquares)
+        {
+            SimulatedMoveInfo info = simulated_move_info(simulatedMove);
+            return freeze_squares_from_freezers(c, &info);
+        }
         if (simulatedFreezeCacheMove != simulatedMove || simulatedFreezeCacheState != st)
         {
             SimulatedMoveInfo simulatedMoveInfo = simulated_move_info(simulatedMove);
@@ -7845,8 +7857,44 @@ Bitboard Position::freeze_squares_from_freezers(Color c, const SimulatedMoveInfo
     }
 
     Bitboard frozen = 0;
+    if (!var->freezeAttackedSquares)
+    {
+        while (freezers)
+            frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
+        return frozen;
+    }
+
+    SimulatedMoveInfoGuard simulatedView(*this);
+    if (simulated)
+        simulatedView.set(*simulated);
     while (freezers)
-        frozen |= adjacent_squares(*this, pop_lsb(freezers), var->freezeDiagonals) & targets;
+    {
+        Square freezer = pop_lsb(freezers);
+        PieceType pt = type_of(piece_at(freezer, occupied));
+        Bitboard attackedTargets = targets;
+        if (var->freezeSameType)
+        {
+            Bitboard sameType = 0;
+            for (Bitboard candidates = targets; candidates; )
+            {
+                Square target = pop_lsb(candidates);
+                if (type_of(piece_at(target, occupied)) == pt)
+                    sameType |= target;
+            }
+            attackedTargets &= sameType;
+        }
+        frozen |= attacks_from(~c, pt, freezer, occupied) & attackedTargets;
+        if ((var->twoStepPieceTypes | var->hookPieceTypes) & piece_set(pt))
+        {
+            Bitboard friendly = (simulated ? simulated->colorOccupancy[~c] : pieces(~c)) & occupied;
+            auto freezeCaptures = [&](const detail::TwoLegPath& path) {
+                frozen |= path.captures & attackedTargets;
+                return false;
+            };
+            detail::TwoLegWalker::for_each_two_leg_path(*this, ~c, pt, freezer, occupied,
+                                                        friendly, freezeCaptures);
+        }
+    }
     return frozen;
 }
 

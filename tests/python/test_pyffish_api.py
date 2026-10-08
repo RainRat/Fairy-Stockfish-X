@@ -389,6 +389,8 @@ class TestPublicAPI(unittest.TestCase):
             "freezePieceTypes = b\n"
             "freezeImmunePieceTypes = p\n"
             "freezeDiagonals = false\n"
+            "freezeAttackedSquares = true\n"
+            "freezeSameType = true\n"
             "trapRegion = d4\n"
             "trapProtection = friendly-orthogonal\n"
         )
@@ -396,6 +398,8 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(composable["movement"]["freezePieceTypes"], ["bishop"])
         self.assertEqual(composable["movement"]["freezeImmunePieceTypes"], ["pawn"])
         self.assertFalse(composable["movement"]["freezeDiagonals"])
+        self.assertTrue(composable["movement"]["freezeAttackedSquares"])
+        self.assertTrue(composable["movement"]["freezeSameType"])
         self.assertEqual(composable["capture"]["trapRegion"], ["d4"])
         self.assertEqual(composable["capture"]["trapProtection"], "friendly-orthogonal")
 

@@ -351,6 +351,8 @@ std::string variant_info_json(const std::string& name) {
     field(movement, b, "freezePieceTypes", piece_set_json(v.freezePieceTypes));
     field(movement, b, "freezeImmunePieceTypes", piece_set_json(v.freezeImmunePieceTypes));
     field(movement, b, "freezeDiagonals", boolean(v.freezeDiagonals));
+    field(movement, b, "freezeAttackedSquares", boolean(v.freezeAttackedSquares));
+    field(movement, b, "freezeSameType", boolean(v.freezeSameType));
     field(movement, b, "cambodianMoves", boolean(v.cambodianMoves));
     field(movement, b, "makpongRule", boolean(v.makpongRule));
     field(movement, b, "flyingGeneral", boolean(v.flyingGeneral));
