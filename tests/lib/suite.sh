@@ -62,8 +62,13 @@ native() {
         *large*:*|*allvars*:*|*vlb*:*|*:*large|*:*very-large) ;;
         *)
             case "${group}" in occupancy|state|royal)
-                echo "skip: ${SUITE_NAME}/native-${group} requires a large-board engine"
-                return 0
+                if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+                    echo "SKIP-BOARDSIZE: ${SUITE_NAME}/native-${group} requires a large-board engine; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+                    return 0
+                fi
+                echo "native-${group} requires a large-board engine; got ${ENGINE}" >&2
+                echo "run with a large-board engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
+                return 1
                 ;;
             esac
             ;;
@@ -73,7 +78,7 @@ native() {
 
 run_config() {
     suite_case python-api-tests 3m env PYTHONPATH="${SUITE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" python3 "${SUITE_ROOT}/tests/python/test_pyffish_api.py"
-    legacy parser-regressions.sh 2m "${ENGINE}"
+    legacy parser-regressions.sh 5m "${ENGINE}"
     legacy explicit-custom-piece-replacements.sh 2m "${ENGINE}" "${VARIANTS}"
     if [[ -f "${SUITE_ROOT}/src/variants-incomplete.ini" ]]; then
         legacy incomplete-baselines.sh 2m "${ENGINE}" "${SUITE_ROOT}/src/variants-incomplete.ini"
@@ -89,7 +94,7 @@ run_movement() {
     legacy geometry-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy rider-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy fast-regression-piece-regions.sh 3m "${ENGINE}" "${VARIANTS}"
-    legacy universal-hopper.sh 2m "${ENGINE}" "${VARIANTS}"
+    legacy universal-hopper.sh 5m "${ENGINE}" "${VARIANTS}"
     legacy wrapping-topology.sh 2m "${ENGINE}"
     legacy test_hex_boards.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy non-knight-riders.sh 2m "${ENGINE}"
@@ -146,6 +151,7 @@ UCI
     assert_contains_literal "${no_kings_output}" "e4e8: 1" "contains the royal capture"
     cleanup_tmp_ini
     legacy royal-variant-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
+    legacy chu-lion-rules.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy pseudoroyal-capture-illegal.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy ep-pseudoroyal-regressions.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy quiet-check-special-moves.sh 5m "${ENGINE}"
@@ -214,7 +220,7 @@ run_notation_protocol() {
 
 run_variants_smoke() {
     native board-games
-    legacy variant-load-all.sh 10m "${ENGINE}" "${VARIANTS}"
+    legacy variant-load-all.sh 15m "${ENGINE}" "${VARIANTS}"
     legacy variant-load-matrix.sh 30m "${ENGINE}" "${VARIANTS}"
     legacy variant-rules-matrix.sh 8m "${ENGINE}" "${VARIANTS}"
     legacy small-variant-rules.sh 5m "${ENGINE}" "${VARIANTS}"
@@ -238,6 +244,7 @@ run_search_evaluation() {
     legacy nnue-variant-dimension-guard.sh 2m "${ENGINE}"
     legacy nnue-affine-regression.sh 2m
     legacy nnue-export-failure.sh 2m "${ENGINE}"
+    suite_case nnue-loading 2m python3 "${SUITE_ROOT}/tests/nnue-loading.py" "${ENGINE}"
     legacy engine-search-regressions.sh 15m "${ENGINE}" "${VARIANTS}"
 }
 

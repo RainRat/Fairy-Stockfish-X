@@ -1074,5 +1074,74 @@ describe('ffish.variants()', function () {
     chai.expect(ffish.variants().includes("crazyhouse")).to.equal(true);
     chai.expect(ffish.variants().includes("dragon")).to.equal(true);
     chai.expect(ffish.variants().includes("janggi")).to.equal(true);
+    if (process.env.FSX_REQUIRE_VLB === '1') {
+      const variants = ffish.variants().split(' ');
+      for (const variant of ['chu_shogi', 'dai_shogi']) {
+        chai.expect(variants, `required VLB variant ${variant}`).to.include(variant);
+      }
+    }
+  });
+});
+
+describe('Chu Shogi rules on very-large-board builds', function () {
+  it('validates and replays saved Chu history and captured kings', function () {
+    if (!ffish.variants().split(' ').includes('chu_shogi')) this.skip();
+    const variant = 'chu_shogi';
+    const start = new ffish.Board(variant);
+    try {
+      const rows = start.fen().split(' ')[0].split('/');
+      chai.expect(rows[1]).to.equal("l'1b1b'k'h'b'1b1l'");
+      chai.expect(rows[10]).to.equal("L'1B1B'H'K'B'1B1L'");
+    } finally { start.delete(); }
+    const fen = '11k/P11/12/12/12/7b4/12/12/12/12/12/11K w - - 0 1 D:a11';
+    chai.expect(ffish.validateFen(fen, variant, false)).to.equal(1);
+    chai.expect(ffish.validateFen(fen + ' T:b2', variant, false)).to.equal(1);
+    const board = new ffish.Board(variant, fen);
+    try {
+      chai.expect(board.push('a11a12+')).to.equal(true);
+      chai.expect(board.fen()).not.to.include(' D:');
+      chai.expect(ffish.validateFen(board.fen(), variant, false)).to.equal(1);
+    } finally { board.delete(); }
+    const prince = '11k/12/12/12/12/12/12/12/12/12/12/Y11 w - - 0 1';
+    chai.expect(ffish.validateFen(prince, variant, false)).to.equal(1);
+    const bare = new ffish.Board(variant, "11k/12/12/12/12/12/5j'6/12/12/12/12/K11 w - - 0 1");
+    try { chai.expect(bare.result()).to.equal('0-1'); }
+    finally { bare.delete(); }
+  });
+
+  it('adjudicates attacking cycles and the fourth mutual-jitto occurrence', function () {
+    if (!ffish.variants().split(' ').includes('chu_shogi')) this.skip();
+    const cases = [
+      ['11k/12/12/12/pp10/12/12/12/12/12/R11/11K b - - 0 1',
+       ['l12k12', 'a2b2', 'k12l12', 'b2a2'], '0-1'],
+      ['5k6/11r/12/12/p11/12/12/11P/12/12/R11/5K6 b - - 0 1',
+       ['l11l10', 'a2a3', 'l10l11', 'a3a2'], '1-0'],
+      ["5k6/11j'/12/12/12/12/12/12/12/12/J'11/5K6 b - - 0 1",
+       ['l11l12l11', 'a2a3a2'], '1-0'],
+    ];
+    for (const [fen, cycle, expected] of cases) {
+      const board = new ffish.Board('chu_shogi', fen);
+      try {
+        for (let repeat = 0; repeat < 3; ++repeat) {
+          chai.expect(board.result()).to.equal('*');
+          for (const move of cycle) chai.expect(board.push(move), move).to.equal(true);
+        }
+        chai.expect(board.result()).to.equal(expected);
+      } finally {
+        board.delete();
+      }
+    }
+  });
+});
+
+describe('two-leg route parsing', function () {
+  it('rejects an explicit royal route through check', function () {
+    ffish.loadVariantConfig('[js-royal-route:chess]\nking = k:0\n'
+      + 'twoStepMoves = k:NW>NE,NE>NW\nroyalPieceNoThroughCheck = true\ncastling = false\n');
+    const board = new ffish.Board('js-royal-route', 'k7/8/2b5/8/4K3/8/8/8 w - - 0 1');
+    try {
+      chai.expect(board.push('e4d5e6')).to.equal(false);
+      chai.expect(board.push('e4f5e6')).to.equal(true);
+    } finally { board.delete(); }
   });
 });

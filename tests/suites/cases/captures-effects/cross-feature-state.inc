@@ -195,6 +195,7 @@ EOF
 log_user 1
 set timeout 10
 spawn ${ENGINE}
+expect_after { timeout { exit 1 } }
 expect "by Fabian Fichter"
 send "setoption name Hash value 1\r"
 send "setoption name Clear Hash\r"

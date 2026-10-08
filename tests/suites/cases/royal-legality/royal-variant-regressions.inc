@@ -9,7 +9,7 @@ init_test_env "${1:-}" "${2:-}" "royal variant regressions"
 
 variant_available() {
   local variant="$1"
-  probe_variant_available "$ENGINE" "$variant" "$VARIANTS"
+  fsx_enforce_board_status "$(fsx_variant_board_status "$ENGINE" "$variant" "$VARIANTS")" "$ENGINE" "$variant" "$VARIANTS"
 }
 
 tmp_dir=$(mktemp -d)

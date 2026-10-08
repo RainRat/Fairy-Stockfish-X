@@ -146,7 +146,8 @@ bool MovePicker::is_qsearch_tt_move(Move m) const {
   if (pos.evasion_checkers())
       return true;
 
-  if (depth <= DEPTH_QS_RECAPTURES && to_sq(m) != recaptureSquare)
+  if (depth <= DEPTH_QS_RECAPTURES
+      && !pos.matches_recapture_square(m, recaptureSquare))
       return false;
 
   return pos.capture_or_promotion(m)
@@ -210,33 +211,17 @@ void MovePicker::score() {
       int delta = distance_to_goal(from) - distance_to_goal(to);
       return delta > 0 ? 900 * delta : 0;
   };
-  auto points_capture_bonus = [&](Piece captured) {
-      if (!pos.points_counting())
-          return 0;
-      if (captured == NO_PIECE)
-          return 0;
-      int pts = pos.variant()->piecePoints[type_of(captured)];
-      int signedPts = 0;
-      switch (pos.points_rule_captures())
-      {
-          case POINTS_US:        signedPts =  pts; break;
-          case POINTS_THEM:      signedPts = -pts; break;
-          case POINTS_OWNER:     signedPts =  color_of(captured) == pos.side_to_move() ? pts : -pts; break;
-          case POINTS_NON_OWNER: signedPts =  color_of(captured) == pos.side_to_move() ? -pts : pts; break;
-          case POINTS_NONE:      signedPts = 0; break;
-      }
-      if (pos.points_goal() > 0)
-      {
-          if (pos.points_goal_value() < VALUE_ZERO)
-              signedPts = -signedPts;
-          else if (pos.points_goal_value() == VALUE_ZERO)
-              signedPts = 0;
-      }
-      return 20 * signedPts;
-  };
   auto gate_history_bonus = [&](Move mv) {
       const Square gate = gate_history_square(mv);
       return gate != SQ_NONE ? (*gateHistory)[pos.side_to_move()][gate] : 0;
+  };
+  // Ordering weight for variant points lives here in MovePicker, not in
+  // Position::capture_summary (which reports raw signed points).
+  auto capture_victims = [&](Move mv, int& total, PieceType& topType, int& points) {
+      Position::CaptureSummary summary = pos.capture_summary(mv);
+      total = summary.value;
+      topType = summary.highestType;
+      points = 20 * summary.points;
   };
   auto freeze_target_bonus = [&](Move mv) {
       if (!pos.potions_enabled() || !is_gating(mv))
@@ -260,15 +245,17 @@ void MovePicker::score() {
   for (auto& m : *this)
       if constexpr (Type == CAPTURES)
       {
-          Piece captured = pos.captured_piece(m);
-          Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
-          m.value =  int(PieceValue[MG][victim]) * 6
-                   + points_capture_bonus(captured)
+          int victimVal;
+          PieceType victimType;
+          int pointsBonus;
+          capture_victims(m, victimVal, victimType, pointsBonus);
+          m.value =  victimVal * 6
+                   + pointsBonus
                    + flag_goal_bonus(m)
                    + king_goal_progress_bonus(m)
                    + gate_history_bonus(m)
                    + freeze_target_bonus(m)
-                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][type_of(victim)];
+                   + (*captureHistory)[pos.moved_piece(m)][to_sq(m)][victimType];
       }
 
       else if constexpr (Type == QUIETS)
@@ -293,10 +280,12 @@ void MovePicker::score() {
       {
           if (pos.capture(m))
           {
-              Piece captured = pos.captured_piece(m);
-              Piece victim = captured != NO_PIECE ? captured : pos.piece_on(to_sq(m));
-              m.value =  int(PieceValue[MG][victim])
-                       + points_capture_bonus(captured)
+              int victimVal;
+              PieceType victimType;
+              int pointsBonus;
+              capture_victims(m, victimVal, victimType, pointsBonus);
+              m.value =  victimVal
+                       + pointsBonus
                        + flag_goal_bonus(m)
                        + king_goal_progress_bonus(m)
                        + gate_history_bonus(m)
@@ -497,13 +486,7 @@ top:
   case EVASION_INIT:
       ensure_move_list_storage();
       cur = moveList;
-      // On wrapped boards, between_bb / checker_evasion_targets are not
-      // topology-aware and can miss interposition moves that cross the
-      // seam. Use NON_EVASIONS and rely on the search's legal() filter,
-      // matching the fallback already used by generate<LEGAL>.
-      endMoves = pos.topology_wraps()
-               ? generate_without_potions<NON_EVASIONS>(pos, cur)
-               : generate_without_potions<EVASIONS>(pos, cur);
+      endMoves = generate_without_potions<EVASION_CANDIDATES>(pos, cur);
       evasionBaseEnd = endMoves;
       evasionPotionsDeferred = potions_pending();
       assert_move_list_bounds();
@@ -536,7 +519,7 @@ top:
 
   case QCAPTURE:
       if (select<Best>([&](){ return   depth > DEPTH_QS_RECAPTURES
-                                    || to_sq(*cur) == recaptureSquare; }))
+                                    || pos.matches_recapture_square(*cur, recaptureSquare); }))
           return *(cur - 1);
 
       if (resume_deferred_potions<CAPTURES>(moveList, qcaptureBaseEnd, qcapturePotionsDeferred))

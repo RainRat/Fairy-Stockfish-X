@@ -38,7 +38,6 @@ stalemateValue = loss
 king = -
 checking = false
 startFen = 8/8/8/8/8/8/8/8 w - - 0 1
-stalemateValue = none
 flagPiece = -
 extinctionValue = loss
 extinctionPieceTypes = *
@@ -147,7 +146,11 @@ position fen 8/8/8/8/8/8/8/8 w - - 0 1
 go depth 1
 UCI
 )
-assert_not_contains "$out" "adjudication reason game_end"
+# Empty board: nothing has appeared, so extinction must not trigger. The
+# position stalemates to a draw instead of an extinction loss.
+assert_contains "$out" "adjudication reason stalemate"
+assert_contains "$out" "result cp 0"
+assert_not_contains "$out" "mate -"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" extinction-setup-probe <<'UCI'
 setoption name Verbosity value 2
