@@ -7549,7 +7549,9 @@ bool Position::gives_check_impl(Move m) const {
   if (!is_ok(attackFrom))
       return false;
 
-  if (topology_wraps()
+  // King setup can preserve an existing attack on the opponent's royal.
+  if ((must_drop() && count_in_hand(KING))
+      || topology_wraps()
       || laser_game()
       || has_pushing()
       || has_adjacent_swapping()
