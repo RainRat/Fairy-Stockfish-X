@@ -347,7 +347,8 @@ namespace Stockfish::Eval::NNUE::Features {
 
   bool HalfKAv2Variants::requires_refresh(StateInfo* st, Color perspective, const Position& pos) {
     return st->nnueRefreshNeeded
-        || st->dirtyPiece.piece[0] == make_piece(perspective, pos.nnue_king())
+        || (st->dirtyPiece.dirty_num
+            && st->dirtyPiece.piece[0] == make_piece(perspective, pos.nnue_king()))
         || pos.flip_enclosed_pieces();
   }
 

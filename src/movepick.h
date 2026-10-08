@@ -36,6 +36,11 @@ inline Piece captured_piece_or_on(const Position& pos, Move m) {
 }
 
 inline PieceType captured_type(const Position& pos, Move m) {
+  // A two-step double capture removes two victims; history uses the most
+  // valuable one (matching MovePicker scoring). The is_two_leg() guard keeps
+  // unrelated variants on the original single-lookup path.
+  if (is_two_leg(m))
+      return pos.capture_summary(m).highestType;
   return type_of(captured_piece_or_on(pos, m));
 }
 

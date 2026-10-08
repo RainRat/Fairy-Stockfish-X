@@ -89,6 +89,42 @@ fsx_build_profile() {
     "$arch" "$board" "$all" "$nnue" "$debug" "$optimize" "$compiler" "$compiler_kind"
 }
 
+fsx_build_config_file() {
+  printf '%s/src/.build-config\n' "$1"
+}
+
+# Named executables share src/*.o. Track the object configuration independently
+# of the output name, retaining every other argument and environment flag.
+fsx_build_object_config() {
+  local root_dir="$1" arg
+  shift
+  local -a object_args=()
+  for arg in "$@"; do
+    case "$arg" in
+      EXE=*) ;;
+      *) object_args+=("$arg") ;;
+    esac
+  done
+  fsx_build_signature "$root_dir" shared-objects "${object_args[@]}"
+}
+
+fsx_build_object_config_matches() {
+  local root_dir="$1" config_file expected
+  shift
+  config_file=$(fsx_build_config_file "$root_dir")
+  expected=$(fsx_build_object_config "$root_dir" "$@")
+  [[ -f "$config_file" && "$(cat "$config_file")" == "$expected" ]]
+}
+
+fsx_build_write_object_config() {
+  local root_dir="$1" config_file temp_file
+  shift
+  config_file=$(fsx_build_config_file "$root_dir")
+  temp_file="${config_file}.tmp.$$"
+  fsx_build_object_config "$root_dir" "$@" >"$temp_file"
+  mv -f "$temp_file" "$config_file"
+}
+
 fsx_build_signature_matches() {
   local root_dir="$1"
   local output_file="$2"

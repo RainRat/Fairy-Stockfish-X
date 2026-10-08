@@ -178,6 +178,24 @@ namespace Stockfish::Eval::NNUE {
     #endif
 
    public:
+    FeatureTransformer() {
+      // Only the active variant's columns are read or indexed. The compiled
+      // maximum is much larger, especially on very large boards.
+      const std::size_t dimensions = FeatureSet::get_dimensions();
+      weights = static_cast<WeightType*>(aligned_large_pages_alloc(
+          HalfDimensions * dimensions * sizeof(WeightType)));
+      psqtWeights = static_cast<PSQTWeightType*>(aligned_large_pages_alloc(
+          PSQTBuckets * dimensions * sizeof(PSQTWeightType)));
+    }
+
+    ~FeatureTransformer() {
+      aligned_large_pages_free(weights);
+      aligned_large_pages_free(psqtWeights);
+    }
+
+    FeatureTransformer(const FeatureTransformer&) = delete;
+    FeatureTransformer& operator=(const FeatureTransformer&) = delete;
+
     // Output type
     using OutputType = TransformedFeatureType;
 
@@ -196,6 +214,9 @@ namespace Stockfish::Eval::NNUE {
 
     // Read network parameters
     bool read_parameters(std::istream& stream) {
+
+      if (!weights || !psqtWeights)
+        return false;
 
       read_little_endian<BiasType      >(stream, biases     , HalfDimensions                  );
       read_little_endian<WeightType    >(stream, weights    , HalfDimensions * FeatureSet::get_dimensions());
@@ -606,8 +627,8 @@ namespace Stockfish::Eval::NNUE {
     }
 
     alignas(CacheLineSize) BiasType biases[HalfDimensions];
-    alignas(CacheLineSize) WeightType weights[HalfDimensions * InputDimensions];
-    alignas(CacheLineSize) PSQTWeightType psqtWeights[InputDimensions * PSQTBuckets];
+    WeightType* weights;
+    PSQTWeightType* psqtWeights;
   };
 
 }  // namespace Stockfish::Eval::NNUE

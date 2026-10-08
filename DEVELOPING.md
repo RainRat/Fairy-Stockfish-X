@@ -82,6 +82,12 @@ without a GUI-compatibility review:
   move is skipped.
 - **`go searchmoves`**: tokens that match no legal move select nothing. A
   list with no legal match searches no moves (`bestmove (none)`).
+- **`go` numeric limits** (`depth`, `nodes`, `mate`, `perft`, `movetime`,
+  `movestogo`, `wtime`/`btime`, `winc`/`binc`, UCCI/USI time fields):
+  malformed or negative values reject just that command with an
+  `info string error: ...` diagnostic; the engine stays alive and answers
+  the next command. This mirrors upstream's fail-fast spirit without
+  upstream's abort, which would lose GUI games.
 - **Python (`pyffish`)**: whole-request rejection. A bad move in the list
   raises `ValueError` and applies nothing.
 - **JS (`ffish.js`)**: per-call choice. `push` returns `false` per move,

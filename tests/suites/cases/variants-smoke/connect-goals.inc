@@ -61,4 +61,16 @@ UCI
 )
 assert_nodes "$out" 0
 
+# Lines-of-action edge adjacency: h1 must not wrap-connect to a2. With only
+# those two knights on the board, a wrap bug would see white as already
+# connected (terminal, 0 moves); the correct 8 moves prove otherwise.
+if variant_available "$ENGINE" linesofaction "$VARIANTS"; then
+out=$(run_uci "$ENGINE" "$VARIANTS" linesofaction <<'UCI'
+position fen 8/8/8/8/8/8/N7/7N w - - 0 1
+go perft 1
+UCI
+)
+assert_nodes "$out" 8
+fi
+
 echo "wrapped connect win regressions passed"

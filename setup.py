@@ -11,7 +11,13 @@ if platform.python_compiler().startswith("MSC"):
     args = ["/std:c++17"]
 else:
     args = ["-std=c++17", "-Wno-date-time"]
-    if "clang" not in os.environ.get("CXX", "").lower():
+    # VERY_LARGE_BOARDS widens PieceSet to two words, whose loops trip a GCC 11
+    # LTO internal compiler error (compute_live_loop_exits) in the link-time
+    # optimizer. VLB pyffish is a developer/test configuration (no CI wheels),
+    # so build it without LTO. Native make builds are unaffected.
+    very_large = "VERY_LARGE_BOARDS" in (os.environ.get("CXXFLAGS", "")
+                                         + os.environ.get("CFLAGS", ""))
+    if "clang" not in os.environ.get("CXX", "").lower() and not very_large:
         args.append("-flto")
 
 args.extend(["-DLARGEBOARDS", "-DALLVARS", "-DPRECOMPUTED_MAGICS", "-DNNUE_EMBEDDING_OFF"])

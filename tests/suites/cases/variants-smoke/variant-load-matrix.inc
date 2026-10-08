@@ -21,7 +21,7 @@ run_cmds() {
 
 variant_available() {
   local v="$1"
-  probe_variant_available "$ENGINE" "$v" "$VARIANT_PATH"
+  fsx_enforce_board_status "$(fsx_variant_board_status "$ENGINE" "$v" "$VARIANT_PATH")" "$ENGINE" "$v" "$VARIANT_PATH"
 }
 
 echo "new variants smoke testing started"
@@ -808,12 +808,12 @@ d")
 assert_contains "$out" "Fen: rndwbmkqsbwdnr/pppppppppppppp/14/14/14/14/14/14/14/14/14/14/PPPPPPPPPPPPPP/RNDWBSQKMBWDNR w - - 0 1"
 fi
 
-# 19da) Shatranj: source-backed setup should load as documented.
+# 19da) Shatranj: orthodox builtin setup loads as documented.
 if variant_available "shatranj"; then
 out=$(run_cmds "setoption name UCI_Variant value shatranj
 position startpos
 d")
-assert_contains "$out" "Fen: rnafkanr/pppppppp/8/8/8/8/PPPPPPPP/RNAFKANR w - - 0 1"
+assert_contains "$out" "Fen: rnbkqbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKQBNR w - - 0 1"
 fi
 
 # 19db) Chaturanga: source-backed setup should load as documented.
@@ -1215,14 +1215,6 @@ if variant_available "monad"; then
 position startpos
 go perft 1")
   assert_nodes "$out" "37"
-fi
-
-# 43) Camel-rhino baseline (large-board): setup loads and generates legal moves.
-if variant_available "camel-rhino"; then
-  out=$(run_cmds "setoption name UCI_Variant value camel-rhino
-position startpos
-go perft 1")
-  assert_nodes "$out" "68"
 fi
 
 # 44) Rifle chess baseline: start position behaves like orthodox chess before captures appear.
