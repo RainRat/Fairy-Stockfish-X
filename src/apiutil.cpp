@@ -17,6 +17,7 @@
 */
 
 #include "apiutil.h"
+#include "direction_pair.h"
 
 #include <iomanip>
 
@@ -137,7 +138,9 @@ const char* walling_name(WallingRule v) {
     static const char* names[] = {"none", "arrow", "duck", "edge", "past", "static"};
     return names[int(v)];
 }
-const char* chasing_name(ChasingRule v) { return v == AXF_CHASING ? "axf" : "none"; }
+const char* chasing_name(ChasingRule v) {
+    return v == AXF_CHASING ? "axf" : v == ALL_ATTACKS_CHASING ? "all" : "none";
+}
 const char* material_counting_name(MaterialCounting v) {
     static const char* names[] = {"none", "janggi", "unweighted", "whiteDrawOdds", "blackDrawOdds"};
     return names[int(v)];
@@ -212,6 +215,52 @@ std::string castling_rights_json(CastlingRights rights) {
          + ",\"queenSide\":" + boolean(bool(rights & WHITE_OOO))
          + "},\"black\":{\"kingSide\":" + boolean(bool(rights & BLACK_OO))
          + ",\"queenSide\":" + boolean(bool(rights & BLACK_OOO)) + "}}";
+}
+
+// Canonical White-relative direction-pair list for a direction-pair mask.
+// Index order matches KingDirections (see king_step_name); Black
+// masks are the same pairs point-reflected 180 degrees.
+std::string direction_pair_mask_json(uint64_t mask) {
+    if (mask == ~0ULL)
+        return quote("*");
+    std::ostringstream pairs;
+    bool first = true;
+    for (int d1 = 0; d1 < 8; ++d1)
+        for (int d2 = 0; d2 < 8; ++d2)
+            if (mask & two_leg_direction_pair_bit(d1, d2)) {
+                if (!first) pairs << ',';
+                first = false;
+                pairs << king_step_name(d1) << '>' << king_step_name(d2);
+            }
+    return quote(pairs.str());
+}
+
+std::string two_step_moves_json(const Variant& v) {
+    std::ostringstream out;
+    out << '{';
+    bool first = true;
+    for (int i = 1; i < PIECE_TYPE_NB; ++i)
+        if (v.twoStepMoves[i].relative)
+            field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(),
+                  direction_pair_mask_json(v.twoStepMoves[i].relative));
+    out << '}';
+    return out.str();
+}
+
+std::string hook_moves_json(const Variant& v) {
+    std::ostringstream out;
+    out << '{';
+    bool first = true;
+    for (int i = 1; i < PIECE_TYPE_NB; ++i)
+        if (v.hookMoves[i].directions.relative) {
+            std::ostringstream spec;
+            spec << "{\"pairs\":" << direction_pair_mask_json(v.hookMoves[i].directions.relative)
+                 << ",\"firstRange\":" << v.hookMoves[i].firstRange
+                 << ",\"secondRange\":" << v.hookMoves[i].secondRange << '}';
+            field(out, first, variant_piece_type_name(v, PieceType(i)).c_str(), spec.str());
+        }
+    out << '}';
+    return out.str();
 }
 
 } // namespace
@@ -306,6 +355,8 @@ std::string variant_info_json(const std::string& name) {
     field(movement, b, "makpongRule", boolean(v.makpongRule));
     field(movement, b, "flyingGeneral", boolean(v.flyingGeneral));
     field(movement, b, "soldierPromotionRank", std::to_string(int(v.soldierPromotionRank) + 1));
+    field(movement, b, "twoStepMoves", two_step_moves_json(v));
+    field(movement, b, "hookMoves", hook_moves_json(v));
     movement << '}'; field(out, first, "movement", movement.str());
 
     std::ostringstream promotion; promotion << '{'; b = true;
@@ -337,6 +388,8 @@ std::string variant_info_json(const std::string& name) {
     field(promotion, b, "steal", boolean(v.promotionSteal));
     field(promotion, b, "requireInHand", boolean(v.promotionRequireInHand));
     field(promotion, b, "consumeInHand", boolean(v.promotionConsumeInHand));
+    field(promotion, b, "declineRule", boolean(v.promotionDeclineRule));
+    field(promotion, b, "declineFinalRankRetryTypes", piece_set_json(v.promotionDeclineFinalRankRetryTypes));
     promotion << '}'; field(out, first, "promotion", promotion.str());
 
     std::ostringstream capture; capture << '{'; b = true;
@@ -359,6 +412,10 @@ std::string variant_info_json(const std::string& name) {
     field(capture, b, "rifle", boolean(v.rifleCapture));
     field(capture, b, "selfCapture", color_bools(v.selfCapture[WHITE], v.selfCapture[BLACK]));
     field(capture, b, "selfCaptureTypes", color_piece_sets(v.selfCaptureTypes[WHITE], v.selfCaptureTypes[BLACK]));
+    field(capture, b, "lionMoveTypes", piece_set_json(v.lionMoveTypes));
+    field(capture, b, "lionCapturingRule", boolean(v.lionCapturingRule));
+    field(capture, b, "lionInsignificantPieces", piece_set_json(v.lionInsignificantPieces));
+    field(capture, b, "lionCounterstrikeIfUnprotected", boolean(v.lionCounterstrikeIfUnprotected));
     capture << '}'; field(out, first, "capture", capture.str());
 
     std::ostringstream castling; castling << '{'; b = true;
@@ -418,6 +475,9 @@ std::string variant_info_json(const std::string& name) {
     field(end, b, "nMoveRule", std::to_string(v.nMoveRule));
     field(end, b, "nMoveRuleTypes", color_piece_sets(v.nMoveRuleTypes[WHITE], v.nMoveRuleTypes[BLACK]));
     field(end, b, "nFoldRule", std::to_string(v.nFoldRule));
+    field(end, b, "bareKingRule", boolean(v.bareKingRule));
+    field(end, b, "bareKingExemptTypes", piece_set_json(v.bareKingExemptTypes));
+    field(end, b, "bareKingDeadTypes", piece_set_json(v.bareKingDeadTypes));
     field(end, b, "nFoldValue", quote(value_name(v.nFoldValue)));
     field(end, b, "nFoldValueAbsolute", boolean(v.nFoldValueAbsolute));
     field(end, b, "perpetualCheckIllegal", boolean(v.perpetualCheckIllegal));

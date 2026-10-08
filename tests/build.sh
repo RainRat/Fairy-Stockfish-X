@@ -28,11 +28,65 @@ OUTPUT_FILE=$(fsx_build_output_path "$ROOT_DIR" "$EXE")
 BUILD_SIGNATURE=$(fsx_build_signature "$ROOT_DIR" "$OUTPUT_FILE" "$@")
 BUILD_PROFILE=$(fsx_build_profile "$@")
 
+# Board family the fresh binary must exhibit. One engine spawn; turns a
+# silent wrong-family link (stale shared src/*.o under a new EXE name) into
+# a loud build error at the point of occurrence.
+verify_build_board_family() {
+    local board=normal
+    if [[ "${BUILD_PROFILE}" == *"board=very-large"* ]]; then
+        board=very-large
+    elif [[ "${BUILD_PROFILE}" == *"board=large"* ]]; then
+        board=large
+    fi
+
+    local catalog
+    if ! catalog=$(printf 'uci\nsetoption name VariantPath value %s\nuci\nquit\n' \
+        "${ROOT_DIR}/src/variants.ini" \
+        | timeout "${FSX_BUILD_PROBE_TIMEOUT:-60s}" "${OUTPUT_FILE}" 2>&1); then
+        echo "FAILED: ${EXE} board-family probe did not run (profile: ${BUILD_PROFILE})" >&2
+        return 1
+    fi
+
+    local has_shogi=1 has_chu=1 has_hex16=1
+    grep -q "var shogi\\([ ,]\\|\$\\)" <<<"${catalog}" || has_shogi=0
+    grep -q "var chu_shogi\\([ ,]\\|\$\\)" <<<"${catalog}" || has_chu=0
+    grep -q "var hex-16x16\\([ ,]\\|\$\\)" <<<"${catalog}" || has_hex16=0
+    local fail=""
+    case "${board}" in
+        very-large)
+            (( has_shogi )) || fail="expected shogi in catalog"
+            (( has_chu )) || fail="expected chu_shogi in catalog"
+            (( has_hex16 )) || fail="expected hex-16x16 in catalog"
+            ;;
+        large)
+            (( has_shogi )) || fail="expected shogi in catalog"
+            (( ! has_chu )) || fail="large binary must skip chu_shogi"
+            (( ! has_hex16 )) || fail="non-VLB binary must skip hex-16x16"
+            ;;
+        *)
+            (( ! has_shogi )) || fail="plain binary must skip shogi"
+            (( ! has_chu )) || fail="plain binary must skip chu_shogi"
+            (( ! has_hex16 )) || fail="plain binary must skip hex-16x16"
+            ;;
+    esac
+    if [[ -n "${fail}" ]]; then
+        echo "FAILED: ${EXE} board-family mismatch (profile: ${BUILD_PROFILE}): ${fail}" >&2
+        return 1
+    fi
+}
+
 validate_build_output() {
     if [[ ! -s "${OUTPUT_FILE}" || ! -x "${OUTPUT_FILE}" ]]; then
         echo "FAILED: ${EXE} build did not produce a runnable, non-empty executable" >&2
         exit 1
     fi
+    if [[ "${COMPILER_KIND}" == mingw ]]; then
+        case "$(uname -s)" in
+            MINGW*|MSYS*|CYGWIN*) ;;
+            *) echo "Skipping runtime board-family probe for MinGW cross-build."; return ;;
+        esac
+    fi
+    verify_build_board_family
 }
 
 echo "Building ${EXE}..."

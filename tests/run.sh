@@ -12,10 +12,15 @@ source "${ROOT_DIR}/tests/lib/build-signature.sh"
 # engine-rules) inherit this. Override with JOBS=N.
 export JOBS="${JOBS:-$(nproc 2>/dev/null || echo 2)}"
 
+# Outer suite timeouts are backstops only: each must comfortably exceed the
+# sum of its inner case timeouts in tests/lib/suite.sh (currently 12/46/48/
+# 52/24/40/12/91/42/5 min), so a slow-but-progressing machine fails individual
+# cases on their own limits instead of tripping the suite wrapper first.
+# Keep this invariant (~1.5x inner sum) when adding cases.
 declare -A SUITE_TIMEOUT=(
-  [config]=300 [movement]=900 [royal-legality]=900 [captures-effects]=600
-  [promotion-drops]=600 [state-transitions]=900 [notation-protocol]=300
-  [variants-smoke]=2400 [search-evaluation]=900 [spells]=300
+  [config]=1200 [movement]=4200 [royal-legality]=4500 [captures-effects]=4800
+  [promotion-drops]=2400 [state-transitions]=3600 [notation-protocol]=1200
+  [variants-smoke]=8400 [search-evaluation]=3900 [spells]=600
 )
 declare -A SUITE_FAMILY=(
   [config]=large [movement]=large [royal-legality]=large [captures-effects]=large

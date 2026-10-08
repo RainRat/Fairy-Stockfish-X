@@ -403,6 +403,7 @@ capture_allowed_only_ini=$(mktemp)
 dropnomate_alias_ini=$(mktemp)
 bad_rider_range_val_ini=$(mktemp)
 bad_tuple_atom_ini=$(mktemp)
+bad_hook_ini=$(mktemp)
 unsupported_bent_rose_modifier_ini=$(mktemp)
 bad_ini_syntax_option_ini=$(mktemp)
 bad_check_counting_ini=$(mktemp)
@@ -416,7 +417,7 @@ bad_none_result_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${bad_none_result_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${bad_hook_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${bad_none_result_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -507,6 +508,113 @@ customPiece3 = c:(0,0)
 
 [tuple-atom-4:chess]
 customPiece4 = d:(999,1)
+INI
+
+cat > "${bad_hook_ini}" <<'INI'
+[bad-hook-leg:chess]
+customPiece1 = h:0
+hookMoves = h:X
+
+[bad-hook-geometry:chess]
+customPiece1 = h:0
+hookMoves = h:sB-R
+
+[bad-hook-limit:chess]
+customPiece1 = h:0
+hookMoves = h:R-R:3
+
+[bad-hook-no-turn:chess]
+customPiece1 = h:0
+hookMoves = h:fR-bR
+
+[bad-twostep-empty-list:chess]
+customPiece1 = l:0
+twoStepMoves = l:,
+
+[bad-twostep-repeated-comma:chess]
+customPiece1 = l:0
+twoStepMoves = l:N>N,,E>E
+
+[hook-bounded-diagonal-legs:chess]
+customPiece1 = h:0
+hookMoves = h:B2-R
+castling = false
+
+[bad-two-leg-mandatory-demotion:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+mandatoryPiecePromotion = true
+pieceDemotion = true
+promotedPieceType = p:h
+
+[bad-hook-wrapped:chess]
+king = -
+customPiece1 = h:0
+hookMoves = h:R-R
+cylindrical = true
+startFen = 8/8/8/8/4H3/8/8/8 w - - 0 1
+immobile = -
+castling = false
+doubleStep = false
+
+[bad-hook-toroidal:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+toroidal = true
+
+[bad-hook-suffix:chess]
+customPiece1 = h:0
+hookMoves = h:R-R:2
+
+[hook-twoboards-single:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+twoBoards = true
+
+[bad-twostep-twoboards:chess]
+customPiece1 = l:0
+twoStepMoves = l:N>N
+twoBoards = true
+
+[hook-parent:chess]
+customPiece1 = h:0
+castling = false
+
+[bad-inherited-hook-wrapped:hook-parent]
+hookMoves = h:R-R
+cylindrical = true
+
+[bad-inherited-lion-twoboards:hook-parent]
+twoStepMoves = h:N>N
+twoBoards = true
+
+[hook-clear-parent:chess]
+customPiece1 = h:0
+hookMoves = h:R-R
+
+[inherited-hook-cleared:hook-clear-parent]
+hookMoves = h:-
+twoBoards = true
+castling = false
+
+[lion-clear-parent:chess]
+customPiece1 = l:0
+twoStepMoves = l:N>N
+
+[inherited-lion-cleared:lion-clear-parent]
+twoStepMoves = l:-
+twoBoards = true
+castling = false
+
+[bad-bare-king-without-royals:chess]
+bareKingRule = true
+
+[bare-king-with-royals:chess]
+bareKingRule = true
+pseudoRoyalTypes = k
+
+[bad-bare-king-cleared-royals:bare-king-with-royals]
+pseudoRoyalTypes = -
 INI
 
 cat > "${unsupported_bent_rose_modifier_ini}" <<'INI'
@@ -813,6 +921,63 @@ assert_contains "${bad_tuple_atom_output3}" "unknown variant 'tuple-atom-3'; kee
 bad_tuple_atom_output4=$(run_uci "$ENGINE" "$bad_tuple_atom_ini" "tuple-atom-4" </dev/null 2>&1 || true)
 assert_contains "${bad_tuple_atom_output4}" "unknown variant 'tuple-atom-4'; keeping 'chess'"
 
+bad_hook_output1=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-leg" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output1}" "unknown variant 'bad-hook-leg'; keeping 'chess'"
+
+bad_hook_output2=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-geometry" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output2}" "unknown variant 'bad-hook-geometry'; keeping 'chess'"
+
+bad_hook_output3=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-limit" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output3}" "unknown variant 'bad-hook-limit'; keeping 'chess'"
+
+bad_hook_no_turn_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-no-turn" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_no_turn_output}" "unknown variant 'bad-hook-no-turn'; keeping 'chess'"
+
+bad_hook_output4=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-wrapped" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output4}" "unknown variant 'bad-hook-wrapped'; keeping 'chess'"
+
+bad_hook_toroidal_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-toroidal" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_toroidal_output}" "unknown variant 'bad-hook-toroidal'; keeping 'chess'"
+
+bad_hook_output5=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-hook-suffix" </dev/null 2>&1 || true)
+assert_contains "${bad_hook_output5}" "unknown variant 'bad-hook-suffix'; keeping 'chess'"
+
+bad_twostep_twoboards_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-twostep-twoboards" </dev/null 2>&1 || true)
+assert_contains "${bad_twostep_twoboards_output}" "unknown variant 'bad-twostep-twoboards'; keeping 'chess'"
+
+bad_inherited_hook_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-inherited-hook-wrapped" </dev/null 2>&1 || true)
+assert_contains "${bad_inherited_hook_output}" "unknown variant 'bad-inherited-hook-wrapped'; keeping 'chess'"
+
+bad_inherited_lion_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bad-inherited-lion-twoboards" </dev/null 2>&1 || true)
+assert_contains "${bad_inherited_lion_output}" "unknown variant 'bad-inherited-lion-twoboards'; keeping 'chess'"
+
+inherited_hook_cleared_output=$(run_uci "$ENGINE" "$bad_hook_ini" "inherited-hook-cleared" </dev/null 2>&1 || true)
+assert_not_contains "${inherited_hook_cleared_output}" "unknown variant 'inherited-hook-cleared'"
+
+inherited_lion_cleared_output=$(run_uci "$ENGINE" "$bad_hook_ini" "inherited-lion-cleared" </dev/null 2>&1 || true)
+assert_not_contains "${inherited_lion_cleared_output}" "unknown variant 'inherited-lion-cleared'"
+
+for variant in bad-bare-king-without-royals bad-bare-king-cleared-royals; do
+  bare_king_output=$(run_uci "$ENGINE" "$bad_hook_ini" "$variant" </dev/null 2>&1 || true)
+  assert_contains "$bare_king_output" "unknown variant '$variant'; keeping 'chess'"
+done
+bare_king_output=$(run_uci "$ENGINE" "$bad_hook_ini" "bare-king-with-royals" </dev/null 2>&1 || true)
+assert_not_contains "$bare_king_output" "unknown variant 'bare-king-with-royals'"
+
+bad_hook_check_output=$("${ENGINE}" check "${bad_hook_ini}" 2>&1 || true)
+assert_contains "${bad_hook_check_output}" "hookMoves - Malformed hook legs"
+assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook leg"
+assert_contains "${bad_hook_check_output}" "hookMoves - Invalid hook capture limit"
+assert_contains "${bad_hook_check_output}" "hookMoves - Hook legs have no valid direction pairs"
+assert_contains "${bad_hook_check_output}" "twoStepMoves - Empty direction pair in list"
+assert_contains "${bad_hook_check_output}" "hookMoves is not supported on wrapped boards."
+assert_contains "${bad_hook_check_output}" "twoBoards is not supported with multi-capture twoStepMoves."
+assert_contains "${bad_hook_check_output}" "mandatoryPiecePromotion with pieceDemotion is not supported with twoStepMoves or hookMoves."
+assert_contains "${bad_hook_check_output}" "bareKingRule=true requires pseudoRoyalTypes."
+
+run_uci "$ENGINE" "$bad_hook_ini" "hook-twoboards-single" </dev/null >/dev/null
+run_uci "$ENGINE" "$bad_hook_ini" "hook-bounded-diagonal-legs" </dev/null >/dev/null
+
 unsupported_bent_rose_output1=$(run_uci "$ENGINE" "$unsupported_bent_rose_modifier_ini" "unsupported-bent-1" </dev/null 2>&1 || true)
 assert_contains "${unsupported_bent_rose_output1}" "unknown variant 'unsupported-bent-1'; keeping 'chess'"
 
@@ -1062,4 +1227,3 @@ INI
 done
 
 echo "parser regression tests passed"
-
