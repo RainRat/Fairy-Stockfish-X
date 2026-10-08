@@ -56,7 +56,8 @@ a normal-board `stockfish` (via `NORMAL_ENGINE` or a sibling); both fail
 loudly when the binary is missing. Set `FSX_ALLOW_SMALL_BOARD=1` only for
 intentional small-board runs where board-size skips are expected.
 Set `FSX_ALLOW_STALE_ENGINE=1` only to bypass the sources-newer-than-binary
-staleness check (never for results you intend to keep).
+staleness check (never for results you intend to keep). It does not bypass
+wrapper verification or profile checks for named regression engines.
 
 If you prefer standard make, compile from `src/` using `make -j build ...`.
 
