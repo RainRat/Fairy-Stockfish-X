@@ -3,11 +3,15 @@
 # Shared build/configuration helpers for C++ regression harnesses. Source this
 # file after setting ROOT_DIR, ENGINE, CXX, and optionally JOBS.
 #
-# Named engine mappings:
+# Harness object mappings (board family for compiled test objects; the
+# engine binary profiles themselves are verified by tests/run.sh and
+# tests/regression-runner.sh, e.g. stockfish-large is board=large/all=no and
+# stockfish-allvars is board=large/all=yes/nnue=no while the harnesses below
+# build objects with all=yes and, for allvars/vlb, nnue=yes for NNUE paths):
 #   stockfish       normal board, standard variants
-#   stockfish-large large board, all variants
-#   stockfish-allvars large board, all variants, NNUE-enabled executable
-#   stockfish-vlb   very-large board, all variants, NNUE-enabled executable
+#   stockfish-large large board, all variants (objects)
+#   stockfish-allvars large board, all variants, NNUE-enabled objects
+#   stockfish-vlb   very-large board, all variants, NNUE-enabled objects
 # Unknown engine names reuse the existing position.o board-family probe and
 # require their object family to have been prepared by the caller.
 

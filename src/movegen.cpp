@@ -637,7 +637,12 @@ namespace {
                 while (epSquares)
                 {
                     Square epSquare = pop_lsb(epSquares);
-                    if (Type == EVASIONS && (target & (epSquare + Up)) && !pos.non_sliding_riders())
+                    // Freeze/trap/blast can resolve check without capture/block; keep
+                    // all candidates and let legal() decide (target is AllSquares).
+                    bool effectBroadened = pos.variant()->freezePieceTypes || pos.variant()->trapRegion
+                                            || pos.blast_on_move() || pos.blast_on_self_destruct()
+                                            || pos.blast_on_capture();
+                    if (Type == EVASIONS && !effectBroadened && (target & (epSquare + Up)) && !pos.non_sliding_riders())
                         continue;
                     moveList = make_move_and_gating<EN_PASSANT, Type>(pos, moveList, Us, from, epSquare);
                 }
@@ -818,8 +823,12 @@ namespace {
         {
             Square epSquare = pop_lsb(epSquares);
 
-            // An en passant capture cannot resolve a discovered check (unless there are non-sliding riders)
-            if (Type == EVASIONS && (target & (epSquare + Up)) && !pos.non_sliding_riders())
+            // An en passant capture cannot resolve a discovered check (unless there are non-sliding riders).
+            // Freeze/trap/blast can resolve check without capture/block; keep candidates for legal().
+            bool effectBroadened = pos.variant()->freezePieceTypes || pos.variant()->trapRegion
+                                    || pos.blast_on_move() || pos.blast_on_self_destruct()
+                                    || pos.blast_on_capture();
+            if (Type == EVASIONS && !effectBroadened && (target & (epSquare + Up)) && !pos.non_sliding_riders())
                 continue;
 
             Bitboard b = pawns & pawn_attacks_bb(Them, epSquare);
@@ -1149,8 +1158,13 @@ namespace {
     }
     else if constexpr (Type == EVASIONS)
     {
+        // Freeze/trap/blast can resolve check without capture/block; keep
+        // all candidates and let legal() decide, mirroring generate_all_impl.
+        bool effectBroadened = pos.variant()->freezePieceTypes || pos.variant()->trapRegion
+                               || pos.blast_on_move() || pos.blast_on_self_destruct()
+                               || pos.blast_on_capture();
         const PieceType royal = pos.royal_piece_type(Us);
-        if (pt != royal)
+        if (pt != royal && !effectBroadened)
         {
             if (more_than_one(checkers))
             {

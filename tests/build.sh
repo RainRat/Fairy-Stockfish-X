@@ -91,6 +91,15 @@ validate_build_output() {
 
 echo "Building ${EXE}..."
 
+# A stale repo-root ./stockfish (ignored build artifact) is a known footgun:
+# shells resolve ./stockfish before src/stockfish when run from the root.
+# The wrapper never writes there, so drop it automatically when it is not
+# the requested output.
+if [[ "${OUTPUT_FILE}" != "${ROOT_DIR}/stockfish" && -e "${ROOT_DIR}/stockfish" ]]; then
+    echo "Removing stale repo-root ./stockfish (use src/${EXE} instead)..."
+    rm -f "${ROOT_DIR}/stockfish"
+fi
+
 if ! fsx_build_object_config_matches "$ROOT_DIR" "$@" \
     || ! fsx_build_signature_matches "$ROOT_DIR" "$OUTPUT_FILE" "$BUILD_SIGNATURE" "$BUILD_PROFILE"; then
     echo "Build configuration changed or artifact is unverified; cleaning objects..."

@@ -519,7 +519,9 @@ extern "C" PyObject* pyffish_gameResult(PyObject* self, PyObject *args) {
         return NULL;
 
     gameEnd = pos.is_immediate_game_end(result);
-    if (!gameEnd && (has_insufficient_material(WHITE, pos) && has_insufficient_material(BLACK, pos)))
+    bool noRoyalDraw = pos.count<KING>() == 0 && pos.king_type() == NO_PIECE_TYPE
+                       && !pos.pseudo_royal_types() && !pos.anti_royal_types();
+    if (!gameEnd && !noRoyalDraw && (has_insufficient_material(WHITE, pos) && has_insufficient_material(BLACK, pos)))
     {
         gameEnd = true;
         result = VALUE_DRAW;

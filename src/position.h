@@ -3209,18 +3209,24 @@ inline Value Position::stalemate_value(int ply) const {
 inline Value Position::checkmate_value(int ply) const {
   assert(var != nullptr);
   // Check for illegal mate by a banned drop type (e.g. shogi pawn-drop mate):
-  // the delivering side fouls, so the mated side wins.
-  PieceSet noMateDrops = drop_no_checkmate_types(~side_to_move());
-  Bitboard bannedCheckers = 0;
-  for (PieceSet ps = noMateDrops; ps; )
-      bannedCheckers |= pieces(pop_lsb(ps));
-  if (    noMateDrops != NO_PIECE_SET
-      && !(evasion_checkers() & ~bannedCheckers)
-      && !st->captured.piece
-      &&  st->pliesFromNull > 0
-      && (st->materialKey != st->previous->materialKey))
+  // the delivering side fouls, so the mated side wins. Test the delivering
+  // move directly: non-capturing promotions/gating also change materialKey.
+  Color deliverer = ~side_to_move();
+  bool delivererDrop = st->pliesFromNull > 0 && is_drop_move(st->move);
+  if (delivererDrop && !st->captured.piece)
   {
-      return mate_in(ply);
+      // Blanket dropMates=false bans all mating drops.
+      if (!var->dropMates.get(deliverer))
+          return mate_in(ply);
+      PieceSet noMateDrops = drop_no_checkmate_types(deliverer);
+      if (noMateDrops != NO_PIECE_SET)
+      {
+          Bitboard bannedCheckers = 0;
+          for (PieceSet ps = noMateDrops; ps; )
+              bannedCheckers |= pieces(deliverer, pop_lsb(ps));
+          if (!(evasion_checkers() & ~bannedCheckers))
+              return mate_in(ply);
+      }
   }
   // Check for shatar mate rule
   if (var->shatarMateRule)

@@ -91,7 +91,10 @@ namespace Stockfish::Eval::NNUE {
     int maxPieces = currentNnueVariant->nnueMaxPieces;
     if (maxPieces <= 0)
         return 0;
-    return std::min((pos.count<ALL_PIECES>() - 1) * 8 / maxPieces, 7);
+    int pieces = pos.count<ALL_PIECES>();
+    if (pieces <= 0)
+        return 0;
+    return std::min((pieces - 1) * 8 / maxPieces, 7);
   }
 
   static void append_trace_cell(std::ostream& os, const std::string& text) {

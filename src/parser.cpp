@@ -1040,7 +1040,7 @@ namespace {
                     }
                     if (RankNum == -1 && FileNum == -1)
                     {
-                        board = Bitboard(-1);
+                        board = AllSquares;
                     }
                     else if (FileNum == -1)
                     {

@@ -37,7 +37,7 @@ Use the smallest suite matching the changed engine area:
 
 The search and evaluation suite requires the NNUE network evaluation file. Download it once with `make -C src net` before running that suite.
 
-The test runner determines board-size requirements from the engine name. In CI, set `FSX_ENGINE_FAMILY=large` when testing a custom binary name that needs large-board support. Set `FSX_ALLOW_SMALL_BOARD=1` only when intentionally running movement smoke tests on a small-board build.
+The test runner determines board-size requirements from the engine name. In CI, set `FSX_ENGINE_FAMILY=large` when testing a custom binary name that needs large-board support. Set `FSX_ALLOW_SMALL_BOARD=1` only when intentionally running movement smoke tests on a small-board build. The full regression runner also honors `VLB_ENGINE`/`NORMAL_ENGINE` overrides and `FSX_ALLOW_STALE_ENGINE=1` for the sources-newer-than-binary check (see `AGENTS.md`).
 
 Other test scripts include: `perft.sh`, `instrumented.sh`, `regression.sh`, `regression-runner.sh`, upstream comparison scripts, and the JavaScript tests in `tests/js/`.
 

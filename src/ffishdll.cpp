@@ -250,6 +250,8 @@ public:
   }
 
   bool is_insufficient_material() const {
+    if (pos.count<KING>() == 0 && pos.king_type() == NO_PIECE_TYPE && !pos.pseudo_royal_types() && !pos.anti_royal_types())
+      return false;
     return Stockfish::has_insufficient_material(WHITE, pos) && Stockfish::has_insufficient_material(BLACK, pos);
   }
 

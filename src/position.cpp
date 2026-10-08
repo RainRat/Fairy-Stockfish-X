@@ -894,6 +894,7 @@ namespace Zobrist {
   Key castling[CASTLING_RIGHT_NB];
   Key side, noPawns;
   Key inHand[PIECE_NB][SQUARE_NB];
+  Key inPrison[PIECE_NB][SQUARE_NB];
   Key checks[COLOR_NB][CHECKS_NB];
   Key committed[COLOR_NB][FILE_NB][PIECE_TYPE_NB];
   Key potionZone[COLOR_NB][Variant::POTION_TYPE_NB][SQUARE_NB];
@@ -1313,6 +1314,14 @@ inline void xor_in_hand_count(Key& k, Piece pc, int oldCount, int newCount, Key*
       *reserveKey ^= diff;
 }
 
+inline void xor_in_prison_count(Key& k, Piece pc, int oldCount, int newCount, Key* reserveKey = nullptr) {
+  Key diff = Zobrist::inPrison[pc][in_hand_zobrist_index(oldCount)]
+           ^ Zobrist::inPrison[pc][in_hand_zobrist_index(newCount)];
+  k ^= diff;
+  if (reserveKey)
+      *reserveKey ^= diff;
+}
+
 inline void xor_points_bucket(Key& k, Color c, int points) {
   if (points < 0)
       return;
@@ -1400,7 +1409,7 @@ Key Position::reserve_key() const {
           if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
               k ^= Zobrist::inHand[pc][in_hand_zobrist_index(pieceCountInHand[c][pt])];
           if (capture_type() == PRISON || prison_pawn_promotion())
-              k ^= Zobrist::inHand[pc][in_hand_zobrist_index(pieceCountInPrison[~c][pt])];
+              k ^= Zobrist::inPrison[pc][in_hand_zobrist_index(pieceCountInPrison[~c][pt])];
       }
 
   return k;
@@ -1549,7 +1558,10 @@ void Position::init() {
   for (Color c : {WHITE, BLACK})
       for (PieceType pt = PAWN; pt <= KING; ++pt)
           for (int n = 0; n < SQUARE_NB; ++n)
+          {
               Zobrist::inHand[make_piece(c, pt)][n] = rng.rand<Key>();
+              Zobrist::inPrison[make_piece(c, pt)][n] = rng.rand<Key>();
+          }
 
   for (Color c : {WHITE, BLACK})
       for (File f = FILE_A; f <= FILE_MAX; ++f)
@@ -2604,7 +2616,7 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
           if (capture_type() == PRISON || prison_pawn_promotion())
           {
               int n = std::clamp(pieceCountInPrison[~c][pt], 0, SQUARE_NB - 1);
-              si->key ^= Zobrist::inHand[pc][n];
+              si->key ^= Zobrist::inPrison[pc][n];
           }
       }
 
@@ -2714,7 +2726,9 @@ Bitboard Position::compute_evasion_checkers_bb(Color side) const {
                     ? attackers_to_king(royalSq, ~side)
                     : Bitboard(0);
 
-  if (!allow_checks() && var->blastPassiveTypes)
+  // Evasion machinery requires a royal square (between_bb/asserts below);
+  // a royal-less side has no king-evasion state even with blast-passive types.
+  if (!allow_checks() && royalSq != SQ_NONE && var->blastPassiveTypes)
       checkers |= passive_blast_checkers(side, pieces());
 
   return checkers;
@@ -8048,8 +8062,14 @@ bool Position::add_capture_transfer(StateInfo* state, Piece transferPiece, Key* 
     else
         add_to_hand(target.hashedPiece);
     if (k)
-        xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1,
-                          state ? &state->reserveKey : nullptr);
+    {
+        if (target.prison)
+            xor_in_prison_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1,
+                                state ? &state->reserveKey : nullptr);
+        else
+            xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1,
+                              state ? &state->reserveKey : nullptr);
+    }
     return true;
 }
 
@@ -8063,7 +8083,12 @@ bool Position::undo_capture_transfer(StateInfo* state, Piece transferPiece, Key*
     else
         remove_from_hand(target.hashedPiece);
     if (k)
-        xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount - 1);
+    {
+        if (target.prison)
+            xor_in_prison_count(*k, target.hashedPiece, target.oldCount, target.oldCount - 1);
+        else
+            xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount - 1);
+    }
     return true;
 }
 
@@ -8072,7 +8097,10 @@ bool Position::simulate_capture_transfer(Key& k, Piece transferPiece, bool suppr
     if (!target.valid)
         return false;
 
-    xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
+    if (target.prison)
+        xor_in_prison_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
+    else
+        xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
     return true;
 }
 
@@ -8110,11 +8138,11 @@ void Position::apply_drop_hash_delta(Key& k, Move m, Piece pc, Color dropColor, 
 
         int prisonOldEx = pieceCountInPrison[sideToMove][exchanged];
         int prisonNewEx = prisonOldEx - 1;
-        xor_in_hand_count(k, exchangedPiece, prisonOldEx, prisonNewEx, reserveKey);
+        xor_in_prison_count(k, exchangedPiece, prisonOldEx, prisonNewEx, reserveKey);
 
         int prisonOldDrop = pieceCountInPrison[~dropColor][type_of(pc)];
         int prisonNewDrop = prisonOldDrop - 1;
-        xor_in_hand_count(k, pc, prisonOldDrop, prisonNewDrop, reserveKey);
+        xor_in_prison_count(k, pc, prisonOldDrop, prisonNewDrop, reserveKey);
     }
 }
 
@@ -8834,13 +8862,19 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           remove_piece(s);
           k ^= Zobrist::psq[flipped][s];
           st->materialKey ^= Zobrist::psq[flipped][pieceCount[flipped]];
-          st->nonPawnMaterial[them] -= PieceValue[MG][flipped];
+          if (type_of(flipped) == PAWN)
+              st->pawnKey ^= Zobrist::psq[flipped][s];
+          else
+              st->nonPawnMaterial[them] -= PieceValue[MG][flipped];
 
           // add our piece
           put_piece(resulting, s);
           k ^= Zobrist::psq[resulting][s];
           st->materialKey ^= Zobrist::psq[resulting][pieceCount[resulting]-1];
-          st->nonPawnMaterial[us] += PieceValue[MG][resulting];
+          if (type_of(resulting) == PAWN)
+              st->pawnKey ^= Zobrist::psq[resulting][s];
+          else
+              st->nonPawnMaterial[us] += PieceValue[MG][resulting];
       }
   }
 
@@ -9134,8 +9168,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               int addedN = add_to_prison(st->promotionPawn);
               int removedN = remove_from_prison(promotion);
               // Keep prison inventory hash in sync with promotion swap.
-              xor_in_hand_count(k, st->promotionPawn, addedN - 1, addedN, &st->reserveKey);
-              xor_in_hand_count(k, promotion, removedN + 1, removedN, &st->reserveKey);
+              xor_in_prison_count(k, st->promotionPawn, addedN - 1, addedN, &st->reserveKey);
+              xor_in_prison_count(k, promotion, removedN + 1, removedN, &st->reserveKey);
           }
 
           int promoDirtyIdx = -1;
@@ -9203,10 +9237,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           }
       }
 
-      // Update pawn hash key
-      st->pawnKey ^= (!dropMove ? Zobrist::psq[pc][from] : 0) ^ Zobrist::psq[pc][to];
-      if (dropMove && paired_drop(m))
-          st->pawnKey ^= Zobrist::psq[pc][secondary_drop_square(m)];
+      // Update pawn hash key (pull/clone mover already hashed above)
+      if (!pullMove && !cloneMove)
+      {
+          st->pawnKey ^= (!dropMove ? Zobrist::psq[pc][from] : 0) ^ Zobrist::psq[pc][to];
+          if (dropMove && paired_drop(m))
+              st->pawnKey ^= Zobrist::psq[pc][secondary_drop_square(m)];
+      }
   }
   else if (is_any_promotion(m))
   {
@@ -10826,6 +10863,8 @@ void Position::do_null_move(StateInfo& newSt) {
 
   st->key ^= Zobrist::side;
   st->boardKey = st->key ^ st->reserveKey;
+  if (var->samePlayerBoardRepetitionIllegal)
+      st->layoutKey = layout_key();
   prefetch(TT.first_entry(key()));
 
   ++st->rule50;

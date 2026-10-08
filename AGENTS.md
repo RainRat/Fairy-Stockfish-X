@@ -37,16 +37,19 @@ tests/build.sh COMP=mingw
 
 `tests/build.sh` verifies that native builds produce a runnable, non-empty executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
 
-Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. When switching board size options, run `make clean`.
+Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. `tests/build.sh` tracks the build configuration and cleans objects automatically when flags change; `make clean` is only needed for direct `make -C src` builds.
 
 For named binaries used by regression scripts:
 
 ```sh
 tests/build.sh ARCH=x86-64-modern EXE=stockfish
 tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
-tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb
+tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 ```
+
+The `nnue=yes` on the very-large-board binary matches the `stockfish-vlb` profile
+expected by `tests/regression-runner.sh`; omitting it fails the profile check.
 
 Build these named test binaries with the wrapper so the test runner can verify their build profiles.
 
@@ -58,11 +61,17 @@ intentional small-board runs where board-size skips are expected.
 Set `FSX_ALLOW_STALE_ENGINE=1` only to bypass the sources-newer-than-binary
 staleness check (never for results you intend to keep). It does not bypass
 wrapper verification or profile checks for named regression engines.
+In CI, set `FSX_ENGINE_FAMILY=large` when testing a custom binary name that
+needs large-board support (see `tests/README.md`).
 
 If you prefer standard make, compile from `src/` using `make -j build ...`.
 
 ## Running the engine
 Use `src/stockfish`; do not rely on a stale repo-root `./stockfish`.
+The warning stays because shells resolve `./stockfish` first when run from the
+root, silently testing an old binary. `tests/build.sh` now removes that stale
+file automatically when it is not the requested output, but direct `make`
+workflows can still leave it behind.
 
 ```uci
 setoption name VariantPath value variants.ini
