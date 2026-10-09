@@ -123,11 +123,6 @@ position fen 4k3/8/8/8/8/3Q4/4P3/4K3 w - - 0 1
 go perft 1
 EOF
 )
-  if ! grep -q "^e2d3: 1$" <<<"$out"; then
-    echo "self-capture-types regression not supported by this build; skipping self-capture-types checks"
-    rm -f "${tmp_ini}" "${tmp_king}"
-    return 0
-  fi
   assert_contains "$out" "^e2d3: 1$"
   assert_not_contains "$out" "^d3e2: 1$"
 
