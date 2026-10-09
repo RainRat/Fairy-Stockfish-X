@@ -105,9 +105,15 @@ namespace {
     Square effectiveTo = (rifleShot || iguiShot) ? from : to;
     Bitboard occupancyAfter = Bitboard(0);
     if (pos.gating() || pos.walling(us))
-        occupancyAfter = from == to && pos.laser_game()
-                       ? pos.pieces()
-                       : pos.simulated_move_info(m, false).placementOccupancy;
+    {
+        if (from == to && pos.laser_game())
+            occupancyAfter = pos.pieces();
+        else if (pos.walling(us) && pos.walling_rule() == DUCK)
+            // Duck is placed after the move's captures and explosion effects.
+            occupancyAfter = pos.simulated_move_info(m).occupiedAfterEffects;
+        else
+            occupancyAfter = pos.simulated_move_info(m, false).placementOccupancy;
+    }
 
     // Wall placing moves
     //if it's "wall or move", and they chose non-null move, skip even generating wall move

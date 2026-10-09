@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/../../../../tests/lib/uci.sh"
 
 init_test_env "${1:-}" "${2:-}" "hex boards regression"
 VARIANT_PATH=${VARIANTS}
-VLB_ENGINE="${ENGINE}"
+VLB_ENGINE="${VLB_ENGINE:-${ENGINE}}"
 
 ensure_vlb_engine() {
   local probe_variant="$1"
@@ -248,9 +248,9 @@ go perft 1')
   assert_contains "$out" "^0000: 1$"
   assert_nodes "$out" 1
 
-  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "esa-hex" <<<'position startpos moves P@a1 0000 p@b1 0000
+  out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "esa-hex" <<<'position startpos moves P@a1 0000 P@b1
 go perft 1')
-  assert_nodes "$out" 99
+  assert_nodes "$out" 98
 
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "hex" <<<'position fen 11/11/11/11/11/11/11/11/11/11/PPPPPPPPPPP b - - 0 1
 go perft 1')

@@ -234,7 +234,7 @@ startFen = 8/6k1/8/8/8/8/P7/4K3 w - - 0 1
 INI
 
 tor_pawn_repro_output=$(run_uci "$ENGINE" "$TMP_VARIANT_PATH" tor-pawn-repro <<'UCI'
-position startpos moves a2a3 g7g6 a3a4 g6g5 a4a5 g5g4 a5a6 g4h3 a6a7 h3g2 a7a8 g2h1 a8a1 h1g2 a1a2 g2g1
+position startpos moves a2a3 g7g6 a3a4 g6g5 a4a5 g5g4 a5a6 g4g3 a6a7 g3g2 a7a8 g2g1 a8a1 g1g8 a1a2 g8g7
 go perft 1
 UCI
 )

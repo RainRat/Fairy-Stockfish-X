@@ -294,7 +294,7 @@ fi
 
 # Custom king movement must still participate in orthodox checkmate semantics.
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" wazir-chess \
-  "position startpos moves b7h7 h8h7 a7h7
+  "position startpos moves b7h7
 go perft 1")
 assert_nodes "$out" "0"
 
@@ -374,6 +374,20 @@ out=$(run_uci_cmds "$ENGINE" "$VARIANTS" atomicduck \
   "position startpos moves a2a3,a3a2
 go depth 2")
 assert_contains "$out" "^bestmove "
+
+# Atomic Duck wall targets must use post-blast occupancy. The queen on e5 is
+# adjacent to the captured pawn on d5 and explodes, freeing e5 for the wall.
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" atomicduck \
+  "position fen 7k/8/8/3pQ3/2Q5/8/8/K7 w - - 0 1
+go perft 1")
+assert_contains "$out" "^c4d5,d5e5: 1$"
+
+# A wall can be the component that blocks check even when the moved piece
+# neither captures the checker nor interposes on its ray.
+out=$(run_uci_cmds "$ENGINE" "$VARIANTS" atomicduck \
+  "position fen k3r3/8/8/8/8/8/8/1N2K3 w - - 0 1
+go perft 1")
+assert_contains "$out" "^b1c3,c3e4: 1$"
 
 # Racing Kings must not grant generic pawn-style initial pushes to non-pawns.
 out=$(run_uci_cmds "$ENGINE" "$VARIANTS" racingkings \

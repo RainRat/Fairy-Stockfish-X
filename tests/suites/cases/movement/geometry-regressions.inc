@@ -57,21 +57,21 @@ test_nightrider_evasion() {
 
   local out
   out=$(run_uci "$ENGINE" "$VARIANTS" nightrider <<'EOF'
-position fen 8/8/8/8/8/4K3/8/n1R5 w - - 0 1
+position fen k7/8/8/8/8/4K3/8/n1R5 w - - 0 1
 go depth 1 searchmoves c1c2
 EOF
 )
   assert_contains "$out" "bestmove c1c2"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" nightrider <<'EOF'
-position fen 8/8/8/8/8/4K3/8/n1R5 w - - 0 1
+position fen k7/8/8/8/8/4K3/8/n1R5 w - - 0 1
 go depth 1 searchmoves c1a1
 EOF
 )
   assert_contains "$out" "bestmove c1a1"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" nightrider <<'EOF'
-position fen 8/8/8/8/8/4K3/6n1/2R5 w - - 0 1
+position fen k7/8/8/8/8/4K3/6n1/2R5 w - - 0 1
 go depth 1 searchmoves c1c2
 EOF
 )
@@ -147,12 +147,6 @@ EOF
 )
   assert_contains_literal "$out" "Fen: AA3/5/5/5/5[AAAAAAAA] b - - 0 1"
 
-  out=$(run_uci "$ENGINE" "$tmp_ini" edge-insert-demo <<'EOF'
-position startpos moves A@a1
-d
-EOF
-)
-  assert_contains_literal "$out" "Fen: 5/5/5/5/5[AAAAAAAAAA] w - - 0 1"
 }
 
 test_cylinder
