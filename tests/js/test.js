@@ -562,6 +562,22 @@ describe('board.result()', function () {
     board.pushSan("Kxd8");
     chai.expect(board.result()).to.equal("1/2-1/2");
 
+    // No-royal variants must not inherit chess's insufficient-material draw.
+    ffish.loadVariantConfig(
+      '[js-no-royal-result:chess]\n'
+      + 'king = -\ncastling = false\npass = true\nnMoveRule = 0\n'
+      + 'startFen = 8/8/8/8/8/8/8/8 w - - 0 1\n'
+    );
+    board.delete();
+    board = new ffish.Board('js-no-royal-result');
+    chai.expect(board.legalMoves()).to.equal('0000');
+    chai.expect(board.hasInsufficientMaterial(true)).to.equal(true);
+    chai.expect(board.hasInsufficientMaterial(false)).to.equal(true);
+    chai.expect(board.isInsufficientMaterial()).to.equal(false);
+    chai.expect(board.isGameOver(false)).to.equal(false);
+    chai.expect(board.result(false)).to.equal('*');
+    chai.expect(board.result(true)).to.equal('*');
+
     // Stalemate with material counting - black draw odds (armageddon)
     board.delete();
     board = new ffish.Board("armageddon");

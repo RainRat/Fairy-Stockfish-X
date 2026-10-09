@@ -114,6 +114,22 @@ class TestBindings(unittest.TestCase):
         )
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_game_result_does_not_infer_draw_without_royals(self):
+        sf.load_variant_config(
+            "[api-no-royal-result:chess]\n"
+            "king = -\n"
+            "castling = false\n"
+            "pass = true\n"
+            "nMoveRule = 0\n"
+            "startFen = 8/8/8/8/8/8/8/8 w - - 0 1\n"
+        )
+        fen = "8/8/8/8/8/8/8/8 w - - 0 1"
+        self.assertEqual(sf.legal_moves("api-no-royal-result", fen, []), ["0000"])
+        self.assertEqual(sf.has_insufficient_material("api-no-royal-result", fen, []),
+                         (True, True))
+        self.assertFalse(sf.is_immediate_game_end("api-no-royal-result", fen, [])[0])
+        self.assertEqual(sf.game_result("api-no-royal-result", fen, []), sf.VALUE_NONE)
+
     def test_load_variant_config_reports_added_count(self):
         # Loading is add-only: redefinitions are skipped, never replaced.
         added = sf.load_variant_config(

@@ -82,7 +82,9 @@ Value public_game_result(Position& pos) {
     Value result = VALUE_NONE;
     if (pos.is_immediate_game_end(result))
         return result;
-    if (has_insufficient_material(WHITE, pos) && has_insufficient_material(BLACK, pos))
+    const bool noRoyalDraw = pos.count<KING>() == 0 && pos.king_type() == NO_PIECE_TYPE
+                          && !pos.pseudo_royal_types() && !pos.anti_royal_types();
+    if (!noRoyalDraw && has_insufficient_material(WHITE, pos) && has_insufficient_material(BLACK, pos))
         return VALUE_DRAW;
     if (pos.is_optional_game_end(result))
         return result;
@@ -1557,6 +1559,15 @@ void adjudication() {
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "immediate n-move rule did not return a draw");
 
+    set_position(pos, states, "no-royal-insufficient",
+                 "8/8/8/8/8/8/8/8 w - - 0 1");
+    check(has_insufficient_material(WHITE, pos) && has_insufficient_material(BLACK, pos),
+          "no-royal pass position did not trigger both insufficient-material predicates");
+    check(MoveList<LEGAL>(pos).size() > 0, "no-royal pass position has no legal move");
+    check(!pos.is_immediate_game_end(result), "no-royal pass position immediately ended");
+    check(public_game_result(pos) == VALUE_NONE,
+          "no-royal position was incorrectly drawn for insufficient material");
+
     // Dobutsu's official rules make Try a win only when the Lion cannot be
     // immediately captured; an unsafe arrival is neither a win nor a loss.
     // https://joshi-shogi.com/5965/
@@ -1803,6 +1814,13 @@ startFen = 8/8/8/8/8/8/PP6/8 w - - 0 1
 nMoveRuleImmediate = 1
 nMoveRule = 0
 startFen = k3r3/8/8/8/8/8/8/4K3 w - - 2 1
+
+[no-royal-insufficient:chess]
+king = -
+castling = false
+pass = true
+nMoveRule = 0
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 
 [mixed-goal-simul:fairy]
 maxFile = d
