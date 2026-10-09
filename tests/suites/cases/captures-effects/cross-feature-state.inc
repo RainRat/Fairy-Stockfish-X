@@ -236,6 +236,20 @@ CMDS
   assert_contains_literal "$output" "Fen: 4/4/2e1/4[EEEEEEEEEEEeeeeeeeeeee] w - - 0 3 {2 1}"
 
   output=$(run_uci "$ENGINE" "$VARIANTS" pond <<'CMDS'
+position fen 4/4/F1F1/4[E] w - - 0 1 {0 0} moves E@b2
+d
+CMDS
+)
+  assert_contains_literal "$output" "Fen: 4/4/4/4[] b - - 0 1 {3 0}"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" pond <<'CMDS'
+position fen 4/4/T1T1/1T2[] w - - 0 1 {0 0} moves b1b2
+d
+CMDS
+)
+  assert_contains_literal "$output" "Fen: 4/4/FTF1/4[] b - - 1 1 {0 0}"
+
+  output=$(run_uci "$ENGINE" "$VARIANTS" pond <<'CMDS'
 position fen 4/4/1Tt1/4[] w - - 0 1 {0 0}
 go perft 1
 CMDS
