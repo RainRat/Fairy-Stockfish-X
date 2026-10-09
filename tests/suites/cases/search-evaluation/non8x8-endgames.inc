@@ -37,6 +37,7 @@ startFen = 5/5/5/5/K3k w - - 0 1
 maxFile = 10
 maxRank = 8
 castling = false
+startFen = 9k/10/10/10/10/10/10/9K w - - 0 1
 INI
 tmp_ini="${FSX_TMP_INI}"
 
