@@ -255,12 +255,22 @@ fsx_harness_build() {
   local output_file="$2"
   local label="$3"
   local signature_file="${4:-${output_file}.sig}"
+  if (($# > 3)); then
+    shift 4
+  else
+    shift "$#"
+  fi
+  local -a extra_sources=("$@")
   local signature
   local extra_cxxflags=()
 
   read -r -a extra_cxxflags <<<"${CXXFLAGS:-}"
 
   signature=$(fsx_harness_signature "${label}" "${source_file}")
+  local extra_source
+  for extra_source in "${extra_sources[@]}"; do
+    signature+="|${extra_source}=$(fsx_harness_hash_file "${extra_source}")"
+  done
   if [[ -x "${output_file}" && -f "${signature_file}" \
       && "$(<"${signature_file}")" == "${signature}" ]]; then
     return 0
@@ -272,7 +282,7 @@ fsx_harness_build() {
     "${FSX_HARNESS_CXX}" "${extra_cxxflags[@]}" -std=c++17 -O2 -Wall -Wextra -flto \
       -I"${FSX_HARNESS_ROOT_DIR}/src" -I"${FSX_HARNESS_ROOT_DIR}/tests/lib" \
       "${FSX_HARNESS_CXX_DEFS[@]}" "${source_file}" \
-      "${FSX_HARNESS_OBJ_FILES[@]}" -pthread -o "${output_file}"
+      "${extra_sources[@]}" "${FSX_HARNESS_OBJ_FILES[@]}" -pthread -o "${output_file}"
   )
   printf '%s\n' "${signature}" > "${signature_file}"
 }
