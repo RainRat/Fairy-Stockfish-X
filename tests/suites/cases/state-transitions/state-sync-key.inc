@@ -240,14 +240,16 @@ startFen = 4k3/8/8/8/8/8/8/4K3[Q] w - - 0 1
 
 [dropsym:chess]
 pieceDrops = true
+symmetricDropTypes = r
 castling = false
-startFen = 4k3/8/8/8/8/8/8/4K3[Rr] w - - 0 1
+startFen = 4k3/8/8/8/8/8/8/4K3[RR] w - - 0 1
 
 [exsync:chess]
 pieceDrops = true
+captureType = prison
+hostageExchange = p:p
 castling = false
-capturesToHand = true
-startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
+startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k w - - 0 1
 
 [commitkeys:chess]
 pieceDrops = true
@@ -256,11 +258,16 @@ promotedPieceType = p:q
 startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
 
 [spellprisonex:chess]
+potions = true
+freezePotion = q
+jumpPotion = r
+freezeCooldown = 3
+jumpCooldown = 3
 pieceDrops = true
+captureType = prison
+hostageExchange = p:p
 castling = false
-capturesToHand = true
-spell = true
-startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
+startFen = 8/8/8/3p1p2/2P1P3/8/8/4K2k[Qq] w - - 0 1
 
 [libertysync]
 maxRank = 5
@@ -348,7 +355,7 @@ assert_distinct_position_keys "${tmp_ini}" "promotion-origin-sync" \
 assert_reload_key_match "${tmp_ini}" "promotion-origin-sync" \
   "position fen 4k3/8/8/8/8/8/8/Q~:N3K3[] w - - 0 1"
 assert_reload_key_match "${tmp_ini}" "promotion-origin-sync" \
-  "position fen 4k3/8/8/8/8/8/8/Q~:N3K2r[] b - - 0 1 moves h1a1"
+  "position fen r3k3/8/8/8/8/8/8/Q~:N3K3[] b - - 0 1 moves a8a1"
 
 # A Jump potion may let a double-step pass through an occupied enemy square.
 # The resulting en-passant target remains serializable after Jump expires.

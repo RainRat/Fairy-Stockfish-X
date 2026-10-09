@@ -4,9 +4,8 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
-for arg in "$@"; do
-    if [[ "$arg" == -h || "$arg" == --help ]]; then
-        cat <<'EOF'
+show_usage() {
+    cat <<'EOF'
 Usage: tests/build.sh [MAKE_VARIABLE=value ...]
 
 Build an engine binary and record its build profile. Common variables include
@@ -16,7 +15,17 @@ Examples:
   tests/build.sh ARCH=x86-64-modern
   tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 EOF
-        exit 0
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help) show_usage; exit 0 ;;
+    esac
+    arg_name="${arg%%=*}"
+    if [[ "$arg" != *=* || ! "$arg_name" =~ ^[[:alpha:]_][[:alnum:]_]*$ ]]; then
+        echo "Unsupported build argument: ${arg} (expected MAKE_VARIABLE=value)." >&2
+        show_usage >&2
+        exit 2
     fi
 done
 
