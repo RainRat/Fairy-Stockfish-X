@@ -823,6 +823,17 @@ inline Validation check_for_valid_characters(const std::string& firstFenPart, co
             std::cerr << "Invalid piece character: '" << c << "'." << std::endl;
             return NOK;
         }
+        if (c == '#')
+        {
+            size_t pocketStart = firstFenPart.find('[');
+            size_t pocketEnd = firstFenPart.find(']');
+            if (v->captureType != PRISON || pocketStart == std::string::npos
+                || pocketEnd == std::string::npos || i <= pocketStart || i >= pocketEnd)
+            {
+                std::cerr << "Prison separator is only valid inside a prison pocket." << std::endl;
+                return NOK;
+            }
+        }
     }
     return OK;
 }
@@ -1291,9 +1302,23 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
     const int maxPocketCount = int(SQUARE_NB) - 1;
     const int maxPocketPieces = maxPocketCount * int(PIECE_NB);
     int handCount = 0;
+    bool prisonSeen = false;
+    size_t prisonPieceCount = 0;
     for (size_t i = 0; i < pocketPart.size();)
     {
         char c = pocketPart[i];
+        if (c == '#')
+        {
+            if (v->captureType != PRISON || prisonSeen || handCount > 0)
+            {
+                std::cerr << "Invalid prison separator in pocket." << std::endl;
+                return NOK;
+            }
+            prisonSeen = true;
+            prisonPieceCount = pocket.size();
+            ++i;
+            continue;
+        }
         if (c == '-')
         {
             ++i;
@@ -1334,6 +1359,11 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
     if (handCount > 0)
     {
         std::cerr << "Pocket piece count is missing a following piece symbol." << std::endl;
+        return NOK;
+    }
+    if (prisonSeen && pocket.size() == prisonPieceCount)
+    {
+        std::cerr << "Prison separator is not followed by a prisoner." << std::endl;
         return NOK;
     }
     return OK;
@@ -1488,6 +1518,8 @@ inline std::string get_valid_special_chars(const Variant* v) {
         validSpecialCharactersFirstField += '~';
     if (v->pieceDrops || v->seirawanGating || v->potions || v->promotionRequireInHand || v->promotionConsumeInHand)
         validSpecialCharactersFirstField += "[-]";
+    if (v->captureType == PRISON)
+        validSpecialCharactersFirstField += '#';
     return validSpecialCharactersFirstField;
 }
 

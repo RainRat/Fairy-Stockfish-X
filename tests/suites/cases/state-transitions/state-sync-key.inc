@@ -298,6 +298,10 @@ tmp_ini="${FSX_TMP_INI}"
 assert_reload_key_match "${tmp_ini}" "prsync" "position startpos moves e2e4 d7d5 e4d5"
 assert_reload_key_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
 assert_reload_perft1_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
+# Placement drops can grant castling rights; the incremental hash must include
+# the rights from a dropped king/rook just as FEN reconstruction does.
+assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "placement" \
+  "position startpos moves K@e1 R@h8 R@h1"
 assert_reload_key_match "${tmp_ini}" "dropsym" "position startpos moves R@a4,h4"
 assert_reload_perft1_match "${tmp_ini}" "dropsym" "position startpos moves R@a4,h4"
 assert_reload_key_match "${tmp_ini}" "exsync" "position startpos moves c4d5 f5e4 P#P@a2"
