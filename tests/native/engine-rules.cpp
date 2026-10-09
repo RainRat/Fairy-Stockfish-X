@@ -1566,6 +1566,24 @@ void adjudication() {
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "simultaneous safe Alapo goals did not draw");
 
+    // flagPieceCount composes with flagPieceSafe by requiring that many safe
+    // goal pieces; unsafe surplus pieces do not count toward the threshold.
+    Variant flagCountVariant = *variants.get("alapo");
+    flagCountVariant.flagPieceCount = 2;
+    flagCountVariant.flagMove = false;
+    UCI::init_variant(&flagCountVariant);
+    auto set_flag_count_position = [&](const char* fen) {
+        states = StateListPtr(new std::deque<StateInfo>(1));
+        pos.set(&flagCountVariant, fen, false, &states->back(), nullptr);
+    };
+    set_flag_count_position("KRB3/r5/6/6/6/6 b - - 0 1");
+    check(pos.flag_reached(WHITE),
+          "two safe Alapo goal pieces did not satisfy flag_reached with one capturable surplus");
+    check(pos.is_immediate_game_end(result) && result < VALUE_ZERO,
+          "two safe Alapo goal pieces did not count when a surplus piece was capturable");
+    set_flag_count_position("KRB3/r1r3/6/6/6/6 b - - 0 1");
+    expect_nonterminal(pos, "Alapo with only one safe goal piece for a count of two");
+
     set_position(pos, states, "mixed-goal-simul", "ssAB b - - 0 1");
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "simultaneous connection goal did not return a draw");

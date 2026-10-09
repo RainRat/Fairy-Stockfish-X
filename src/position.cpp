@@ -11687,8 +11687,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   // This matches Dobutsu's rule that Try wins only when the Lion cannot be
   // immediately captured (https://joshi-shogi.com/5965/) and Squatter's
   // repeated safe-goal check (https://github.com/yagu0/vchess/blob/master/client/src/variants/Squatter1.js).
-  // If both sides currently meet the safe-goal condition, the rules give no
-  // priority to either side, so adjudicate the simultaneous result as a draw.
+  // If both sides meet their safe-goal condition, including the required count,
+  // neither has priority; adjudicate the simultaneous result as a draw.
   if (var->flagPieceSafe && flag_reached(WHITE) && flag_reached(BLACK))
   {
       result = VALUE_DRAW;
