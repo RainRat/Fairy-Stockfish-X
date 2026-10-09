@@ -352,6 +352,14 @@ class TestPublicAPI(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "No such variant"):
             sf.start_fen("this_variant_does_not_exist")
 
+    def test_standard_chess_variant_aliases(self):
+        fen = sf.start_fen("chess")
+        expected_moves = sf.legal_moves("chess", fen, [])
+        for alias in ("", "Standard", "standard"):
+            with self.subTest(alias=alias):
+                self.assertEqual(sf.start_fen(alias), fen)
+                self.assertEqual(sf.legal_moves(alias, fen, []), expected_moves)
+
     def test_move_and_serialization_shapes(self):
         fen = sf.start_fen("chess")
         moves = sf.legal_moves("chess", fen, [])
