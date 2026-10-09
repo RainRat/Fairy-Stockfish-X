@@ -88,6 +88,9 @@ assert_position_rejected() {
 assert_position_rejected "position startpos garbage" "expected 'moves' after startpos"
 assert_position_rejected "position startpos moves e2e4 bogus g1f3" "Invalid move 'bogus'"
 assert_position_rejected "position fen not-a-fen" "Invalid position FEN"
+# Standard chess cannot reach evaluation with a missing royal or a pocket.
+assert_position_rejected "position fen 4k3/8/8/8/8/8/4Q3/8 w - - 0 1" "Invalid number of white kings."
+assert_position_rejected "position fen 4k3/8/8/8/8/8/4Q3/4K3[N] w - - 0 1" "Invalid piece character: '['."
 
 # Malformed numeric `go` limits are rejected without killing the engine:
 # the command is ignored with an `info string error` diagnostic and the
