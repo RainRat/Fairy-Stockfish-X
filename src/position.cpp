@@ -11682,18 +11682,28 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
           }
       }
   }
-  // capture the flag
-  // A flag win by the side to move is only possible if flagMove is enabled
-  // and they already reached the flag region the move before.
-  // In the case both colors reached it, it is a draw if white was first.
-  if (flag_move() && flag_reached(sideToMove))
+  // Capture-the-flag results are based on the current board: with flagPieceSafe,
+  // an unsafe flag is not a win, but can become one after the opponent's move.
+  // This matches Dobutsu's rule that Try wins only when the Lion cannot be
+  // immediately captured (https://joshi-shogi.com/5965/) and Squatter's
+  // repeated safe-goal check (https://github.com/yagu0/vchess/blob/master/client/src/variants/Squatter1.js).
+  // If both sides currently meet the safe-goal condition, the rules give no
+  // priority to either side, so adjudicate the simultaneous result as a draw.
+  if (var->flagPieceSafe && flag_reached(WHITE) && flag_reached(BLACK))
+  {
+      result = VALUE_DRAW;
+      return true;
+  }
+  // With flagMove, the side that reached the goal must remain eligible after
+  // the opponent's extra move. flag_reached() applies flagPieceSafe here too.
+  if ((flag_move() || var->flagPieceSafe) && flag_reached(sideToMove))
   {
       result = sideToMove == WHITE && flag_reached(BLACK) ? VALUE_DRAW : mate_in(ply);
       return true;
   }
-  // A direct flag win is possible if the opponent does not get an extra flag move
-  // or we can detect early for kings that they won't be able to reach the flag region
-  // Note: This condition has to be after the above, since both might be true e.g. in racing kings.
+  // Without flagMove, a safe goal is an immediate win. With flagMove, only
+  // retain the existing king-only shortcut for positions where the opponent
+  // cannot legally reach their goal on the extra move (Racing Kings).
   if (   (!flag_move() || (flag_piece_types(sideToMove) == piece_set(KING) && !allow_checks())) // king-only shortcut is invalid when kings are capturable
        && flag_reached(~sideToMove))
   {

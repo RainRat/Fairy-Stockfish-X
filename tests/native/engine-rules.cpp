@@ -1540,6 +1540,32 @@ void adjudication() {
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "immediate n-move rule did not return a draw");
 
+    // Dobutsu's official rules make Try a win only when the Lion cannot be
+    // immediately captured; an unsafe arrival is neither a win nor a loss.
+    // https://joshi-shogi.com/5965/
+    set_position(pos, states, "dobutsu", "1L1/1l1/3/3 b - - 0 1");
+    expect_nonterminal(pos, "unsafe Dobutsu Try");
+    set_position(pos, states, "dobutsu", "1L1/3/3/3 b - - 0 1");
+    check(pos.is_immediate_game_end(result) && result < VALUE_ZERO,
+          "safe Dobutsu Try was not awarded after the opponent's reply");
+    set_position(pos, states, "dobutsu", "1L1/3/3/3 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result > VALUE_ZERO,
+          "safe Dobutsu Try was not awarded when it became the moving side's turn");
+    set_position(pos, states, "dobutsu", "1L1/3/3/1l1 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "simultaneous safe Dobutsu goals did not draw");
+
+    // Alapo enables both settings: flagMove gives the opponent a reply, while
+    // flagPieceSafe remains a separate requirement for the eventual win.
+    set_position(pos, states, "alapo", "5K/6/6/6/6/6 b - - 0 1");
+    expect_nonterminal(pos, "Alapo flag before the opponent's extra move");
+    set_position(pos, states, "alapo", "5K/6/6/6/6/6 w - - 0 1");
+    check(pos.is_immediate_game_end(result) && result > VALUE_ZERO,
+          "Alapo safe flag was not awarded after the opponent's extra move");
+    set_position(pos, states, "alapo", "5K/6/6/6/6/k5 b - - 0 1");
+    check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
+          "simultaneous safe Alapo goals did not draw");
+
     set_position(pos, states, "mixed-goal-simul", "ssAB b - - 0 1");
     check(pos.is_immediate_game_end(result) && result == VALUE_DRAW,
           "simultaneous connection goal did not return a draw");

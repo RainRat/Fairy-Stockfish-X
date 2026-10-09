@@ -988,6 +988,9 @@ namespace {
     // Dobutsu
     // Educational shogi variant on a 3x4 board
     // https://en.wikipedia.org/wiki/D%C5%8Dbutsu_sh%C5%8Dgi
+    // The LPSA rules say Try wins only if the Lion cannot be immediately captured;
+    // an unsafe arrival is not itself a loss, so flag safety is rechecked each turn.
+    // https://joshi-shogi.com/5965/
     Variant* dobutsu_variant() {
         Variant* v = minishogi_variant_base()->init();
         v->pieceToCharTable = "C....E...G.+.....Lc....e...g.+.....l";
