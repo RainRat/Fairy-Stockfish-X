@@ -49,6 +49,11 @@ The strict test profile requires wrapper-recorded engine roles: every suite's ma
 
 Other test scripts include: `perft.sh`, `instrumented.sh`, `regression.sh`, `regression-runner.sh`, upstream comparison scripts, and the JavaScript tests in `tests/js/`.
 
+The standalone `tests/perft.sh` runner reports permitted perft-set omissions
+as `FSX_TEST_EVENT` partial-skip records and prints an
+`FSX_TEST_SUMMARY` with the perft positions executed and any omitted sets.
+Without `FSX_ALLOW_SMALL_BOARD=1`, missing required variant sets still fail.
+
 The benchmark script accepts either a reference signature (`tests/bench-regressions.sh [signature] [engine]`) or standard input (`tests/bench-regressions.sh --stdin [engine]`).
 
 The semantic checks are grouped into ten test suites. Each wrapped case reports its duration; failures print a `tests/run.sh case <suite> <case> [engine] [variants]` command that reruns only that case. Python tests in `tests/python/test_pyffish_api.py` verify the Python bindings directly, while chess variant rules run through native C++ test harnesses and UCI test cases.

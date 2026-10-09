@@ -19,12 +19,47 @@ command -v expect >/dev/null || {
 error()
 {
   echo "perft testing failed on line $1"
+  PERFT_FAILED=1
   exit 1
 }
 trap 'error ${LINENO}' ERR
 
+PERFT_REQUIRED=0
+PERFT_EXECUTED=0
+PERFT_PARTIAL_SKIPS=0
+PERFT_FAILED=0
+PERFT_SUITE="perft-${VARIANT:-chess}"
+
+perft_note_skip() {
+  local case_name="$1" reason="$2"
+  reason=${reason//$'\t'/ }
+  reason=${reason//$'\n'/ }
+  ((PERFT_PARTIAL_SKIPS += 1))
+  printf 'FSX_TEST_EVENT\t1\t%s\t%s\tpartial-skip\t0\toptional\t%s\n' \
+    "${PERFT_SUITE}" "${case_name}" "${reason}"
+}
+
+perft_exit() {
+  local status=$1
+  trap - EXIT ERR
+  if (( status != 0 )); then
+    PERFT_FAILED=1
+  fi
+  rm -f "${perft_exp:-}"
+  printf 'FSX_TEST_SUMMARY\t1\t%s\trequired=%d\texecuted=%d\tskipped=0\tpartial_skipped=%d\tfailed=%d\n' \
+    "${PERFT_SUITE}" "${PERFT_REQUIRED}" "${PERFT_EXECUTED}" \
+    "${PERFT_PARTIAL_SKIPS}" "${PERFT_FAILED}"
+  return "${status}"
+}
+
+perft_fail() {
+  PERFT_FAILED=1
+  trap - ERR
+  exit 1
+}
+
 perft_exp=$(mktemp)
-trap 'rm -f "$perft_exp"' EXIT
+trap 'perft_exit $?' EXIT
 cat << EOF > "$perft_exp"
    set timeout 60
    lassign \$argv var pos depth result chess960
@@ -48,9 +83,11 @@ EOF
 # failed Expect invocation retain its complete transcript on stderr.
 expect() {
   local output_file status
+  ((PERFT_REQUIRED += 1))
   output_file=$(mktemp)
   if command expect "$@" >"${output_file}" 2>&1; then
     status=0
+    ((PERFT_EXECUTED += 1))
   else
     status=$?
     printf 'perft case failed: variant=%s depth=%s expected=%s position=%s\n' \
@@ -237,6 +274,12 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
       # all=yes build path (fairy CI matrix)
       expect "$perft_exp" wolf startpos 3 13722 > /dev/null
       expect "$perft_exp" wolf "fen 8/k5SP/8/8/8/8/8/8/8/7K w - - 0 1" 4 10587 > /dev/null
+    elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+      perft_note_skip wolf "wolf perft unavailable in this build; allowed by FSX_ALLOW_SMALL_BOARD=1"
+    else
+      echo "wolf perft requires a build with the wolf variant; refusing to silently skip" >&2
+      echo "run an all-variant build or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
+      perft_fail
     fi
     expect "$perft_exp" shako "fen 4kc3c/ernbq1b1re/ppp3p1pp/3p2pp2/4p5/5P4/2PN2P3/PP1PP2PPP/ER1BQKBNR1/5C3C w KQ - 0 9" 3 26325 > /dev/null
     expect "$perft_exp" shako "fen 4ncr1k1/1cr2P4/pp2p2pp1/P7PN/2Ep1p4/B3P1eN2/2P1n1P3/1B1P1K4/9p/5C2CR w - - 0 1" 3 180467 > /dev/null
@@ -260,11 +303,11 @@ if [[ $VARIANT == "all" ||  $VARIANT == "largeboard" ]]; then
     expect "$perft_exp" flipello10 startpos 7 55180 > /dev/null
   else
     if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-      echo "SKIP-BOARDSIZE: large-board perft set unavailable in this build; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+      perft_note_skip large-board "large-board perft set unavailable in this build; allowed by FSX_ALLOW_SMALL_BOARD=1"
     else
       echo "large-board perft set requires shogi, capablanca and xiangqi in this build; refusing to silently skip" >&2
       echo "run with a large-board all-variant engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
-      exit 1
+      perft_fail
     fi
   fi
 fi
@@ -274,20 +317,20 @@ if [[ $VARIANT == "all" ]]; then
   if has_variant duck; then
     expect "$perft_exp" duck startpos 1 640 > /dev/null
   elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-    echo "SKIP-BOARDSIZE: duck perft unavailable in this build; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+    perft_note_skip duck "duck perft unavailable in this build; allowed by FSX_ALLOW_SMALL_BOARD=1"
   else
     echo "duck perft requires an all-variant build; refusing to silently skip" >&2
     echo "run with a large-board all-variant engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
-    exit 1
+    perft_fail
   fi
   if has_variant amazons; then
     expect "$perft_exp" amazons startpos 1 2176 > /dev/null
   elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-    echo "SKIP-BOARDSIZE: amazons perft unavailable in this build; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+    perft_note_skip amazons "amazons perft unavailable in this build; allowed by FSX_ALLOW_SMALL_BOARD=1"
   else
     echo "amazons perft requires an all-variant build; refusing to silently skip" >&2
     echo "run with a large-board all-variant engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
-    exit 1
+    perft_fail
   fi
 fi
 
