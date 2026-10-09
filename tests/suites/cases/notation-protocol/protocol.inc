@@ -19,6 +19,20 @@ $(expect_engine_setup)
    expect eof
 EOF
 
+# Keep the persistent protocol position attached to a live worker when the
+# thread option recreates the pool. ASan catches the stale rootMoves access.
+run_expect "$ENGINE" > /dev/null <<EOF
+$(expect_engine_setup)
+   send "uci\n"
+   expect "uciok"
+   send "position startpos\n"
+   send "setoption name Threads value 2\n"
+   send "go perft 2\n"
+   expect "Nodes searched: 400"
+   send "quit\n"
+   expect eof
+EOF
+
 run_expect "$ENGINE" > /dev/null <<EOF
 $(expect_engine_setup)
    send "ucci\n"

@@ -36,6 +36,11 @@ echo "${out}" | grep -q "Error (bad perft): perft"
 out=$(run_xboard $'expect "feature done=1"\nsend "option   Verbosity=2\\n"\n')
 echo "${out}" | grep -q "feature done=1"
 
+# XBoard's persistent position must be retargeted after `cores` recreates the
+# thread pool, before the engine searches and applies its move.
+out=$(run_xboard $'expect "feature done=1"\nsend "cores 2\\n"\nsend "sd 1\\n"\nsend "go\\n"\nexpect -re {move [a-h][1-8][a-h][1-8]}\n')
+echo "${out}" | grep -Eq "move [a-h][1-8][a-h][1-8]"
+
 out=$(run_xboard $'expect "feature done=1"\nsend "setboard not-a-fen\\n"\nexpect "Error (bad setboard): invalid FEN"\nsend "d\\n"\nexpect "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"\n')
 echo "${out}" | grep -q "Error (bad setboard): invalid FEN"
 echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"

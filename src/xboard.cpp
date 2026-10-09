@@ -491,6 +491,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       stop();
       if (is >> token)
           Options["Threads"] = token;
+      pos.set_thread(Threads.main());
   }
   else if (token == "memory")
   {
@@ -511,6 +512,8 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
           if (Options[name].get_type() == "check")
               value = value == "1" ? "true" : "false";
           Options[name] = value;
+          if (name == "Threads")
+              pos.set_thread(Threads.main());
       }
   }
   else if (token == "analyze")

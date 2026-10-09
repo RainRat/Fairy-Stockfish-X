@@ -289,7 +289,7 @@ namespace {
             else
                trace_eval(pos);
         }
-        else if (token == "setoption")  setoption(is);
+        else if (token == "setoption")  setoption(is), pos.set_thread(Threads.main());
         else if (token == "position")   position(pos, is, states);
         else if (token == "ucinewgame") { Search::clear(); elapsed = now(); } // Search::clear() may take some while
     }
@@ -546,7 +546,7 @@ void UCI::loop(int argc, char* argv[]) {
       else if (CurrentProtocol == XBOARD)
           XBoard::stateMachine->process_command(token, is);
 
-      else if (token == "setoption")  setoption(is);
+      else if (token == "setoption")  setoption(is), pos.set_thread(Threads.main());
       // UCCI-specific banmoves command
       else if (token == "banmoves")
           while (is >> token)
