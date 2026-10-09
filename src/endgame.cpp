@@ -361,6 +361,11 @@ Value Endgame<KRKN>::operator()(const Position& pos) const {
 template<>
 Value Endgame<KQKP>::operator()(const Position& pos) const {
 
+  // This evaluator's known-draw exceptions describe 8x8 chess only. Do not
+  // apply its KQ vs KP assumptions to other board geometries.
+  if (pos.max_file() != FILE_H || pos.max_rank() != RANK_8)
+      return VALUE_NONE;
+
   assert(verify_material(pos, strongSide, QueenValueMg, 0));
   assert(verify_material(pos, weakSide, VALUE_ZERO, 1));
 
