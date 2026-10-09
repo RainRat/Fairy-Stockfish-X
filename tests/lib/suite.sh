@@ -7,6 +7,10 @@ SUITE_NAME=${1:?suite name is required}
 ENGINE=${2:-${SUITE_ROOT}/src/stockfish-large}
 VARIANTS=${3:-${SUITE_ROOT}/src/variants.ini}
 FSX_CASE_MATCHED=0
+FSX_CASES_REQUIRED=0
+FSX_CASES_EXECUTED=0
+FSX_CASES_SKIPPED=0
+FSX_CASES_FAILED=0
 export ROOT_DIR="${SUITE_ROOT}" ENGINE VARIANTS VARIANT_PATH="${VARIANTS}"
 cd "${SUITE_ROOT}"
 source "${SUITE_ROOT}/tests/lib/uci.sh"
@@ -17,16 +21,44 @@ if [[ "${VERBOSE:-0}" != 1 && -z "${FSX_CASE_LOG_ROOT:-}" ]]; then
     export FSX_CASE_LOG_ROOT
 fi
 
+fsx_suite_summary() {
+    local status=$?
+    trap - EXIT
+    printf 'FSX_TEST_SUMMARY\t1\t%s\trequired=%d\texecuted=%d\tskipped=%d\tfailed=%d\n' \
+        "${SUITE_NAME}" "${FSX_CASES_REQUIRED}" "${FSX_CASES_EXECUTED}" \
+        "${FSX_CASES_SKIPPED}" "${FSX_CASES_FAILED}"
+    exit "${status}"
+}
+trap fsx_suite_summary EXIT
+
+fsx_case_event() {
+    local name="$1" result="$2" duration="$3" requirement="$4" reason="${5:-}"
+    reason=${reason//$'\t'/ }
+    reason=${reason//$'\n'/ }
+    printf 'FSX_TEST_EVENT\t1\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "${SUITE_NAME}" "${name}" "${result}" "${duration}" \
+        "${requirement}" "${reason}"
+}
+
 suite_case() {
     local name="$1" timeout_value="$2" log_dir="" log="" start=$SECONDS duration status=0
+    local requirement=required reason="" was_skip=0
     shift 2
     if [[ -n "${FSX_CASE_FILTER:-}" ]]; then
         [[ "${name}" == "${FSX_CASE_FILTER}" ]] || return 0
         FSX_CASE_MATCHED=1
     fi
+    if [[ "${FSX_CASE_OPTIONAL:-0}" == 1 && "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+        requirement=optional
+    else
+        ((FSX_CASES_REQUIRED += 1))
+    fi
     if [[ "${VERBOSE:-0}" == 1 ]]; then
         echo "== ${SUITE_NAME}/${name} =="
-        timeout "${timeout_value}" "$@" || status=$?
+        mkdir -p "${SUITE_ROOT}/.local/build/test-run"
+        log=$(mktemp "${SUITE_ROOT}/.local/build/test-run/verbose-case-XXXXXX")
+        timeout "${timeout_value}" "$@" >"${log}" 2>&1 || status=$?
+        cat "${log}"
     else
         log_dir="${FSX_CASE_LOG_ROOT}/${SUITE_NAME}"
         log="${log_dir}/${name//\//_}.log"
@@ -35,15 +67,35 @@ suite_case() {
     fi
     duration=$((SECONDS - start))
     if (( status == 0 )); then
+        ((FSX_CASES_EXECUTED += 1))
+        fsx_case_event "${name}" pass "${duration}" "${requirement}"
         echo "ok: ${SUITE_NAME}/${name} (${duration}s)"
+        [[ "${VERBOSE:-0}" != 1 ]] || rm -f "${log}"
         return 0
     fi
+    if (( status == 77 )); then
+        reason=$(sed -n 's/^FSX_TEST_SKIP: //p' "${log}" | sed -n '1p')
+        ((FSX_CASES_SKIPPED += 1))
+        if [[ "${requirement}" == optional && "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 && -n "${reason}" ]]; then
+            fsx_case_event "${name}" skip "${duration}" "${requirement}" "${reason}"
+            echo "skip: ${SUITE_NAME}/${name} (${reason})"
+            [[ "${VERBOSE:-0}" != 1 ]] || rm -f "${log}"
+            return 0
+        fi
+        was_skip=1
+        status=1
+        reason="unexpected skip${reason:+: ${reason}}"
+    fi
+    (( was_skip )) || ((FSX_CASES_EXECUTED += 1))
+    ((FSX_CASES_FAILED += 1))
     [[ "${VERBOSE:-0}" == 1 ]] || cat "${log}"
+    fsx_case_event "${name}" fail "${duration}" "${requirement}" "${reason:-exit ${status}}"
     {
         echo "FAILED: ${SUITE_NAME}/${name} (${duration}s)" >&2
         printf 'rerun: tests/run.sh case %q %q %q %q\n' \
             "${SUITE_NAME}" "${name}" "${ENGINE}" "${VARIANTS}" >&2
     }
+    [[ "${VERBOSE:-0}" != 1 ]] || rm -f "${log}"
     return 1
 }
 
@@ -60,6 +112,10 @@ legacy() {
         return 1
     }
     suite_case "${script%.sh}" "${timeout_value}" bash "${case_path}" "$@"
+}
+
+optional_legacy() {
+    FSX_CASE_OPTIONAL=1 legacy "$@"
 }
 
 native() {
@@ -195,7 +251,7 @@ run_variants_smoke() {
     legacy variant-promotion-baselines.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy gating-large-board.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy royal-pawn-variants.sh 3m "${ENGINE}" "${VARIANTS}"
-    legacy very-large-board-regressions.sh 10m "${ENGINE}" "${VARIANTS}"
+    optional_legacy very-large-board-regressions.sh 10m "${ENGINE}" "${VARIANTS}"
 }
 
 run_search_evaluation() {

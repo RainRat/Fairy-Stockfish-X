@@ -172,6 +172,7 @@ run_one() {
         log="${log_dir}/${suite}.log"
         if timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants" >"$log" 2>&1; then
             echo "ok: ${label} (log: ${log})"
+            grep '^FSX_TEST_SUMMARY' "$log" || true
         else
             echo "FAILED: ${label}"
             cat "$log"

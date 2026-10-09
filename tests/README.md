@@ -53,6 +53,14 @@ The benchmark script accepts either a reference signature (`tests/bench-regressi
 
 The semantic checks are grouped into ten test suites. Each wrapped case reports its duration; failures print a `tests/run.sh case <suite> <case> [engine] [variants]` command that reruns only that case. Python tests in `tests/python/test_pyffish_api.py` verify the Python bindings directly, while chess variant rules run through native C++ test harnesses and UCI test cases.
 
+The suite wrapper also writes tab-separated `FSX_TEST_EVENT` records
+(`version`, suite, case, result, seconds, requirement, reason) and an
+`FSX_TEST_SUMMARY` with required, executed, skipped, and failed case counts.
+The first case wired to structured skip classification is the VLB smoke case:
+it is required unless `FSX_ALLOW_SMALL_BOARD=1` authorizes omitting that board
+family. Other suite-level, case-level, and partial-case skips are being
+migrated to this contract; until then, read their case logs for skip messages.
+
 Passing tests run quietly and save their logs in `.local/build/test-run/`. Without verbose output, multiple suites run in parallel. With `VERBOSE=1`, the runner runs suites one at a time and prints full output.
 
 The JavaScript Makefile follows the same convention: successful builds print

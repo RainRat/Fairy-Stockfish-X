@@ -11,6 +11,13 @@ fsx_error() {
   exit 1
 }
 
+fsx_test_skip() {
+  local reason="$*"
+  [[ -n "${reason}" ]] || reason="no reason provided"
+  printf 'FSX_TEST_SKIP: %s\n' "${reason}" >&2
+  exit 77
+}
+
 FSX_EXIT_CLEANUPS=()
 
 fsx_run_exit_cleanups() {

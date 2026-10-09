@@ -20,8 +20,7 @@ if [[ "$(basename "${ENGINE}")" != *vlb* && "${FSX_ENGINE_FAMILY:-}" != very-lar
     echo "vlb regressions: using VLB engine ${VLB_CANDIDATE}"
     ENGINE="${VLB_CANDIDATE}"
   elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-    echo "SKIP-BOARDSIZE: VLB engine not available at ${VLB_CANDIDATE}; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
-    exit 0
+    fsx_test_skip "VLB engine not available at ${VLB_CANDIDATE}; skip allowed by FSX_ALLOW_SMALL_BOARD=1"
   else
     echo "vlb regressions require a very-large-board engine; got ${ENGINE} and no VLB engine at ${VLB_CANDIDATE}" >&2
     echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb" >&2
@@ -32,8 +31,7 @@ fi
 
 if [[ ! -x "${ENGINE}" ]]; then
   if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-    echo "SKIP-BOARDSIZE: VLB engine ${ENGINE} not available; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
-    exit 0
+    fsx_test_skip "VLB engine ${ENGINE} not available; skip allowed by FSX_ALLOW_SMALL_BOARD=1"
   fi
   echo "vlb regressions require a very-large-board engine; ${ENGINE} is not executable" >&2
   exit 1
@@ -44,8 +42,7 @@ fi
 # the suite would pass without testing anything.
 if ! probe_variant_available "${ENGINE}" "hex-16x16" "${VARIANTS}"; then
   if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-    echo "SKIP-BOARDSIZE: ${ENGINE} lacks very-large-board coverage; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
-    exit 0
+    fsx_test_skip "${ENGINE} lacks very-large-board coverage; skip allowed by FSX_ALLOW_SMALL_BOARD=1"
   fi
   echo "engine ${ENGINE} cannot load very-large-board variants (hex-16x16 missing); refusing to skip VLB coverage" >&2
   exit 1
@@ -112,7 +109,7 @@ EOF
   assert_contains_literal "$output" "f5f6f7: 1"
 
   output=$(run_uci "$ENGINE" "$VARIANTS" dai_shogi <<'EOF' 2>&1
-position fen K13k/15/15/15/15/15/15/15/7p8/6p9/5E"9/15/15/15/15 w - - 0 1
+position fen K13k/15/15/15/15/15/15/15/7p7/6p8/5E"9/15/15/15/15 w - - 0 1
 go perft 1
 EOF
 )
@@ -495,7 +492,7 @@ EOF
   # stays quiet while the mapping is exercised.)
   while IFS='|' read -r from entry move; do
     output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<EOF 2>&1
-position fen 11k/12/12/12/2${from}8/12/12/12/12/12/1p9/K11 w - - 0 1 moves c8${entry}+ l12l11
+position fen 11k/12/12/12/2${from}9/12/12/12/12/12/1p10/K11 w - - 0 1 moves c8${entry}+ l12l11
 go perft 1
 EOF
 )
@@ -520,7 +517,7 @@ B'|d9|d9d11
 H'|d9|d9d10d9
 TABLE
   output=$(run_uci "$ENGINE" "$VARIANTS" chu_shogi <<'EOF' 2>&1
-position fen 11k/12/12/12/3B7/12/12/12/12/12/1p9/K11 w - - 0 1 moves d8e9+ l12l11
+position fen 11k/12/12/12/3B8/12/12/12/12/12/1p10/K11 w - - 0 1 moves d8e9+ l12l11
 go perft 1
 EOF
 )
