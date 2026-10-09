@@ -681,6 +681,7 @@ INI
 cat > "${unknown_option_ini}" <<'INI'
 [unknown-option:chess]
 pieceDrop = true
+laserFutureOption = true
 INI
 
 cat > "${bad_royal_betza_ini}" <<'INI'
@@ -1026,9 +1027,11 @@ assert_contains "${bad_piece_value_uci_output}" "unknown variant 'bad-piece-valu
 
 unknown_option_check_output=$("${ENGINE}" check "${unknown_option_ini}" 2>&1 || true)
 assert_contains_literal "${unknown_option_check_output}" "Unknown option ignored: pieceDrop"
+assert_contains_literal "${unknown_option_check_output}" "Unknown option ignored: laserFutureOption"
 assert_not_contains_literal "${unknown_option_check_output}" "has invalid configuration. Skipping."
 unknown_option_uci_output=$(run_uci "$ENGINE" "$unknown_option_ini" "unknown-option" </dev/null 2>&1 || true)
 assert_contains_literal "${unknown_option_uci_output}" "Unknown option ignored: pieceDrop"
+assert_contains_literal "${unknown_option_uci_output}" "Unknown option ignored: laserFutureOption"
 assert_not_contains "${unknown_option_uci_output}" "unknown variant 'unknown-option'"
 
 bad_royal_betza_output=$(run_uci "$ENGINE" "$bad_royal_betza_ini" "bad-royal-betza" </dev/null 2>&1 || true)

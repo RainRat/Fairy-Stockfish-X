@@ -118,6 +118,23 @@ void composable_rules() {
     Position pos;
     StateListPtr states;
 
+    const Variant* inheritedLaser = variants.get("laser-emitter-child");
+    check(inheritedLaser != nullptr, "laser emitter inheritance variant is missing");
+    check(inheritedLaser->staticEmitters[WHITE] == std::vector<Square>{SQ_A1}
+          && inheritedLaser->staticEmitterDirs[WHITE] == std::vector<Direction>{NORTH},
+          "child laser variant did not preserve its parent's static emitter");
+    check(inheritedLaser->staticEmitters[BLACK] == std::vector<Square>{SQ_H8}
+          && inheritedLaser->staticEmitterDirs[BLACK] == std::vector<Direction>{SOUTH},
+          "child laser variant did not append its static emitter");
+
+    const Variant* inheritedPieceLaser = variants.get("laser-piece-emitter-child");
+    const Variant* parentPieceLaser = variants.get("laser-piece-emitter-parent");
+    check(inheritedPieceLaser != nullptr && parentPieceLaser != nullptr,
+          "laser piece-emitter inheritance variants are missing");
+    check(inheritedPieceLaser->emitterPieceType != parentPieceLaser->emitterPieceType
+          && inheritedPieceLaser->pieceToSymbol[make_piece(WHITE, inheritedPieceLaser->emitterPieceType)] == "Y",
+          "child laser variant did not replace its parent's piece emitter");
+
     set_position(pos, states, "composable-freeze-traps",
                  "8/8/8/4e3/4M3/8/7r/8 w - - 0 1");
     check(pos.freeze_squares() & square_bb(SQ_E4), "adjacent freezer mask missed the mover");
@@ -2282,6 +2299,24 @@ royalPieceNoThroughCheck = true
 castling = true
 trapRegion = g1
 trapProtection = none
+
+[laser-emitter-parent:fairy]
+laserGame = true
+laserEmitters = white@a1:0
+
+[laser-emitter-child:laser-emitter-parent]
+laserEmitters = black@h8:2
+
+[laser-piece-emitter-parent:fairy]
+laserGame = true
+customPiece1 = x:K
+orientedPieceTypes = x
+laserEmitters = piece:x
+
+[laser-piece-emitter-child:laser-piece-emitter-parent]
+customPiece2 = y:K
+orientedPieceTypes = x y
+laserEmitters = piece:y
 )INI");
     variants.parse_istream<false>(inline_config);
 }

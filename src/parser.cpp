@@ -2386,6 +2386,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 Square sq = make_square(f, r);
                 Color c = explicitColor != COLOR_NB ? explicitColor
                                                      : (rank_of(sq) > v->maxRank / 2 ? BLACK : WHITE);
+                // Static emitters are additive across inheritance: child entries extend the list.
                 v->staticEmitters[c].push_back(sq);
                 v->staticEmitterDirs[c].push_back(v->laserDiagonal ? (dir == 0 ? NORTH_EAST : dir == 1 ? SOUTH_EAST : dir == 2 ? SOUTH_WEST : NORTH_WEST) : (dir == 0 ? NORTH : dir == 1 ? EAST : dir == 2 ? SOUTH : WEST));
             }
