@@ -395,7 +395,7 @@ position startpos
 d")
 assert_contains "$out" "Fen: c7c/2baaab2/4a4/9/9/9/4A4/2BAAAB2/C7C w - - 0 1 {0 0}"
 out=$(run_cmds "setoption name UCI_Variant value oshi
-position fen 9/9/9/9/9/9/9/1a3/1A3 w - - 0 1 {0 0} moves b1b2
+position fen 9/9/9/9/9/9/9/1a7/1A7 w - - 0 1 {0 0} moves b1b2
 go perft 1")
 assert_not_contains "$out" "b3b2: 1"
 out=$(run_cmds "setoption name UCI_Variant value oshi
@@ -664,15 +664,15 @@ assert_contains "$out" "Fen: 4k3/8/8/8/8/8/8/4K3 b - - 0 1"
 
 # 15b) Kamikaze (nocheckatomic template): kings are explosion-immune.
 out=$(run_cmds "setoption name UCI_Variant value kamikaze
-position fen r1bqkbnr/pppp1ppp/8/4pK2/4P3/8/PPPP1PPP/RNBQ2NR w KQkq - 0 3 moves f5e5
+position fen r1bqkbnr/pppp1ppp/8/4pK2/4P3/8/PPPP1PPP/RNBQ2NR w - - 0 3 moves f5e5
 d")
-assert_contains "$out" "Fen: r1bqkbnr/pppp1ppp/8/4K3/4P3/8/PPPP1PPP/RNBQ2NR b kq - 0 3"
+assert_contains "$out" "Fen: r1bqkbnr/pppp1ppp/8/4K3/4P3/8/PPPP1PPP/RNBQ2NR b - - 0 3"
 fi
 
 # 16) Fatal giveaway: dead squares can be captured as neutral blockers.
 if variant_available "fatal-giveaway"; then
 out=$(run_cmds "setoption name UCI_Variant value fatal-giveaway
-position fen 4k3/8/8/4\\^3/8/8/8/4Q3 w - - 0 1 moves e1e5
+position fen 4k3/8/8/4^3/8/8/8/4Q3 w - - 0 1 moves e1e5
 d")
 assert_contains "$out" "Fen: 4k3/8/8/4Q3/8/8/8/8 b - - 0 1"
 fi
@@ -734,7 +734,7 @@ assert_contains "$out" "a7a8n: 1"
 
 # 19bac) Reach Chess: reaching the back rank wins, and the current checkmated case is terminal.
 out=$(run_cmds "setoption name UCI_Variant value reach-chess
-position fen 4P3/8/8/8/8/8/8/4k3 b - - 0 1
+position fen 4P3/8/8/8/8/8/8/K3k3 b - - 0 1
 go perft 1")
 assert_nodes "$out" "0"
 out=$(run_cmds "setoption name UCI_Variant value reach-chess
@@ -764,11 +764,11 @@ fi
 
 # 19ba) Crown Prince Chess: crown prince cannot capture and wins by reaching the back rank.
 out=$(run_cmds "setoption name UCI_Variant value crown-prince-chess
-position fen 4k3/8/8/8/8/8/4p3/4C3 w - - 0 1
+position fen 4k3/8/8/8/8/8/4p3/K3C3 w - - 0 1
 go perft 1")
 assert_not_contains "$out" "^e1e2"
 out=$(run_cmds "setoption name UCI_Variant value crown-prince-chess
-position fen 4C3/8/8/8/8/8/8/4k3 b - - 0 1
+position fen 4C3/8/8/8/8/8/8/K3k3 b - - 0 1
 go perft 1")
 assert_nodes "$out" "0"
 
@@ -840,7 +840,7 @@ position startpos
 d")
 assert_contains "$out" "Fen: rnefkenr/pppppppp/8/8/8/8/PPPPPPPP/RNEFKENR w - - 0 1"
 out=$(run_cmds "setoption name UCI_Variant value shatranj-iraq
-position fen 8/8/8/3e4/4E3/8/8/4K3 w - - 0 1
+position fen 7k/8/8/3e4/4E3/8/8/4K3 w - - 0 1
 go perft 1")
 assert_not_contains "$out" "^e4d5: 1$"
 assert_contains "$out" "^e4d3: 1$"
@@ -1171,7 +1171,7 @@ assert_contains "$out" "^bestmove "
 if variant_available "spell-chess"; then
 # 40) Spell chess: frozen castling rook blocks castling.
 out=$(run_cmds "setoption name UCI_Variant value spell-chess
-position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1 e8e7
+position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1,e8e7
 go perft 1")
 assert_not_contains "$out" "^e1g1:"
 
@@ -1204,7 +1204,7 @@ assert_not_contains "$out" "^j@b1,e1c1:"
 
 # 43) Spell chess: frozen pawn cannot capture en passant.
 out=$(run_cmds "setoption name UCI_Variant value spell-chess
-position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d5
+position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5,d7d5
 go perft 1")
 assert_not_contains "$out" "^e5d6:"
 fi

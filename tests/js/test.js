@@ -326,6 +326,14 @@ describe('board.setFen(fen)', function () {
     chai.expect(board.fen()).to.equal("r1bqkbnr/ppp2ppp/2np4/1B6/3NP3/8/PPP2PPP/RNBQK2R b KQkq - 0 5");
     board.delete();
   });
+
+  it("rejects invalid FEN without changing the board", () => {
+    let board = new ffish.Board();
+    const originalFen = board.fen();
+    chai.expect(() => board.setFen("not-a-fen")).to.throw();
+    chai.expect(board.fen()).to.equal(originalFen);
+    board.delete();
+  });
 });
 
 describe('board.sanMove(uciMove)', function () {

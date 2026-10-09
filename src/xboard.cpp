@@ -23,6 +23,7 @@
 #include <limits>
 
 #include "evaluate.h"
+#include "apiutil.h"
 #include "misc.h"
 #include "partner.h"
 #include "search.h"
@@ -202,12 +203,21 @@ namespace XBoard {
 
   void StateMachine::setboard(std::string fen) {
 
+    const Variant* v = variants.get(Options["UCI_Variant"]);
     if (fen.empty())
-        fen = variants.get(Options["UCI_Variant"])->startFen;
+        fen = v->startFen;
+
+    const FEN::FenValidation validation = FEN::validate_fen(fen, v, Options["UCI_Chess960"]);
+    if (validation != FEN::FEN_OK)
+    {
+        sync_cout << "Error (bad setboard): invalid FEN (validation error "
+                  << validation << ")." << sync_endl;
+        return;
+    }
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
     moveList.clear();
-    pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main());
+    pos.set(v, fen, Options["UCI_Chess960"], &states->back(), Threads.main());
   }
 
   // do_move() is called when engine needs to apply a move when using XBoard protocol.

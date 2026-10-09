@@ -1288,6 +1288,8 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
     else
         return OK;
 
+    const int maxPocketCount = int(SQUARE_NB) - 1;
+    const int maxPocketPieces = maxPocketCount * int(PIECE_NB);
     int handCount = 0;
     for (size_t i = 0; i < pocketPart.size();)
     {
@@ -1299,7 +1301,7 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
         }
         if (std::isdigit(static_cast<unsigned char>(c)))
         {
-            if (!read_fen_number(pocketPart, i, handCount) || handCount > int(SQUARE_NB))
+            if (!read_fen_number(pocketPart, i, handCount) || handCount > maxPocketCount)
             {
                 std::cerr << "Invalid pocket piece count." << std::endl;
                 return NOK;
@@ -1316,7 +1318,7 @@ inline Validation check_pocket_info(const std::string& fenBoard, int nbRanks, co
                 return NOK;
             }
             int repeats = handCount > 0 ? handCount : 1;
-            if (repeats > int(SQUARE_NB) - int(pocket.size()))
+            if (repeats > maxPocketPieces - int(pocket.size()))
             {
                 std::cerr << "Pocket contains too many pieces." << std::endl;
                 return NOK;

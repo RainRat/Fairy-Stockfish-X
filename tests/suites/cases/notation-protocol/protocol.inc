@@ -60,22 +60,20 @@ $(expect_engine_setup ucicyclone)
    expect eof
 EOF
 
-# Invalid UCI move tokens truncate the move list (pinned contract):
-# the valid prefix is applied, the bad token and everything after it are
-# ignored. Fail-open for notation mismatches; do not turn this into
-# whole-request rejection without a GUI-compat review (see DEVELOPING.md).
-# (No e3 in the FEN: this engine only records an en passant square when a
-# capture is actually possible, and none exists here.)
-run_expect "$ENGINE" > /dev/null <<EOF
-$(expect_engine_setup)
-   send "uci\n"
-   expect "uciok"
-   send "position startpos moves e2e4 bogus g1f3\n"
-   send "d\n"
-   expect -re "Fen: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
-   send "quit\n"
-   expect eof
-EOF
+assert_position_rejected() {
+  local command="$1"
+  local expected="$2"
+  local output
+  if output=$(printf 'uci\n%s\n' "$command" | "$ENGINE" 2>&1); then
+    echo "expected engine to reject: $command" >&2
+    return 1
+  fi
+  assert_contains_literal "$output" "$expected" "report the rejected input"
+}
+
+assert_position_rejected "position startpos garbage" "expected 'moves' after startpos"
+assert_position_rejected "position startpos moves e2e4 bogus g1f3" "Invalid move 'bogus'"
+assert_position_rejected "position fen not-a-fen" "Invalid position FEN"
 
 # Malformed numeric `go` limits are rejected without killing the engine:
 # the command is ignored with an `info string error` diagnostic and the

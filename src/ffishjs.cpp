@@ -208,6 +208,9 @@ public:
   }
 
   void set_fen(std::string fen) {
+    const FEN::FenValidation validation = FEN::validate_fen(fen, v, is960);
+    if (validation != FEN::FEN_OK)
+        throw_js_error("Invalid FEN (validation error " + std::to_string(validation) + ").");
     resetStates();
     moveStack.clear();
     moveStackUCI.clear();
@@ -520,6 +523,9 @@ private:
     this->resetStates();
     if (fen == "")
       fen = v->startFen;
+    const FEN::FenValidation validation = FEN::validate_fen(fen, v, is960);
+    if (validation != FEN::FEN_OK)
+      throw_js_error("Invalid FEN (validation error " + std::to_string(validation) + ").");
     this->pos.set(this->v, fen, is960, &this->states->back(), Threads.empty() ? nullptr : Threads.main());
     this->is960 = is960;
   }

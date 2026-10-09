@@ -69,17 +69,20 @@ Common engine commands:
 
 ## Invalid input handling
 
-Each interface has its own contract for malformed FEN and move lists. This is
-deliberate — match the surface you are calling, and do not "unify" them
-without a GUI-compatibility review:
+Native UCI `position` commands are strict: malformed syntax, invalid
+variant-aware FEN, or any illegal move prints an `info string` diagnostic and
+exits with failure. The engine never searches a valid prefix of a rejected
+move list. The Python API raises `ValueError` for invalid FEN and invalid
+moves. JavaScript board creation and `setFen()` throw on invalid FEN; the C
+binding reports failure from board creation or `fsf_set_fen()`. Native XBoard
+rejects invalid `setboard` FEN with an error and retains its previous position;
+an illegal XBoard move is reported and skipped.
 
-- **Native UCI `position ... moves`**: fail-open truncation. The valid prefix
-  is applied; the first unparsable token and everything after it are silently
-  ignored. This matches upstream Fairy-Stockfish and keeps games going when a
-  GUI sends a notation the engine does not understand (e.g. a 960-unaware
-  `e1h1`). There is no error channel on the `position` command.
-- **Native XBoard**: per-move `Illegal move: <token>` diagnostics; the bad
-  move is skipped.
+Strict FEN checks use the selected variant's board, piece, pocket, promotion,
+castling, and rule-specific fields. They do not impose orthodox chess rules on
+variants.
+
+Each interface still has its own contract for other malformed commands:
 - **`go searchmoves`**: tokens that match no legal move select nothing. A
   list with no legal match searches no moves (`bestmove (none)`).
 - **`go` numeric limits** (`depth`, `nodes`, `mate`, `perft`, `movetime`,
@@ -132,13 +135,10 @@ print(f"New FEN: {new_fen}")
 
 ### Binding and metadata compatibility
 
-The Python binding follows upstream pyffish's move-list contract: an invalid
-move raises `ValueError`. The JavaScript `Board.push()` contract follows
-upstream ffish.js: it returns `false` and leaves the board unchanged. These
-are separate from the native UCI contract, where `position ... moves` applies
-the valid prefix and stops at the first invalid move; callers should validate
-input before sending malformed UCI commands. The native `go searchmoves` path
-also expects valid move strings.
+The Python binding raises `ValueError` for invalid FEN and move lists. The
+JavaScript `Board.push()` contract follows upstream ffish.js: it returns
+`false` and leaves the board unchanged. The native `go searchmoves` path also
+expects valid move strings.
 
 `pyffish.game_result()` is an FSX extension of upstream's older terminal
 position helper. In addition to variant endings and checkmate/stalemate, FSX

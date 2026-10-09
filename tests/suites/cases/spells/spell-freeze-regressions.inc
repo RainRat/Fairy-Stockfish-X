@@ -32,7 +32,7 @@ EOF
 echo "spell freeze regression tests started"
 
 # Frozen castling rook cannot participate in castling.
-out=$(run_cmds "position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1 e8e7
+out=$(run_cmds "position fen 4k3/8/8/8/8/8/8/4K2R[f] b K - 0 1 moves f@h1,e8e7
 go perft 1")
 ! grep -q "^e1g1:" <<< "${out}"
 
@@ -60,7 +60,7 @@ go perft 1")
 ! grep -q "^j@b1,e1c1:" <<< "${out}"
 
 # Frozen pawns cannot capture en passant.
-out=$(run_cmds "position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5 d7d5
+out=$(run_cmds "position fen 4k3/3p4/8/4P3/8/8/8/4K3[f] b - - 0 1 moves f@e5,d7d5
 go perft 1")
 ! grep -q "^e5d6:" <<< "${out}"
 

@@ -56,6 +56,12 @@ bool buildPosition(Position& pos, StateListPtr& states, const Variant* v, const 
     UCI::init_variant(v);
     if (strcmp(fen, "startpos") == 0)
         fen = v->startFen.c_str();
+    const FEN::FenValidation validation = FEN::validate_fen(fen, v, chess960);
+    if (validation != FEN::FEN_OK)
+    {
+        PyErr_Format(PyExc_ValueError, "Invalid FEN (validation error %d)", validation);
+        return false;
+    }
     pos.set(v, std::string(fen), chess960, &states->back(), Threads.empty() ? nullptr : Threads.main());
 
     // parse move list

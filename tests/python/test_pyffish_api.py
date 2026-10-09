@@ -87,14 +87,17 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(sf.game_result("api-jcsa-prince-repetition", fen, cycle * 3), -sf.VALUE_MATE)
 
     def test_move_list_rejects_invalid_move(self):
-        # Whole-request contract: one bad token fails the call (contrast the
-        # native UCI truncation documented in DEVELOPING.md).
+        # Whole-request contract: one bad token fails the call.
         with self.assertRaisesRegex(ValueError, "Invalid move 'bogus'"):
             sf.game_result(
                 "chess",
                 "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                 ["e2e4", "bogus", "g1f3"],
             )
+
+    def test_position_rejects_invalid_fen(self):
+        with self.assertRaisesRegex(ValueError, "Invalid FEN"):
+            sf.legal_moves("chess", "not-a-fen", [])
 
     def test_game_result_nonroyal_draw_threshold(self):
         sf.load_variant_config(

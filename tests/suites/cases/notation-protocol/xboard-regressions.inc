@@ -36,6 +36,10 @@ echo "${out}" | grep -q "Error (bad perft): perft"
 out=$(run_xboard $'expect "feature done=1"\nsend "option   Verbosity=2\\n"\n')
 echo "${out}" | grep -q "feature done=1"
 
+out=$(run_xboard $'expect "feature done=1"\nsend "setboard not-a-fen\\n"\nexpect "Error (bad setboard): invalid FEN"\nsend "d\\n"\nexpect "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"\n')
+echo "${out}" | grep -q "Error (bad setboard): invalid FEN"
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
 out=$(run_expect "$ENGINE" <<EOF
 $(expect_engine_setup xboard)
    send "protover 2\n"

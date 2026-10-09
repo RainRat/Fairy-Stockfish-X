@@ -176,11 +176,14 @@ public:
   std::string fen(bool showPromoted) const { return pos.fen(false, showPromoted); }
   std::string fen(bool showPromoted, int countStarted) const { return pos.fen(false, showPromoted, countStarted); }
 
-  void set_fen(std::string fenStr) {
+  bool set_fen(std::string fenStr) {
+    if (FEN::validate_fen(fenStr, v, is960) != FEN::FEN_OK)
+      return false;
     resetStates();
     moveStack.clear();
     moveStackUCI.clear();
     pos.set(v, fenStr, is960, &states->back(), thread);
+    return true;
   }
 
   std::string san_move(std::string uciMove) { return san_move(uciMove, NOTATION_SAN); }
@@ -520,7 +523,11 @@ FSF_API fsf_board fsf_new_board(const char* variant, const char* fen, bool is960
   std::string uciVariant = variant ? std::string(variant) : std::string("chess");
   {
       std::lock_guard<std::mutex> lock(variant_state_mutex);
-      if (!get_variant(uciVariant))
+      const Variant* v = get_variant(uciVariant);
+      if (!v)
+          return nullptr;
+      const std::string requestedFen = fen ? std::string(fen) : std::string();
+      if (FEN::validate_fen(requestedFen.empty() ? v->startFen : requestedFen, v, is960) != FEN::FEN_OK)
           return nullptr;
   }
   return new Board(uciVariant,
@@ -545,7 +552,9 @@ FSF_API const char* fsf_fen(fsf_board b, bool showPromoted, int countStarted) {
   return to_cstr(static_cast<Board*>(b)->fen(showPromoted, countStarted));
 }
 
-FSF_API void fsf_set_fen(fsf_board b, const char* fen) { static_cast<Board*>(b)->set_fen(fen ? fen : ""); }
+FSF_API bool fsf_set_fen(fsf_board b, const char* fen) {
+  return b && static_cast<Board*>(b)->set_fen(fen ? fen : "");
+}
 
 FSF_API const char* fsf_san_move(fsf_board b, const char* uciMove, int notation) {
   return to_cstr(static_cast<Board*>(b)->san_move(uciMove ? uciMove : "", to_notation(notation)));

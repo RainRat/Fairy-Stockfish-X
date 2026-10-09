@@ -62,32 +62,62 @@ namespace {
   // or the starting position ("startpos") and then makes the moves given in the
   // following move list ("moves").
 
+  [[noreturn]] void invalid_position_command(const std::string& error) {
+    sync_cout << "info string " << error << sync_endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   void position(Position& pos, istringstream& is, StateListPtr& states) {
 
     Move m;
     string token, fen;
 
-    is >> token;
-    // Parse as SFEN if specified
+    if (!(is >> token))
+        invalid_position_command("Invalid position command: missing position.");
+
     bool sfen = token == "sfen";
+    bool hasMoves = false;
+    const Variant* v = variants.get(Options["UCI_Variant"]);
 
     if (token == "startpos")
     {
-        fen = variants.get(Options["UCI_Variant"])->startFen;
-        is >> token; // Consume "moves" token if any
+        fen = v->startFen;
+        if (is >> token)
+        {
+            if (token != "moves")
+                invalid_position_command("Invalid position command: expected 'moves' after startpos.");
+            hasMoves = true;
+        }
     }
     else if (token == "fen" || token == "sfen")
-        while (is >> token && token != "moves")
+    {
+        while (is >> token)
+        {
+            if (token == "moves")
+            {
+                hasMoves = true;
+                break;
+            }
             fen += token + " ";
+        }
+    }
     else
-        return;
+        invalid_position_command("Invalid position command: expected startpos, fen, or sfen.");
+
+    const FEN::FenValidation validation = FEN::validate_fen(fen, v, Options["UCI_Chess960"]);
+    if (validation != FEN::FEN_OK)
+        invalid_position_command("Invalid position FEN (validation error "
+                                 + std::to_string(validation) + ").");
 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
-    pos.set(variants.get(Options["UCI_Variant"]), fen, Options["UCI_Chess960"], &states->back(), Threads.main(), sfen);
+    pos.set(v, fen, Options["UCI_Chess960"], &states->back(), Threads.main(), sfen);
 
-    // Parse move list (if any)
-    while (is >> token && (m = UCI::to_move(pos, token)) != MOVE_NONE)
+    // Parse the complete move list. Invalid suffixes must not silently leave a
+    // different position than the command described.
+    while (hasMoves && is >> token)
     {
+        if ((m = UCI::to_move(pos, token)) == MOVE_NONE)
+            invalid_position_command("Invalid move '" + token + "' in position command.");
         states->emplace_back();
         pos.do_move(m, states->back());
     }
