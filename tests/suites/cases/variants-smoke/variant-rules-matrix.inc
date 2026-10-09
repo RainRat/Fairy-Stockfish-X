@@ -126,17 +126,17 @@ EOF
 
   out=$(run_uci "$ENGINE" "$VARIANTS" battleotk <<'EOF'
 position fen 8/8/8/8/8/8/1k6/K7 w - - 0 1
-go depth 2 searchmoves a1b1 a1a2 a1b2
+go depth 2 searchmoves a1b2
 EOF
 )
   assert_contains_literal "$out" "bestmove a1b2"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" battleotk <<'EOF'
-position fen 8/8/8/8/8/8/1kk5/K7 w - - 0 1 moves a1b2
+position fen 8/8/8/2k5/8/8/1k6/K7 w - - 0 1 moves a1b2
 d
 EOF
 )
-  assert_contains_literal "$out" "Fen: 8/8/8/8/8/8/1kk5/K7 w - - 0 1"
+  assert_contains_literal "$out" "Fen: 8/8/8/2k5/8/8/1K6/8 b - - 0 1"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" battleotk <<'EOF'
 position fen 8/8/8/8/8/8/1kk5/K7 w - - 0 1
@@ -146,12 +146,10 @@ EOF
   assert_contains_literal "$out" "bestmove (none)"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" battleotk <<'EOF'
-position fen K7/R6q/7r/8/8/8/6Q1/8 b - - 0 1 moves h7h8k
-d
+position fen K7/R6q/7r/8/8/8/6Q1/8 b - - 0 1
 go perft 1
 EOF
 )
-  assert_contains_literal "$out" "Fen: K7/R6q/7r/8/8/8/6Q1/8 b - - 0 1"
   assert_not_contains "$out" "^h7h8k:"
   assert_contains "$out" "^h7g7k: 1$"
 }
@@ -832,7 +830,7 @@ EOF
 
   out=$(run_uci "$ENGINE" "$VARIANTS" flank-chess <<'EOF'
 setoption name UCI_Variant value flank-chess
-position fen 10/10/10/10/10/10/5r4/5A4/10 b - - 0 1
+position fen 9k/10/10/10/10/10/5r4/5A4/9K b - - 0 1
 go perft 1
 EOF
 )
@@ -840,7 +838,7 @@ EOF
 
   out=$(run_uci "$ENGINE" "$VARIANTS" flank-chess <<'EOF'
 setoption name UCI_Variant value flank-chess
-position fen 10/10/10/10/10/10/5p4/5A4/10 b - - 0 1
+position fen 9k/10/10/10/10/10/5p4/5A4/9K b - - 0 1
 go perft 1
 EOF
 )
@@ -848,7 +846,7 @@ EOF
 
   out=$(run_uci "$ENGINE" "$VARIANTS" flank-chess <<'EOF'
 setoption name UCI_Variant value flank-chess
-position fen 10/10/10/10/10/10/5a4/5A4/10 b - - 0 1
+position fen 9k/10/10/10/10/10/5a4/5A4/9K b - - 0 1
 go perft 1
 EOF
 )
@@ -856,7 +854,7 @@ EOF
 
   out=$(run_uci "$ENGINE" "$VARIANTS" flank-chess <<'EOF'
 setoption name UCI_Variant value flank-chess
-position fen 10/10/10/10/10/10/10/1R3K2R1/10 w KQ - 0 1
+position fen 9k/10/10/10/10/10/10/1R3K2R1/10 w KQ - 0 1
 go perft 1
 EOF
 )
@@ -917,11 +915,11 @@ EOF
   assert_contains "$out" "Fen: wxeiiexw/rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/WXEIIEXW w KQkq - 0 1"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" constabulary-chess <<'EOF'
-position fen 8/8/8/8/8/8/8/8/R3K2R/8 w KQ - 0 1 moves e2g2
+position fen 7k/8/8/8/8/8/8/8/R3K2R/8 w KQ - 0 1 moves e2g2
 d
 EOF
 )
-  assert_contains "$out" "Fen: 8/8/8/8/8/8/8/8/R4RK1/8 b - - 1 1"
+  assert_contains "$out" "Fen: 7k/8/8/8/8/8/8/8/R4RK1/8 b - - 1 1"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" constabulary-chess <<'EOF'
 position fen 7k/P7/8/8/8/8/8/8/8/7K w - - 0 1

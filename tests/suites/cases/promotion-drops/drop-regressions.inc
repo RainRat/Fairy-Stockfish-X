@@ -380,21 +380,21 @@ UCI
 assert_contains "$out" "Nodes searched:"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" capture-to-hand-types-demo <<'UCI'
-position fen r3k3/8/8/8/8/8/R3K3/8 w - - 0 1 moves a1a7
+position fen r3k3/8/8/8/8/8/R3K3[] w - - 0 1 moves a1a7
 d
 UCI
 )
 assert_contains "$out" "Fen: R3k3/8/8/8/8/8/4K3\\[R\\] b - - 0 1"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" capture-to-hand-types-demo <<'UCI'
-position fen n3k3/8/8/8/8/8/R3K3/8 w - - 0 1 moves a1a7
+position fen n3k3/8/8/8/8/8/R3K3[] w - - 0 1 moves a1a7
 d
 UCI
 )
 assert_contains "$out" "Fen: R3k3/8/8/8/8/8/4K3\\[\\] b - - 0 1"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" capture-to-hand-types-demo <<'UCI'
-position fen +l3k3/8/8/8/8/8/R3K3/8 w - - 0 1 moves a1a7
+position fen +l3k3/8/8/8/8/8/R3K3[] w - - 0 1 moves a1a7
 d
 UCI
 )

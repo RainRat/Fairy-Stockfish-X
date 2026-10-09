@@ -40,14 +40,16 @@ trap 'rm -f "${TMP_INI}"' EXIT
 
 # --- TEST 1: Gated piece blocking discovered check ---
 cat > "${TMP_INI}" <<'EOF'
-[gatingblock:seirawan]
+[gatingblock:chess]
+gating = true
+seirawanGating = true
 EOF
 
 # White Rook a1, White King e1. Enemy Black King h1.
-# Move King e1-e2 and gate a Pawn (p) on e1.
-# The gated Pawn at e1 MUST block the discovered check from Rook a1 to King h1.
+# Move King e1-e2 and gate a Knight (n) on e1.
+# The gated Knight at e1 MUST block the discovered check from Rook a1 to King h1.
 OUT=$(run_cmds "${TMP_INI}" "setoption name UCI_Variant value gatingblock
-position fen 8/8/8/8/8/8/8/R3K2k[P] w KQ - 0 1 moves e1e2p
+position fen 8/8/8/8/8/8/8/R3K2k[N] w QE - 0 1 moves e1e2n
 d")
 
 if echo "$OUT" | grep -q "Checkers: [a-h][1-8]"; then
@@ -55,19 +57,16 @@ if echo "$OUT" | grep -q "Checkers: [a-h][1-8]"; then
     exit 1
 fi
 
-# --- TEST 2: Castling gating occupancy (prevent false positive check) ---
+# --- TEST 2: Castling must account for a checking gate ---
 # White King e1, Rook h1. Enemy Black King a1.
-# Gate a Rook (R) on h1 while castling kingside (e1g1).
-# Gated Rook at h1 would give check to a1 IF g1 and f1 were empty.
-# But King at g1 and Rook at f1 must block this check.
+# Gate a Rook (R) on e1 while castling kingside (e1g1).
+# The gate attacks the Black King along rank 1, so the resulting check must
+# remain visible after the castling rook and king move to f1 and g1.
 OUT=$(run_cmds "${TMP_INI}" "setoption name UCI_Variant value gatingblock
-position fen 8/8/8/8/8/8/8/k3K2R[R] w KQBCDEFGH - 0 1 moves e1g1rh1
+position fen 8/8/8/8/8/8/8/k3K2R[R] w KEH - 0 1 moves e1g1r
 d")
 
-if echo "$OUT" | grep -q "Checkers: [a-h][1-8]"; then
-    echo "FAILED: Engine thinks it is check, but it should be blocked by castled pieces!"
-    exit 1
-fi
+echo "$OUT" | grep -q "Checkers: e1"
 
 # --- TEST 3: Symmetric Gating Generation ---
 cat > "${TMP_INI}" <<'EOF'
@@ -82,7 +81,7 @@ EOF
 # Gating moves: e1f1r,d1; e1d2r,d1; e1e2r,d1; e1f2r,d1 (4 moves). e1d1r is illegal as King is on d1.
 # Total: 9 moves.
 OUT=$(run_cmds "${TMP_INI}" "setoption name UCI_Variant value symgating
-position fen 4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1
+position fen 4k3/8/8/8/8/8/8/4K3[RR] w E - 0 1
 go perft 1")
 
 NODES=$(echo "$OUT" | grep "Nodes searched:" | awk '{print $3}')
@@ -149,7 +148,7 @@ int main() {
 
     StateInfo st{};
     Position pos;
-    pos.set(variants.get("symgating"), "4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1", false, &st, nullptr);
+    pos.set(variants.get("symgating"), "4k3/8/8/8/8/8/8/4K3[RR] w E - 0 1", false, &st, nullptr);
 
     const Move m = make_gating<NORMAL>(SQ_E1, SQ_E2, ROOK, SQ_D1);
     assert(pos.legal(m));

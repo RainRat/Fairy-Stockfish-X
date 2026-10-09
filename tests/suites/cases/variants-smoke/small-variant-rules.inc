@@ -181,7 +181,7 @@ EOF
   assert_contains_literal "$out" "Fen: 1rk4n/nqr2bb1/4pppp/ppp5/5PPP/1PPPP3/P1RQ3N/1NKRBB2 w - - 0 1"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" saxun <<'EOF'
-position fen 8/8/8/8/8/8/P7/8 w - - 0 1
+position fen 7k/8/8/8/8/8/P7/7K w - - 0 1
 go perft 1
 EOF
 )
@@ -189,7 +189,7 @@ EOF
   assert_not_contains_literal "$out" "a2a4:"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" saxun <<'EOF'
-position fen 8/P7/8/8/8/8/8/8 w - - 0 1
+position fen 7k/P7/8/8/8/8/8/7K w - - 0 1
 go perft 1
 EOF
 )

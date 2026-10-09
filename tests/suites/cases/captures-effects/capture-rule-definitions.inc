@@ -511,36 +511,57 @@ setoption name VariantPath value ${default_variant_path}
 setoption name UCI_Variant value spell-chess
 position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 3 4>
 d
-position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 3 4
-d
-position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 x 4>
-d
 quit
 CMDS
 )
     assert_contains "$out" "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1 - <1 2 3 4>$"
-    assert_contains "$out" "^Fen: 7k/8/8/8/8/8/8/4K3\\[J\\] w - - 0 1$"
+
+    if out=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${default_variant_path}
+setoption name UCI_Variant value spell-chess
+position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 3 4
+quit
+CMDS
+); then
+      echo "Unclosed spell context should be rejected" >&2
+      exit 1
+    fi
+    assert_contains "$out" "Invalid position FEN"
+
+    if out=$(cat <<CMDS | "${ENGINE}" 2>&1
+uci
+setoption name VariantPath value ${default_variant_path}
+setoption name UCI_Variant value spell-chess
+position fen 7k/8/8/8/8/8/8/4K3[J] w - - 0 1 - <1 2 x 4>
+quit
+CMDS
+); then
+      echo "Malformed spell context should be rejected" >&2
+      exit 1
+    fi
+    assert_contains "$out" "Invalid position FEN"
   fi
 }
 
 test_pousse_counting() {
   local out
   out=$(run_uci "$ENGINE" "$VARIANTS" pousse <<'UCI'
-position fen AAAAAA/5/5/5/5/5[aaaaaaaaaaaaaaaaaa] b - - 0 1
+position fen AAAAAA/6/6/6/6/6[aaaaaaaaaaaaaaaaaa] b - - 0 1
 go perft 1
 UCI
 )
   assert_contains_literal "$out" "Nodes searched: 0" "Pousse single straight wins immediately"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" pousse <<'UCI'
-position fen AAAAAA/aaaaaa/4/4/4/4[AAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaa] b - - 0 1
+position fen AAAAAA/aaaaaa/6/6/6/6[AAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaa] b - - 0 1
 go perft 1
 UCI
 )
   assert_not_contains_literal "$out" "Nodes searched: 0" "Pousse equal straight counts remain playable"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" pousse <<'UCI'
-position fen AAAAAA/AAAAAA/aaaaaa/4/4/4[AAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaa] b - - 0 1
+position fen AAAAAA/AAAAAA/aaaaaa/6/6/6[AAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaa] b - - 0 1
 go perft 1
 UCI
 )
@@ -722,59 +743,59 @@ CMDS
   assert_contains "$out" "^Nodes searched:"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" nr-edge <<'UCI'
-position fen 5/5/4K/5/a1R2 w - - 0 1
+position fen 4k/5/4K/5/a1R2 w - - 0 1
 go depth 1 searchmoves c1c2
 UCI
 )
   assert_contains "$out" "bestmove c1c2"
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" nr-edge <<'UCI'
-position fen 5/5/4K/5/a1R2 w - - 0 1
+position fen 4k/5/4K/5/a1R2 w - - 0 1
 go depth 1 searchmoves c1b1
 UCI
 )
   assert_contains_literal "$out" "bestmove (none)"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" dabbaba-edge <<'UCI'
-position fen 5/5/5/2R2/a3K w - - 0 1
+position fen 4k/5/5/2R2/a3K w - - 0 1
 go depth 1 searchmoves c2c1
 UCI
 )
   assert_contains "$out" "bestmove c2c1"
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" dabbaba-edge <<'UCI'
-position fen 5/5/5/2R2/a3K w - - 0 1
+position fen 4k/5/5/2R2/a3K w - - 0 1
 go depth 1 searchmoves c2b2
 UCI
 )
   assert_contains_literal "$out" "bestmove (none)"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-edge <<'UCI'
-position fen 4K/5/5/2R2/a4 w - - 0 1
+position fen k3K/5/5/2R2/a4 w - - 0 1
 go depth 1 searchmoves c2c3
 UCI
 )
   assert_contains "$out" "bestmove c2c3"
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-edge <<'UCI'
-position fen 4K/5/5/2R2/a4 w - - 0 1
+position fen k3K/5/5/2R2/a4 w - - 0 1
 go depth 1 searchmoves c2b2
 UCI
 )
   assert_contains_literal "$out" "bestmove (none)"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" griffon-edge <<'UCI'
-position fen 2K2/a4/5/1R3/5 w - - 0 1
+position fen 2K1k/a4/5/1R3/5 w - - 0 1
 go depth 1 searchmoves b2b5
 UCI
 )
   assert_contains "$out" "bestmove b2b5"
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" griffon-edge <<'UCI'
-position fen 2K2/a4/5/1R3/5 w - - 0 1
+position fen 2K1k/a4/5/1R3/5 w - - 0 1
 go depth 1 searchmoves b2b3
 UCI
 )
   assert_contains_literal "$out" "bestmove (none)"
 
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" manticore-edge <<'UCI'
-position fen 5/5/5/2M2/a3K w - - 0 1
+position fen 4k/5/5/2A2/a3K w - - 0 1
 go depth 1 searchmoves c2c1
 UCI
 )
@@ -784,8 +805,8 @@ UCI
   fi
   assert_contains "$out" "bestmove c2c1"
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" manticore-edge <<'UCI'
-position fen 5/5/5/2M2/a3K w - - 0 1
-go depth 1 searchmoves c2b2
+position fen 4k/5/5/2A2/a3K w - - 0 1
+go depth 1 searchmoves c2d3
 UCI
 )
   assert_contains_literal "$out" "bestmove (none)"

@@ -459,7 +459,7 @@ INI
   out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen r3k3/4f3/8/8/8/8/4K3/8 b - - 0 1\ngo perft 1')
   ! grep -q "^a8a7: 1$" <<<"${out}"
 
-  out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen r3k3/8/4f3/8/8/8/4K3/8 w - - 0 1 moves e6e7\ngo perft 1')
+  out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen r3k3/8/4F3/8/8/8/4K3/8 w - - 0 1 moves e6e7\ngo perft 1')
   ! grep -q "^a8a7: 1$" <<<"${out}"
 
   out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen 4k3/8/8/4f3/8/4R3/4K3/8 w - - 0 1 moves e3e4\nd')

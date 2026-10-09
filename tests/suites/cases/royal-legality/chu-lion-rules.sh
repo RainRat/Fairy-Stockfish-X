@@ -30,7 +30,7 @@ promotionRegionWhite = *1 *2 *3
 
 [chu-multi-test:chu-test]
 customPiece2 = h:K
-twoStepMoves = l:* h:N>N
+twoStepMoves = l:* h:*
 
 # Cub mover (king steps only, no 2-square leaps) so the straight double
 # capture cannot hide behind the direct-leap dedup or the quiet-via route

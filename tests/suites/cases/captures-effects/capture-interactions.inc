@@ -82,7 +82,7 @@ startFen = k7/8/8/8/8/8/8/D3K3 w - - 0 1
 checking = false
 
 [dead-fen:chess]
-startFen = 4k3/8/8/8/8/8/8/8 w - - 0 1
+startFen = 4k3/8/8/8/8/8/8/3K4 w - - 0 1
 
 [iron-extinction:chess]
 customPiece1 = s:W
@@ -269,9 +269,9 @@ d")
 echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/R3K2\* b"
 
 # 7. Test color-change
-out=$(run_cmds "color-change" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4R3 w - - 0 1 moves e1e2
+out=$(run_cmds "color-change" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/K3R3 w - - 0 1 moves e1e2
 d")
-echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4r3/8 b"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/4r3/K7 b"
 
 # 7b. Test captureMorph + changingColor undo order.
 out=$(run_cmds "morph-color" "${TEMP_INI}" "position fen 4k3/8/8/3n4/4B3/8/8/4K3 w - - 0 1 moves e4d5
@@ -282,9 +282,9 @@ go perft 2")
 grep -q "Nodes searched:" <<<"$out"
 
 # 8. Test rifleCapture + captureForbidden
-out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1 moves a1a8
-d")
-echo "${out}" | grep -q "Fen: p3k3/8/8/8/8/8/8/R3K3 w"
+out=$(run_cmds "rifle-forbidden" "${TEMP_INI}" "position fen p3k3/8/8/8/8/8/8/R3K3 w - - 0 1
+go perft 1")
+! echo "${out}" | grep -q "^a1a8: 1$"
 
 # 9. Test captureForbidden to king suppresses checks
 out=$(run_cmds "forbidden-king-check" "${TEMP_INI}" "position startpos
@@ -334,7 +334,7 @@ fi
 
 # 15. Test rifleCapture + gating (ensure piece is NOT overwritten)
 # Move White King from e1 to e2 (rifle capture). It should NOT gate on e1.
-out=$(run_cmds "rifle-gating" "${TEMP_INI}" "position fen r3k2r/8/8/8/8/8/4q3/4K3[B] w KQkq - 0 1
+out=$(run_cmds "rifle-gating" "${TEMP_INI}" "position fen r3k2r/8/8/8/8/8/4q3/4K3[B] w -|00001000/00000000 - 0 1
 go perft 1")
 if echo "${out}" | grep -q "e1e2b:"; then
   echo "rifleCapture + gating bug: gating move was generated"
@@ -342,7 +342,7 @@ if echo "${out}" | grep -q "e1e2b:"; then
 fi
 
 # 15b. Test rifleCapture + symmetric gating still allows quiet gating moves
-out=$(run_cmds "rifle-symgating" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1
+out=$(run_cmds "rifle-symgating" "${TEMP_INI}" "position fen 4k3/8/8/8/8/8/8/4K3[RR] w -|00001000/00000000 - 0 1
 go perft 1")
 if ! echo "${out}" | grep -q "^e1e2r,d1: 1$"; then
   echo "rifleCapture + symmetric gating bug: quiet gating move was suppressed"
@@ -355,9 +355,9 @@ fi
 
 # 16. Test surroundCapture + changingColor (ensure color change triggers on bycatch)
 # White Rook moves from e2 to e3, between black pawns on d3 and f3.
-out=$(run_cmds "surround-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/3p1p2/4R3/8 w - - 0 1 moves e2e3
+out=$(run_cmds "surround-color" "${TEMP_INI}" "position fen 4k3/8/8/8/8/3p1p2/4R3/K7 w - - 0 1 moves e2e3
 d")
-if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/4r3/8/8 b"; then
+if ! echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/4r3/8/K7 b"; then
   echo "surroundCapture + changingColor bug: color change did not trigger"
   exit 1
 fi
@@ -408,9 +408,9 @@ fi
 
 # 22. Test pushingStrength + gating.
 # The rook pushes the pawn from d1 to f1, and the gated knight lands on a1.
-out=$(run_cmds "push-gating" "${TEMP_INI}" "position fen n3k2n/8/8/8/8/8/8/R2p3K[N] w Qkq - 0 1 moves a1e1n
+out=$(run_cmds "push-gating" "${TEMP_INI}" "position fen n3k2n/8/8/8/8/8/8/R2p3K[N] w -|10000000/00000000 - 0 1 moves a1e1n
 d")
-if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K\\[\\] b  - 1 1"; then
+if ! echo "${out}" | grep -q "Fen: n3k2n/8/8/8/8/8/8/N3Rp1K\\[\\] b - - 1 1"; then
   echo "pushingStrength + gating bug: piece was not correctly pushed"
   exit 1
 fi
@@ -424,7 +424,7 @@ if ! echo "${out}" | grep -q "Fen: K3k3/8/8/8/8/8/8/7\\* b"; then
 fi
 
 # 24. Test cylindrical + max distance accepts the variant and reaches the wrapped ray endpoint.
-out=$(run_cmds "cylindrical-max-distance" "${TEMP_INI}" "position fen 8/8/8/8/8/8/8/A7 w - - 0 1
+out=$(run_cmds "cylindrical-max-distance" "${TEMP_INI}" "position fen 7k/8/8/3K4/8/8/8/A7 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^a1b1: 1$"
 echo "${out}" | grep -q "^a1h1: 1$"

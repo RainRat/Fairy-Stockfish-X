@@ -7,37 +7,26 @@ tmp_ini="$(mktemp)"
 trap 'rm -f "$tmp_ini"' EXIT
 
 cat >"$tmp_ini" <<'EOF'
-[pseudoroyal-capture-control:chess]
+[pseudoroyal-capture-base:chess]
 king = -
 customPiece1 = a:W
 checking = false
 pseudoRoyalTypes = a
 pseudoRoyalCount = 99
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 8/8/8/8/8/8/8/8 w - - 0 1
 
-[pseudoroyal-capture-illegal:chess]
-king = -
-customPiece1 = a:W
-checking = false
-pseudoRoyalTypes = a
-pseudoRoyalCount = 99
+[pseudoroyal-capture-control:pseudoroyal-capture-base]
+
+[pseudoroyal-capture-illegal:pseudoroyal-capture-base]
 pseudoRoyalCaptureIllegal = true
 
-[pseudoroyal-blast-control:chess]
-king = -
-customPiece1 = a:W
-checking = false
-pseudoRoyalTypes = a
-pseudoRoyalCount = 99
+[pseudoroyal-blast-control:pseudoroyal-capture-base]
 blastOnCapture = true
 blastCenter = true
 blastDiagonals = false
 
-[pseudoroyal-blast-illegal:chess]
-king = -
-customPiece1 = a:W
-checking = false
-pseudoRoyalTypes = a
-pseudoRoyalCount = 99
+[pseudoroyal-blast-illegal:pseudoroyal-capture-base]
 pseudoRoyalCaptureIllegal = true
 blastOnCapture = true
 blastCenter = true

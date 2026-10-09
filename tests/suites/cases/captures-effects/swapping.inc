@@ -69,16 +69,17 @@ grep -q "Nodes searched:" <<<"$out"
 # White king a1, Black king e5, White piece A (Rook) c1, Black piece b d1.
 # Swap c1d1s -> A moves to d1, checks king at e5.
 cat > "${TMP_INI}" <<'INI'
-[swap-check:fairy]
+[swap-check:chess]
 maxFile = e
 maxRank = 5
-king = k
 customPiece1 = a:mR
 customPiece2 = b:mR
+king = k:K
+pieceToCharTable = K...A...R...k...b...r...
 adjacentSwapMoveTypes = a
 startFen = 5/5/5/5/5 w - - 0 1
 INI
-out=$(run_cmds "${TMP_INI}" swap-check "position fen 4k3/5/5/5/2Ab1 w - - 0 1
+out=$(run_cmds "${TMP_INI}" swap-check "position fen 4k/5/5/5/K1Ab1 w - - 0 1
 go perft 1")
 echo "${out}" | grep -q "^c1d1s: 1$"
 
@@ -87,7 +88,7 @@ echo "${out}" | grep -q "^c1d1s: 1$"
 # Swap c1d1s -> A moves to d1, b moves to c1.
 # King at d2 is still in check from Rook d5 (unblocked by A/b swap).
 # So c1d1s should be illegal.
-out=$(run_cmds "${TMP_INI}" swap-check "position fen 3r2/5/5/3K4/5/2Ab1 w - - 0 1
+out=$(run_cmds "${TMP_INI}" swap-check "position fen 3r1/4k/5/3K1/2Ab1 w - - 0 1
 go perft 1")
 ! echo "${out}" | grep -q "c1d1s: 1"
 

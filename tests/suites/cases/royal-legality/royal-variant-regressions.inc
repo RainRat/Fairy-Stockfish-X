@@ -122,7 +122,7 @@ EOF
   assert_not_contains "$out" "^d6d7: 1$"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" anti-king-2 <<'EOF'
-position fen 3rr2a/8/8/8/3Ap3/3P4/8/K6R w - - 0 1
+position fen k2rr2a/8/8/8/3Ap3/3P4/8/K6R w - - 0 1
 go perft 1
 EOF
 )

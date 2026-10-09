@@ -208,7 +208,7 @@ assert_not_contains "$out" "^bestmove \(none\)$"
 
 out=$(run_uci "$ENGINE" "$tmp_ini" shoshogi <<'UCI'
 setoption name Verbosity value 2
-position fen 4k4/9/9/9/9/9/9/7P/r3K4 b - - 0 1 moves a1e1
+position fen 4k4/9/9/9/9/9/9/7P1/r3K4 b - - 0 1 moves a1e1
 go depth 1
 UCI
 )
