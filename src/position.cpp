@@ -160,6 +160,10 @@ namespace {
     return make_piece(receiver, mainPromotionPawnType);
   }
 
+  inline int pass_state(const StateInfo* state) {
+    return state && state->pass ? (state->previous && state->previous->pass ? 2 : 1) : 0;
+  }
+
   
   struct PushTempPiece {
     Piece piece = NO_PIECE;
@@ -903,6 +907,8 @@ namespace Zobrist {
   Key dead[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
   Key promotionOrigin[PIECE_NB][SQUARE_NB];
+  Key passState[3];
+  Key gate[COLOR_NB][SQUARE_NB];
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
   Key edgeInsertLock[COLOR_NB][SQUARE_NB];
@@ -1462,6 +1468,12 @@ Key Position::piece_state_key(Square s) const {
 
 Key Position::compute_piece_state_key() const {
   Key k = 0;
+  // Gate availability changes legal moves even when the board is unchanged.
+  if (gating() && !commit_gates())
+      for (Color c : {WHITE, BLACK})
+          for (Bitboard b = gates(c); b; )
+              k ^= Zobrist::gate[c][pop_lsb(b)];
+
   for (PieceSet ps = var->orientedPieceTypes; ps; )
       for (Bitboard b = pieces(pop_lsb(ps)); b; )
       {
@@ -1610,6 +1622,13 @@ void Position::init() {
 
   for (Square s = SQ_A1; s <= SQ_MAX; ++s)
       Zobrist::lionTrade[s] = rng.rand<Key>();
+
+  for (int i = 1; i < 3; ++i)
+      Zobrist::passState[i] = rng.rand<Key>();
+
+  for (Color c : {WHITE, BLACK})
+      for (Square s = SQ_A1; s <= SQ_MAX; ++s)
+          Zobrist::gate[c][s] = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -2654,6 +2673,10 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
 
   for (Bitboard b = si->lionTradeSquares; b; )
       si->key ^= Zobrist::lionTrade[pop_lsb(b)];
+
+  if (var->doublePassEndsGame && !wall_or_move())
+      if (int state = pass_state(si))
+          si->key ^= Zobrist::passState[state];
 
   si->pieceStateKey = compute_piece_state_key();
   si->key ^= si->pieceStateKey;
@@ -8390,6 +8413,20 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   st->push.ejected = pushMove && pushInfo.ejects;
   st->push.blockedCapture = pushMove && pushInfo.captures && !pushInfo.ejects;
   st->pass = passMove && !openingSelfRemoval;
+  // Track one pass separately from two: the next pass is terminal after one,
+  // while two consecutive passes already end the game.
+  if (var->doublePassEndsGame && !wall_or_move())
+  {
+      int oldPassState = pass_state(st->previous);
+      int newPassState = pass_state(st);
+      if (oldPassState != newPassState)
+      {
+          if (oldPassState)
+              k ^= Zobrist::passState[oldPassState];
+          if (newPassState)
+              k ^= Zobrist::passState[newPassState];
+      }
+  }
   st->claimedSquares = 0;
   st->dropHandColor = COLOR_NB;
   st->suppressedCaptureTransfer = false;
@@ -10077,14 +10114,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
   }
 
-  if (var->orientedPieceTypes)
+  if (var->orientedPieceTypes && !gating())
   {
 #ifndef NDEBUG
       assert(st->pieceStateKey == compute_piece_state_key());
 #endif
       k ^= st->previous->pieceStateKey ^ st->pieceStateKey;
   }
-  else if (promotedPieces || st->pieceStateKey)
+  else if (promotedPieces || st->pieceStateKey || gating())
   {
       Key pieceStateKey = compute_piece_state_key();
       k ^= st->pieceStateKey ^ pieceStateKey;
@@ -10185,8 +10222,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       {
           PieceType pt = pop_lsb(ps);
           if (first_move_piece_type(pt) != NO_PIECE_TYPE)
-              st->gatesBB[sideToMove] &= ~pieces(sideToMove, pt);
+          {
+              Bitboard removedGates = st->gatesBB[sideToMove] & pieces(sideToMove, pt);
+              st->gatesBB[sideToMove] &= ~removedGates;
+              while (removedGates)
+              {
+                  Key gateKey = Zobrist::gate[sideToMove][pop_lsb(removedGates)];
+                  st->key ^= gateKey;
+                  st->pieceStateKey ^= gateKey;
+              }
+          }
       }
+
+  st->boardKey = st->key ^ st->reserveKey;
+  if (var->samePlayerBoardRepetitionIllegal)
+      st->layoutKey = layout_key();
 
   if (counting_rule())
   {
@@ -10843,6 +10893,9 @@ void Position::do_null_move(StateInfo& newSt) {
 
   st->move = MOVE_NULL;
   clear_move_undo_state(st);
+  int previousPassState = pass_state(st->previous);
+  if (var->doublePassEndsGame && !wall_or_move() && previousPassState)
+      st->key ^= Zobrist::passState[previousPassState];
 #ifndef NDEBUG
   assert_no_move_undo_payload(st);
 #endif

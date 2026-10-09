@@ -193,6 +193,28 @@ assert_distinct_position_keys() {
   fi
 }
 
+assert_distinct_move_position_keys() {
+  local variant_path="$1"
+  local variant="$2"
+  local pos_a="$3"
+  local pos_b="$4"
+
+  local out_a out_b key_a key_b
+  out_a=$(position_dump "${variant_path}" "${variant}" "${pos_a}")
+  out_b=$(position_dump "${variant_path}" "${variant}" "${pos_b}")
+  key_a=$(echo "$out_a" | sed -n 's/^Key: //p' | tail -n1)
+  key_b=$(echo "$out_b" | sed -n 's/^Key: //p' | tail -n1)
+
+  if [[ -z "${key_a}" || -z "${key_b}" || "${key_a}" == "${key_b}" ]]; then
+    echo "Distinct-history key collision for ${variant}"
+    echo "position A: ${pos_a}"
+    echo "key A: ${key_a}"
+    echo "position B: ${pos_b}"
+    echo "key B: ${key_b}"
+    return 1
+  fi
+}
+
 assert_progressive_reload_keys() {
   local variant_path="$1"
   local variant="$2"
@@ -257,6 +279,12 @@ castling = false
 promotedPieceType = p:q
 startFen = 4k3/8/8/8/8/8/8/4K3[] w - - 0 1
 
+[gatehash:chess]
+gating = true
+gatingFromHand = false
+gatingPieceAfter = r:q
+castling = false
+
 [spellprisonex:chess]
 potions = true
 freezePotion = q
@@ -303,6 +331,13 @@ INI
 tmp_ini="${FSX_TMP_INI}"
 
 assert_reload_key_match "${tmp_ini}" "prsync" "position startpos moves e2e4 d7d5 e4d5"
+assert_distinct_move_position_keys "${DEFAULT_VARIANT_PATH}" "go9" \
+  "position startpos" "position startpos moves 0000 0000"
+assert_distinct_position_keys "${tmp_ini}" "gatehash" \
+  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1" \
+  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Hh - 0 1"
+assert_reload_key_match "${tmp_ini}" "gatehash" \
+  "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Hh - 0 1 moves h2h4 a7a6 h1h2q"
 assert_reload_key_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
 assert_reload_perft1_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
 # Placement drops can grant castling rights; the incremental hash must include

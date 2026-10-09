@@ -19,6 +19,7 @@ changingColorTrigger = always
 changingColorPieceTypes = n
 
 [move-morph-promoted:chess]
+pieceDrops = true
 capturesToHand = true
 moveMorphPieceType = b:n
 EOF
