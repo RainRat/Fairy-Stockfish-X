@@ -280,10 +280,13 @@ assert_not_contains "$out" "^a2a3:"
 assert_not_contains "$out" "^a2a4:"
 
 # Direct king capture must end the game immediately in capture-the-royal flows.
-out=$(run_uci_cmds "$ENGINE" "$VARIANTS" british-chess \
-  "position fen 10/10/10/10/10/10/10/10/4q5/3Q6 w - - 0 1 moves d1e2
+# British Chess is 10x10, so normal-board test engines do not load it.
+if variant_available "$VARIANTS" british-chess; then
+  out=$(run_uci_cmds "$ENGINE" "$VARIANTS" british-chess \
+    "position fen 10/10/10/10/10/10/10/10/4q5/3Q6 w - - 0 1 moves d1e2
 go perft 1")
-assert_nodes "$out" "0"
+  assert_nodes "$out" "0"
+fi
 
 if variant_available "$VARIANTS" minihexchess; then
   out=$(run_uci_cmds "$ENGINE" "$VARIANTS" minihexchess \
@@ -430,11 +433,14 @@ out=$(run_uci_cmds "$ENGINE" "$VARIANTS" kings-valley \
 go depth 1")
 assert_contains_literal "$out" "bestmove (none)"
 
-# Oshi search should not prefer handing the opponent a point by self-ejecting.
-out=$(run_uci_cmds "$ENGINE" "$VARIANTS" oshi \
-  "position fen ca2a4/b4ab1c/4a4/9/5A3/2AC5/9/2BAA1B2/C8 w - - 10 6 {0 0}
+# Oshi uses a 9x9 board and is unavailable in normal-board builds.
+if variant_available "$VARIANTS" oshi; then
+  # Oshi search should not prefer handing the opponent a point by self-ejecting.
+  out=$(run_uci_cmds "$ENGINE" "$VARIANTS" oshi \
+    "position fen ca2a4/b4ab1c/4a4/9/5A3/2AC5/9/2BAA1B2/C8 w - - 10 6 {0 0}
 go depth 8")
-assert_not_contains "$out" "^bestmove d4a4"
+  assert_not_contains "$out" "^bestmove d4a4"
+fi
 
 # Lion family two-step move regressions: unique outcomes, igui, quiet pass, and gating.
 out=$(run_uci_cmds "$ENGINE" "$TMP_INI" test-lion \

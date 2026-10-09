@@ -13,17 +13,12 @@ EOF
 }
 
 variant_available() {
-  local out
-  out=$(printf 'uci\nquit\n' | uci_timeout "$ENGINE")
-  grep -q ' var separate-realms ' <<<"$out"
+  probe_variant_available "$ENGINE" separate-realms "$VARIANTS"
 }
 
 echo "separate realms regression tests started"
 
-if ! variant_available; then
-  echo "separate-realms variant not available in this build; skipping separate-realms regression"
-  exit 0
-fi
+variant_available "$ENGINE" separate-realms "$VARIANTS"
 
 out=$(run_cmds "setoption name UCI_Variant value separate-realms
 position startpos
@@ -55,7 +50,7 @@ assert_contains "$out" "^d4b2: 1$"
 assert_not_contains "$out" "^d4e5: 1$"
 
 out=$(run_cmds "setoption name UCI_Variant value separate-realms
-position fen 4k3/8/8/4r3/3C4/8/8/4K3 w - - 0 1
+position fen 4k3/8/8/4r3/3C4/8/8/K7 w - - 0 1
 go perft 1")
 assert_contains "$out" "^d4e5: 1$"
 assert_contains "$out" "^d4f6: 1$"

@@ -124,7 +124,7 @@ if [[ $VARIANT == "all" || $VARIANT == "variant" ]]; then
   expect "$perft_exp" shatranj startpos 4 68122 > /dev/null
   expect "$perft_exp" amazon startpos 4 318185 > /dev/null
   expect "$perft_exp" nightrider startpos 4 419019 > /dev/null
-  expect "$perft_exp" nightrider "fen 8/8/8/8/8/4K3/8/n1R5 w - - 0 1" 2 52 > /dev/null
+  expect "$perft_exp" nightrider "fen k7/8/8/8/8/4K3/8/n1R5 w - - 0 1" 2 81 > /dev/null
   expect "$perft_exp" grasshopper startpos 4 635298 > /dev/null
   expect "$perft_exp" hoppelpoppel startpos 4 202459 > /dev/null
   # NOTE: linesofaction is defined in variants.ini, which perft.sh does not
