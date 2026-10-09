@@ -263,6 +263,7 @@ run_variants_smoke() {
     legacy board-game-smoke.sh 5m "${ENGINE}" "${VARIANTS}"
     legacy variant-promotion-baselines.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy gating-large-board.sh 3m "${ENGINE}" "${VARIANTS}"
+    legacy large-board-capacity.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy royal-pawn-variants.sh 3m "${ENGINE}" "${VARIANTS}"
     small_board_optional_legacy very-large-board-regressions.sh 10m "${ENGINE}" "${VARIANTS}"
 }

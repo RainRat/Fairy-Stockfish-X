@@ -13022,18 +13022,22 @@ bool Position::pos_is_ok() const {
   if (Fast)
       return true;
 
-  if (   pieceCount[make_piece(~sideToMove, KING)]
+  // Variants with allowChecks intentionally permit a side to leave the
+  // opposing King attacked, so the orthodox reachability invariant does not
+  // apply to them.
+  if (   !allow_checks()
+      && pieceCount[make_piece(~sideToMove, KING)]
       && (attackers_to_king(square<KING>(~sideToMove), sideToMove) & pieces(sideToMove)))
       assert(0 && "pos_is_ok: Kings");
 
-  if (   pieceCount[make_piece(WHITE, PAWN)] > 64
-      || pieceCount[make_piece(BLACK, PAWN)] > 64)
+  if (   pieceCount[make_piece(WHITE, PAWN)] > SQUARE_NB
+      || pieceCount[make_piece(BLACK, PAWN)] > SQUARE_NB)
       assert(0 && "pos_is_ok: Pawns");
 
   if (   (pieces(WHITE) & pieces(BLACK))
       || (pieces(WHITE) | pieces(BLACK)) != pieces()
-      || popcount(pieces(WHITE)) > 64
-      || popcount(pieces(BLACK)) > 64)
+      || popcount(pieces(WHITE)) > SQUARE_NB
+      || popcount(pieces(BLACK)) > SQUARE_NB)
       assert(0 && "pos_is_ok: Bitboards");
 
   for (PieceType p1 = PAWN; p1 <= KING; ++p1)
