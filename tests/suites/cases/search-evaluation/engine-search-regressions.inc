@@ -87,19 +87,19 @@ symmetricDropTypes = r
 EOF
   local tmp_ini="${FSX_TMP_INI}" out
 
-  out=$(run_uci "$ENGINE" "$tmp_ini" gatingblock <<<'position fen 8/8/8/8/8/8/8/R3K2k[N] w KQBCDEFGH - 0 1 moves e1e2n
+  out=$(run_uci "$ENGINE" "$tmp_ini" gatingblock <<<'position fen 1k6/8/8/8/8/8/8/R3K2R[N] w KQE - 0 1 moves e1e2n
 d')
-  assert_contains "$out" "Fen: 8/8/8/8/8/8/4K3/R3N2k\\[\\] b - - 1 1"
+  assert_contains "$out" "Fen: 1k6/8/8/8/8/8/4K3/R3N2R\\[\\] b - - 1 1"
   assert_contains "$out" "^Checkers: *$"
 
-  out=$(run_uci "$ENGINE" "$tmp_ini" symgating <<<'position fen 4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1
+  out=$(run_uci "$ENGINE" "$tmp_ini" symgating <<<'position fen 4k3/8/8/8/8/8/8/4K3[RR] w E - 0 1
 go perft 1')
   assert_contains "$out" "^e1d1: 1$"
   assert_not_contains "$out" "^e1d1r,d1: 1$"
   assert_contains "$out" "^e1e2r,d1: 1$"
   assert_nodes "$out" 9
 
-  out=$(run_uci "$ENGINE" "$tmp_ini" symgating <<<'position fen 4k3/8/8/8/8/8/8/4K3[RR] w ABCDEFGH - 0 1 moves e1e2r,d1
+  out=$(run_uci "$ENGINE" "$tmp_ini" symgating <<<'position fen 4k3/8/8/8/8/8/8/4K3[RR] w E - 0 1 moves e1e2r,d1
 d')
   assert_contains "$out" "Fen: 4k3/8/8/8/8/8/4K3/3RR3\\[\\] b - - 1 1"
 }

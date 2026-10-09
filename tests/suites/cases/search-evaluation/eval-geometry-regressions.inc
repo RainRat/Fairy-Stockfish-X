@@ -73,7 +73,8 @@ maxFile = 5
 maxRank = 5
 castling = false
 promotionPieceTypes = -
-startFen = 5/5/5/5/5 w - - 0 1
+# The bishop geometry position has one black king and no white king.
+startFen = 5/5/5/4k/5 w - - 0 1
 INI
 
 # Narrow boards should evaluate without tripping invalid shelter clamping.
