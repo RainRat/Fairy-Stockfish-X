@@ -6,6 +6,7 @@ SUITE_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 SUITE_NAME=${1:?suite name is required}
 ENGINE=${2:-${SUITE_ROOT}/src/stockfish-large}
 VARIANTS=${3:-${SUITE_ROOT}/src/variants.ini}
+FSX_CASE_MATCHED=0
 export ROOT_DIR="${SUITE_ROOT}" ENGINE VARIANTS VARIANT_PATH="${VARIANTS}"
 cd "${SUITE_ROOT}"
 source "${SUITE_ROOT}/tests/lib/uci.sh"
@@ -17,26 +18,31 @@ if [[ "${VERBOSE:-0}" != 1 && -z "${FSX_CASE_LOG_ROOT:-}" ]]; then
 fi
 
 suite_case() {
-    local name="$1" timeout_value="$2" log_dir="" log=""
+    local name="$1" timeout_value="$2" log_dir="" log="" start=$SECONDS duration status=0
     shift 2
+    if [[ -n "${FSX_CASE_FILTER:-}" ]]; then
+        [[ "${name}" == "${FSX_CASE_FILTER}" ]] || return 0
+        FSX_CASE_MATCHED=1
+    fi
     if [[ "${VERBOSE:-0}" == 1 ]]; then
         echo "== ${SUITE_NAME}/${name} =="
-        if timeout "${timeout_value}" "$@"; then
-            return 0
-        fi
+        timeout "${timeout_value}" "$@" || status=$?
     else
         log_dir="${FSX_CASE_LOG_ROOT}/${SUITE_NAME}"
         log="${log_dir}/${name//\//_}.log"
         mkdir -p "${log_dir}"
-        if timeout "${timeout_value}" "$@" >"${log}" 2>&1; then
-            echo "ok: ${SUITE_NAME}/${name}"
-            return 0
-        fi
-        cat "${log}"
+        timeout "${timeout_value}" "$@" >"${log}" 2>&1 || status=$?
     fi
+    duration=$((SECONDS - start))
+    if (( status == 0 )); then
+        echo "ok: ${SUITE_NAME}/${name} (${duration}s)"
+        return 0
+    fi
+    [[ "${VERBOSE:-0}" == 1 ]] || cat "${log}"
     {
-        echo "FAILED: ${SUITE_NAME}/${name}" >&2
-        echo "rerun: tests/run.sh suite ${SUITE_NAME} ${ENGINE}" >&2
+        echo "FAILED: ${SUITE_NAME}/${name} (${duration}s)" >&2
+        printf 'rerun: tests/run.sh case %q %q %q %q\n' \
+            "${SUITE_NAME}" "${name}" "${ENGINE}" "${VARIANTS}" >&2
     }
     return 1
 }
@@ -88,8 +94,7 @@ run_config() {
 run_movement() {
     native promotion
     native movement
-    echo "== ${SUITE_NAME}/immobility-illegal-hopper =="
-    run_immobility_illegal_hopper
+    legacy immobility-illegal-hopper.sh 2m "${ENGINE}"
     legacy movegen-regressions.sh 3m "${ENGINE}"
     legacy geometry-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy rider-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
@@ -105,51 +110,11 @@ run_movement() {
     legacy rule-matrix-movement.sh 5m "${ENGINE}"
 }
 
-run_immobility_illegal_hopper() {
-    load_inline_variants <<'INI'
-[immobility-illegal-hopper-test:chess]
-maxFile = h
-maxRank = 8
-pieceDrops = true
-immobilityIllegal = true
-king = k:W
-customPiece1 = m:fpR
-customPiece2 = g:W
-promotedPieceType = m:g
-startFen = 8/8/8/8/8/8/8/4K3[M]
-INI
-    local out
-    out=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" immobility-illegal-hopper-test <<'UCI'
-position fen 8/8/8/8/8/8/8/4K3[M] w - - 0 1
-go perft 1
-UCI
-)
-    assert_contains "$out" "^M@a6: 1$"
-    assert_contains "$out" "^M@e6: 1$"
-    assert_not_contains "$out" "^M@a7:"
-    assert_not_contains "$out" "^M@e7:"
-    assert_not_contains "$out" "^M@a8:"
-    assert_not_contains "$out" "^M@e8:"
-}
-
 run_royal_legality() {
     native royal
     native adjudication
     native extinction-color
-    local no_kings_output
-    load_inline_variants <<'INI'
-[noroyal-capture:chess]
-king = k:K
-castling = false
-allowChecks = true
-INI
-    no_kings_output=$(run_uci "${ENGINE}" "${FSX_TMP_INI}" noroyal-capture <<'UCI'
-position fen 4k3/8/8/8/4R3/8/8/4K3 w - - 0 1
-go perft 1
-UCI
-)
-    assert_contains_literal "${no_kings_output}" "e4e8: 1" "contains the royal capture"
-    cleanup_tmp_ini
+    legacy no-royal-capture.sh 2m "${ENGINE}"
     legacy royal-variant-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy chu-lion-rules.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy pseudoroyal-capture-illegal.sh 2m "${ENGINE}" "${VARIANTS}"
@@ -267,4 +232,13 @@ case "${SUITE_NAME}" in
     *) echo "unknown suite: ${SUITE_NAME}" >&2; exit 2 ;;
 esac
 
-echo "passed: ${SUITE_NAME}"
+if [[ -n "${FSX_CASE_FILTER:-}" && "${FSX_CASE_MATCHED}" != 1 ]]; then
+    echo "unknown suite case: ${SUITE_NAME}/${FSX_CASE_FILTER}" >&2
+    exit 2
+fi
+
+if [[ -n "${FSX_CASE_FILTER:-}" ]]; then
+    echo "passed: ${SUITE_NAME}/${FSX_CASE_FILTER}"
+else
+    echo "passed: ${SUITE_NAME}"
+fi

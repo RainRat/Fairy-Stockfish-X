@@ -158,7 +158,8 @@ print_list() {
 }
 
 run_one() {
-    local suite="$1" engine="$2" variants="$3" log_dir="${4:-}" log=""
+    local suite="$1" engine="$2" variants="$3" log_dir="${4:-}" log="" label="$1"
+    [[ -n "${FSX_CASE_FILTER:-}" ]] && label="${suite}/${FSX_CASE_FILTER}"
     check_engine "$suite" "$engine"
     check_engine_freshness "$engine"
     check_prerequisites "$suite"
@@ -170,18 +171,28 @@ run_one() {
     if [[ -n "$log_dir" ]]; then
         log="${log_dir}/${suite}.log"
         if timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants" >"$log" 2>&1; then
-            echo "ok: ${suite} (log: ${log})"
+            echo "ok: ${label} (log: ${log})"
         else
-            echo "FAILED: ${suite}"
+            echo "FAILED: ${label}"
             cat "$log"
-            echo "rerun: tests/run.sh suite ${suite} ${engine}" >&2
+            if [[ -n "${FSX_CASE_FILTER:-}" ]]; then
+                printf 'rerun: tests/run.sh case %q %q %q %q\n' \
+                    "${suite}" "${FSX_CASE_FILTER}" "${engine}" "${variants}" >&2
+            else
+                echo "rerun: tests/run.sh suite ${suite} ${engine}" >&2
+            fi
             return 1
         fi
     else
-        echo "== ${suite} =="
+        echo "== ${label} =="
         if ! timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants"; then
-            echo "FAILED: ${suite}" >&2
-            echo "rerun: tests/run.sh suite ${suite} ${engine}" >&2
+            echo "FAILED: ${label}" >&2
+            if [[ -n "${FSX_CASE_FILTER:-}" ]]; then
+                printf 'rerun: tests/run.sh case %q %q %q %q\n' \
+                    "${suite}" "${FSX_CASE_FILTER}" "${engine}" "${variants}" >&2
+            else
+                echo "rerun: tests/run.sh suite ${suite} ${engine}" >&2
+            fi
             return 1
         fi
     fi
@@ -306,7 +317,7 @@ run_fast_parallel() {
 }
 
 usage() {
-    echo "usage: tests/run.sh list | fast [engine] | full [engine] | suite <suite...> [engine]" >&2
+    echo "usage: tests/run.sh list | fast [engine] | full [engine] | suite <suite...> [engine] | case <suite> <case> [engine] [variants]" >&2
     exit 2
 }
 
@@ -371,6 +382,26 @@ case "$command" in
             export FSX_CASE_LOG_ROOT="${suite_log_dir}/cases"
             run_suite_list "$engine" "$VARIANTS" "$suite_log_dir"
         fi
+        ;;
+    case)
+        shift
+        (( $# >= 2 && $# <= 4 )) || usage
+        suite="$1"
+        case_name="$2"
+        engine=$(normalize_engine "${3:-$(default_engine)}")
+        variants="${4:-$VARIANTS}"
+        [[ -n "${SUITE_TIMEOUT[$suite]:-}" ]] || { echo "unknown suite: $suite" >&2; exit 2; }
+        SUITES_TO_RUN=("$suite")
+        check_named_engines "$engine"
+        prepare_python
+        export CXX FSX_CASE_FILTER="$case_name"
+        prepare_shared_objects "$engine"
+        if [[ "${VERBOSE:-0}" == 1 ]]; then
+            unset FSX_QUIET_VARIANT_LOAD_SUMMARIES
+        else
+            export FSX_QUIET_VARIANT_LOAD_SUMMARIES=1
+        fi
+        run_one "$suite" "$engine" "$variants"
         ;;
     *) usage ;;
 esac
