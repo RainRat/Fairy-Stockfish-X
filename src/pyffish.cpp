@@ -39,7 +39,9 @@ inline Value normalize_public_mate_score(const Position& pos, Value result) {
 }
 
 const Variant* require_variant(const char* variant) {
-    const Variant* v = variants.get(std::string(variant));
+    const bool standard = !variant || !*variant || !strcmp(variant, "Standard")
+                          || !strcmp(variant, "standard");
+    const Variant* v = variants.get(standard ? "chess" : variant);
     if (!v)
     {
         PyErr_SetString(PyExc_ValueError, (std::string("No such variant '") + variant + "'").c_str());

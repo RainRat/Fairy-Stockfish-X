@@ -2271,6 +2271,9 @@ Value Eval::evaluate(const Position& pos) {
 
 std::string Eval::trace(Position& pos) {
 
+  if (pos.is_immediate_game_end())
+      return "Final evaluation: none (game over)";
+
   if (pos.evasion_checkers())
       return "Final evaluation: none (in check)";
 

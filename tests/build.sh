@@ -3,6 +3,23 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+for arg in "$@"; do
+    if [[ "$arg" == -h || "$arg" == --help ]]; then
+        cat <<'EOF'
+Usage: tests/build.sh [MAKE_VARIABLE=value ...]
+
+Build an engine binary and record its build profile. Common variables include
+ARCH, COMP, EXE, largeboards, verylargeboards, all, nnue, debug, and optimize.
+
+Examples:
+  tests/build.sh ARCH=x86-64-modern
+  tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
+EOF
+        exit 0
+    fi
+done
+
 LOG_DIR="${ROOT_DIR}/.local/build"
 LOG_FILE="${LOG_DIR}/compile.log"
 source "${ROOT_DIR}/tests/lib/build-signature.sh"
