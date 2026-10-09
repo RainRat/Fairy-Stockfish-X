@@ -273,6 +273,7 @@ run_search_evaluation() {
     legacy kxk-fairy-endgames.sh 3m "${ENGINE}"
     legacy non8x8-endgames.sh 3m "${ENGINE}"
     legacy freeze-evaluation-cache.sh 2m "${ENGINE}" "${VARIANTS}"
+    legacy standard-lazy-parity.sh 1m "${ENGINE}" "${VARIANTS}"
     legacy eval-geometry-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy asymmetric-extinction-evaluation.sh 3m "${ENGINE}"
     legacy checkers-evaluation.sh 2m "${ENGINE}" "${VARIANTS}"

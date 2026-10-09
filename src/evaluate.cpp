@@ -303,6 +303,9 @@ namespace {
         && !pos.rifle_capture()
         && !pos.has_pushing()
         && !pos.has_pulling()
+        // Match Variant::conclude(): multi-leg movement disables this shortcut.
+        && pos.variant()->twoStepPieceTypes == NO_PIECE_SET
+        && pos.variant()->hookPieceTypes == NO_PIECE_SET
         && !pos.has_adjacent_swapping()
         && !pos.capture_morph()
         && !pos.piece_promotion_on_capture()
