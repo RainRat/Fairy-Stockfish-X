@@ -91,7 +91,7 @@ jobs:
 
       - name: Test fast semantic profile
         run: |
-          ../tests/run.sh fast ./stockfish-allvars
+          LARGE_ENGINE="${PWD}/stockfish-allvars" ../tests/run.sh fast ./stockfish-allvars
 
       - name: Test search and evaluation regressions
         if: ${{ matrix.config.run_expensive_tests }}
