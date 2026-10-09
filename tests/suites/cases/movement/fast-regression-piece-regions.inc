@@ -98,10 +98,6 @@ position startpos
 go perft 1
 UCI
 )
-if ! grep -q "^e1e2: 1$" <<<"$out"; then
-  echo "skip: piece-region regression not supported by this build"
-  exit 0
-fi
 assert_contains "$out" "^e1e2: 1$"
 assert_contains "$out" "^e1e3: 1$"
 assert_not_contains "$out" "^e1e4: 1$"
@@ -217,6 +213,4 @@ EOF
   assert_contains "$out" "^Nodes searched: 37$"
   assert_contains "$out" "^f3e2: 1$"
   assert_contains "$out" "^0000: 1$"
-else
-  echo "janggi variant not available in this build; skipping janggi regression"
 fi

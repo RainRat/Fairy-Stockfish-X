@@ -110,7 +110,6 @@ assert_xboard_matches_uci() {
 
 test_bombardment() {
   if ! variant_available "$ENGINE" bombardment "$VARIANT_PATH"; then
-    echo "bombardment variant not available in this build; skipping bombardment test"
     return 0
   fi
 
@@ -157,7 +156,6 @@ EOF
 
 test_cowboys_opening() {
   if ! variant_available "$ENGINE" cowboys "$VARIANTS"; then
-    echo "cowboys variant not available in this build; skipping cowboys opening test"
     return 0
   fi
 

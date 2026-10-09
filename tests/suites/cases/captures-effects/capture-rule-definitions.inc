@@ -799,10 +799,6 @@ position fen 4k/5/5/2A2/a3K w - - 0 1
 go depth 1 searchmoves c2c1
 UCI
 )
-  if ! grep -q "bestmove c2c1" <<<"$out"; then
-    echo "skip: pushing edge-piece regression not supported by this build"
-    return 0
-  fi
   assert_contains "$out" "bestmove c2c1"
   out=$(run_uci "$ENGINE" "$TMP_VARIANTS" manticore-edge <<'UCI'
 position fen 4k/5/5/2A2/a3K w - - 0 1

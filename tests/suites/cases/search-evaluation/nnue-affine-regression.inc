@@ -10,8 +10,7 @@ COMMON=(-std=c++17 -O2 -Wall -Wextra -I"$ROOT/src")
 case "$(uname -m)" in
   x86_64|amd64|i386|i686) ;;
   *)
-    echo "nnue-affine-regression skipped: x86 SIMD flags are unavailable on $(uname -m)"
-    exit 0
+    fsx_test_skip "x86 SIMD flags are unavailable on $(uname -m)"
     ;;
 esac
 
@@ -24,7 +23,7 @@ $CXX "${COMMON[@]}" \
 "$CXX" "${COMMON[@]}" \
   "$ROOT/tests/cpu-feature-check.cpp" -o "$TMPDIR/cpu-feature-check"
 if ! "$TMPDIR/cpu-feature-check"; then
-  echo "nnue-affine-regression AVX2 path skipped: CPU does not support AVX2"
+  fsx_test_note_skip "AVX2 path skipped because the CPU does not support AVX2"
   exit 0
 fi
 

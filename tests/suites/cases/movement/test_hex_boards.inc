@@ -7,18 +7,30 @@ source "${SCRIPT_DIR}/../../../../tests/lib/uci.sh"
 
 init_test_env "${1:-}" "${2:-}" "hex boards regression"
 VARIANT_PATH=${VARIANTS}
-VLB_ENGINE="${VLB_ENGINE:-${ENGINE}}"
+if [[ -z "${VLB_ENGINE:-}" ]]; then
+  if [[ "$(basename "${ENGINE}")" == *vlb* ]]; then
+    VLB_ENGINE="${ENGINE}"
+  else
+    engine_dir=$(cd "$(dirname "${ENGINE}")" && pwd)
+    VLB_ENGINE="${engine_dir}/stockfish-vlb"
+  fi
+fi
 
 ensure_vlb_engine() {
   local probe_variant="$1"
 
+  if [[ ! -x "${VLB_ENGINE}" ]]; then
+    if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+      fsx_test_note_skip "VLB role unavailable at ${VLB_ENGINE}; allowed by FSX_ALLOW_SMALL_BOARD=1"
+      return 1
+    fi
+    echo "hex board regressions require a VLB engine: ${VLB_ENGINE}" >&2
+    exit 1
+  fi
   if variant_available "$VLB_ENGINE" "$probe_variant" "$VARIANT_PATH"; then
     return 0
   fi
-  if [[ -x "${ROOT_DIR}/src/stockfish-vlb" && "$VLB_ENGINE" != "${ROOT_DIR}/src/stockfish-vlb" ]]; then
-    VLB_ENGINE="${ROOT_DIR}/src/stockfish-vlb"
-  fi
-  variant_available "$VLB_ENGINE" "$probe_variant" "$VARIANT_PATH"
+  return 1
 }
 
 load_inline_variants <<'INI'
@@ -211,8 +223,6 @@ go perft 1')
   assert_contains "$out" "^c3d4: 1$"
   assert_contains "$out" "^e1c2: 1$"
   assert_contains "$out" "^d1d2: 1$"
-else
-  echo "hex chess variants regression requires a very-large-board capable engine. Skipping."
 fi
 
 if ensure_vlb_engine hex \
@@ -279,8 +289,6 @@ go depth 14')
   out=$(run_uci "$VLB_ENGINE" "$VARIANT_PATH" "y" <<<'position startpos moves P@h6
 go depth 14')
   assert_not_contains "$out" "score mate"
-else
-  echo "hex connection variants regression requires a very-large-board capable engine. Skipping."
 fi
 
 echo "hex board regression tests passed"

@@ -61,8 +61,10 @@ intentional small-board runs where board-size skips are expected.
 Set `FSX_ALLOW_STALE_ENGINE=1` only to bypass the sources-newer-than-binary
 staleness check (never for results you intend to keep). It does not bypass
 wrapper verification or profile checks for named regression engines.
-In CI, set `FSX_ENGINE_FAMILY=large` when testing a custom binary name that
-needs large-board support (see `tests/README.md`).
+`FSX_ENGINE_FAMILY` selects the board-family check for custom binary names;
+it does not satisfy the strict wrapper-recorded engine-role check. Use
+`FSX_TEST_PROFILE=portable` for intentional runs against unrecorded or
+reduced-feature binaries (see `tests/README.md`).
 
 If you prefer standard make, compile from `src/` using `make -j build ...`.
 
@@ -104,17 +106,17 @@ Run large-board tests against a `largeboards=yes` binary. For Python-facing chan
 
 | Changed area | Minimum focused command |
 | --- | --- |
-| `variant.h`, `parser.cpp`, or validation | `tests/run.sh suite config variants-smoke src/stockfish-large` |
+| `variant.h`, `parser.cpp`, or validation | `tests/run.sh suite config variants-smoke src/stockfish-allvars` |
 | `src/variants.ini` only | config plus `variants-smoke`; also JS tests when serialized FEN, pockets, drops, or `startFen` change |
-| royal, checking, evasion, extinction, or castling legality | `tests/run.sh suite royal-legality src/stockfish-large` |
-| `movegen.cpp` or general legality | `tests/run.sh suite movement royal-legality src/stockfish-large` |
-| Betza, riders, hoppers, regions, or topology | `tests/run.sh suite movement src/stockfish-large` |
-| capture effects, blast, rifle, pulling, or swapping | `tests/run.sh suite captures-effects state-transitions src/stockfish-large` |
-| promotions, hands, prisons, gating, or drops | `tests/run.sh suite promotion-drops state-transitions src/stockfish-large` |
-| `StateInfo`, keys, do/undo, or repetition | `tests/run.sh suite state-transitions src/stockfish-large` |
-| notation, FEN, UCI, or XBoard | `tests/run.sh suite notation-protocol src/stockfish-large` |
-| search or evaluation | `tests/run.sh suite search-evaluation src/stockfish-large` |
-| spell chess | `tests/run.sh suite spells src/stockfish-large` |
+| royal, checking, evasion, extinction, or castling legality | `tests/run.sh suite royal-legality src/stockfish-allvars` |
+| `movegen.cpp` or general legality | `tests/run.sh suite movement royal-legality src/stockfish-allvars` |
+| Betza, riders, hoppers, regions, or topology | `tests/run.sh suite movement src/stockfish-allvars` |
+| capture effects, blast, rifle, pulling, or swapping | `tests/run.sh suite captures-effects state-transitions src/stockfish-allvars` |
+| promotions, hands, prisons, gating, or drops | `tests/run.sh suite promotion-drops state-transitions src/stockfish-allvars` |
+| `StateInfo`, keys, do/undo, or repetition | `tests/run.sh suite state-transitions src/stockfish-allvars` |
+| notation, FEN, UCI, or XBoard | `tests/run.sh suite notation-protocol src/stockfish-allvars` |
+| search or evaluation | `tests/run.sh suite search-evaluation src/stockfish-allvars` |
+| spell chess | `tests/run.sh suite spells src/stockfish-allvars` |
 | `src/pyffish.cpp`, `apiutil`, or Python signatures | build the extension, then run `tests/python/test_pyffish_api.py` |
 | broad/shared change before submission | `tests/run.sh fast`, followed by the detached full regression when warranted |
 
@@ -160,7 +162,7 @@ Only regenerate upstream baselines intentionally. Do not refresh fixtures to hid
 Build the named binaries first. Use the regression runner for long test runs; it keeps all output in a single log file and reports estimated time remaining:
 
 ```sh
-tests/regression-runner.sh start src/stockfish-large
+tests/regression-runner.sh start src/stockfish-allvars
 tests/regression-runner.sh status
 tests/regression-runner.sh wait
 ```

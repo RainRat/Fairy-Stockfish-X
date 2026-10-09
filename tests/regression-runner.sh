@@ -18,7 +18,7 @@ Usage: tests/regression-runner.sh start [engine]
        tests/regression-runner.sh log
 
 Runs tests/run.sh full detached, preserving one full log while status and
-wait produce concise output. The default engine is src/stockfish-large.
+wait produce concise output. The default engine is src/stockfish-allvars.
 EOF
 }
 
@@ -88,7 +88,14 @@ validate_engines() {
 
   for candidate in "${candidates[@]}"; do
     [[ "${candidate}" == /* ]] || candidate="${ROOT_DIR}/${candidate}"
-    [[ -x "${candidate}" ]] || continue
+    if [[ ! -x "${candidate}" ]]; then
+      if [[ "${FSX_TEST_PROFILE:-strict}" == portable && "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+        continue
+      fi
+      echo "required regression engine role is missing: ${candidate}" >&2
+      stale=1
+      continue
+    fi
     if engine_is_stale "${candidate}"; then
       echo "stale or unverified engine: ${candidate}" >&2
       stale=1
@@ -107,6 +114,13 @@ validate_engines() {
     echo "  tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
     return 2
   fi
+}
+
+absolute_engine_path() {
+  local engine="$1" directory
+  [[ "${engine}" == /* ]] || engine="${ROOT_DIR}/${engine}"
+  directory=$(cd "$(dirname "${engine}")" 2>/dev/null && pwd) || directory=$(dirname "${engine}")
+  printf '%s/%s\n' "${directory}" "$(basename "${engine}")"
 }
 
 elapsed_seconds() {
@@ -226,12 +240,17 @@ status_run() {
 }
 
 start_run() {
-  local engine=${1:-src/stockfish-large} run_id run_dir pid
+  local engine=${1:-src/stockfish-allvars} run_id run_dir pid
+  local vlb_engine large_engine mini_engine normal_engine
   if [[ "${engine}" != /* ]]; then
     engine="${ROOT_DIR}/${engine}"
   fi
   [[ -x "${engine}" ]] || { echo "engine is not executable: ${engine}" >&2; return 2; }
   validate_engines "${engine}"
+  vlb_engine=$(absolute_engine_path "${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}")
+  large_engine=$(absolute_engine_path "${LARGE_ENGINE:-${ROOT_DIR}/src/stockfish-large}")
+  mini_engine=$(absolute_engine_path "${MINI_ENGINE:-${ROOT_DIR}/src/stockfish-allvars}")
+  normal_engine=$(absolute_engine_path "${NORMAL_ENGINE:-${ROOT_DIR}/src/stockfish}")
 
   if run_dir=$(current_run_dir 2>/dev/null) && run_is_alive "${run_dir}"; then
     echo "regression already running (pid $(<"${run_dir}/pid"))" >&2
@@ -244,12 +263,20 @@ start_run() {
   mkdir -p "${run_dir}"
   printf '%s\n' "${run_dir}" > "${CURRENT_FILE}"
   printf '%s\n' "${engine}" > "${run_dir}/engine"
+  printf '%s\n' "${vlb_engine}" > "${run_dir}/vlb-engine"
+  printf '%s\n' "${large_engine}" > "${run_dir}/large-engine"
+  printf '%s\n' "${mini_engine}" > "${run_dir}/allvars-engine"
+  printf '%s\n' "${normal_engine}" > "${run_dir}/normal-engine"
   date +%s > "${run_dir}/start"
 
   if command -v setsid >/dev/null 2>&1; then
-    setsid "${SCRIPT_PATH}" _run "${run_dir}" "${engine}" >/dev/null 2>&1 < /dev/null &
+    VLB_ENGINE="${vlb_engine}" LARGE_ENGINE="${large_engine}" \
+      MINI_ENGINE="${mini_engine}" NORMAL_ENGINE="${normal_engine}" \
+      setsid "${SCRIPT_PATH}" _run "${run_dir}" "${engine}" >/dev/null 2>&1 < /dev/null &
   else
-    nohup "${SCRIPT_PATH}" _run "${run_dir}" "${engine}" >/dev/null 2>&1 < /dev/null &
+    VLB_ENGINE="${vlb_engine}" LARGE_ENGINE="${large_engine}" \
+      MINI_ENGINE="${mini_engine}" NORMAL_ENGINE="${normal_engine}" \
+      nohup "${SCRIPT_PATH}" _run "${run_dir}" "${engine}" >/dev/null 2>&1 < /dev/null &
   fi
   pid=$!
   printf '%s\n' "${pid}" > "${run_dir}/pid"

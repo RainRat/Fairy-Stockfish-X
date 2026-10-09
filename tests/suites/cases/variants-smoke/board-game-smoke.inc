@@ -7,8 +7,8 @@ source "${SCRIPT_DIR}/../../../../tests/lib/uci.sh"
 init_test_env "${1:-}" "${2:-}" "dots and boxes regression"
 VARIANTS_MAIN=${VARIANTS}
 VARIANTS_INCOMPLETE="${3:-$ROOT_DIR/src/variants-incomplete.ini}"
-ENGINE_LARGE="${4:-$ROOT_DIR/src/stockfish-large}"
-ENGINE_VLB="${5:-$ROOT_DIR/src/stockfish-vlb}"
+ENGINE_LARGE="${4:-${LARGE_ENGINE:-$ROOT_DIR/src/stockfish-large}}"
+ENGINE_VLB="${5:-${VLB_ENGINE:-$ROOT_DIR/src/stockfish-vlb}}"
 
 echo "dots and boxes regression started"
 
@@ -26,6 +26,11 @@ EOF
 )
   assert_contains_literal "$out" "info string variant dots-boxes-9x9 "
   assert_nodes "$out" 40
+elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+  fsx_test_note_skip "large-board Dots and Boxes role unavailable at ${ENGINE_LARGE}; skip allowed by FSX_ALLOW_SMALL_BOARD=1"
+else
+  echo "variants-smoke requires a large-board engine for dots-boxes-9x9: ${ENGINE_LARGE}" >&2
+  exit 1
 fi
 
 if [[ -x "${ENGINE_VLB}" ]]; then
@@ -36,6 +41,11 @@ EOF
 )
   assert_contains_literal "$out" "info string variant dots-boxes-15x15 "
   assert_nodes "$out" 112
+elif [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+  fsx_test_note_skip "very-large-board Dots and Boxes role unavailable at ${ENGINE_VLB}; skip allowed by FSX_ALLOW_SMALL_BOARD=1"
+else
+  echo "variants-smoke requires a VLB engine for dots-boxes-15x15: ${ENGINE_VLB}" >&2
+  exit 1
 fi
 
 echo "dots and boxes regression passed"

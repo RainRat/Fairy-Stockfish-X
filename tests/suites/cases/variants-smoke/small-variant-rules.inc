@@ -51,7 +51,6 @@ UCI
 
 test_rebel_chess() {
   if ! variant_available "$ENGINE" rebel-chess "$VARIANTS"; then
-    echo "rebel-chess variant not available in this build; skipping rebel-chess regression"
     return 0
   fi
 
@@ -74,7 +73,6 @@ EOF
 
 test_manzhouqi() {
   if ! variant_available "$ENGINE" manzhouqi "$VARIANTS"; then
-    echo "manzhouqi variant not available in this build; skipping manzhouqi regression"
     return 0
   fi
 
@@ -111,7 +109,6 @@ EOF
 
 test_hippolyta() {
   if ! variant_available "$ENGINE" hippolyta "$VARIANTS"; then
-    echo "hippolyta variant not available in this build; skipping hippolyta regression"
     return 0
   fi
 
@@ -137,7 +134,6 @@ EOF
 
 test_atlantis() {
   if ! variant_available "$ENGINE" atlantis "$VARIANTS"; then
-    echo "atlantis variant not available in this build; skipping atlantis regression"
     return 0
   fi
 
@@ -168,7 +164,6 @@ EOF
 
 test_saxun() {
   if ! variant_available "$ENGINE" saxun "$VARIANTS"; then
-    echo "saxun variant not available in this build; skipping saxun regression"
     return 0
   fi
 

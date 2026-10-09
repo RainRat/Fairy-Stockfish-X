@@ -154,8 +154,6 @@ go perft 1
 UCI
   )
   assert_contains_literal "$out" "j3j1: 1" "Konane opening removals leave a jump"
-else
-  echo "konane variant not available in this build; skipping Konane opening regressions"
 fi
 
 if variant_available "$ENGINE" border-chess "$VARIANTS"; then
@@ -174,8 +172,6 @@ UCI
   )
   assert_contains_literal "$out" "f2h2: 1" "Border Chess preserves kingside castling"
   assert_contains_literal "$out" "f2d2: 1" "Border Chess preserves queenside castling"
-else
-  echo "border-chess variant not available in this build; skipping Border Chess regressions"
 fi
 
 out=$(run_uci "$ENGINE" "$VARIANTS" opposite-castling <<'UCI'

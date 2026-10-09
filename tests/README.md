@@ -45,7 +45,7 @@ Use the smallest suite matching the changed engine area:
 
 The search and evaluation suite requires the NNUE network evaluation file. Download it once with `make -C src net` before running that suite.
 
-The test runner determines board-size requirements from the engine name. In CI, set `FSX_ENGINE_FAMILY=large` when testing a custom binary name that needs large-board support. Set `FSX_ALLOW_SMALL_BOARD=1` only when intentionally running movement smoke tests on a small-board build. The full regression runner also honors `VLB_ENGINE`/`NORMAL_ENGINE` overrides and `FSX_ALLOW_STALE_ENGINE=1` for the sources-newer-than-binary check (see `AGENTS.md`).
+The strict test profile requires wrapper-recorded engine roles: every suite's main engine must be a large-board all-variant build; `movement` and `search-evaluation` also use a very-large-board all-variant engine, and `variants-smoke` uses large, normal, and very-large auxiliary engines. Set `FSX_TEST_PROFILE=portable` only for compatibility runs against arbitrary upstream or reduced-feature binaries. `FSX_ALLOW_SMALL_BOARD=1` explicitly permits board-role skips; those omissions appear as skip or partial-skip events. `VLB_ENGINE`, `LARGE_ENGINE`, and `NORMAL_ENGINE` override auxiliary paths in the regression runner. `FSX_ALLOW_STALE_ENGINE=1` only bypasses source-newer-than-binary checks.
 
 Other test scripts include: `perft.sh`, `instrumented.sh`, `regression.sh`, `regression-runner.sh`, upstream comparison scripts, and the JavaScript tests in `tests/js/`.
 
@@ -54,12 +54,13 @@ The benchmark script accepts either a reference signature (`tests/bench-regressi
 The semantic checks are grouped into ten test suites. Each wrapped case reports its duration; failures print a `tests/run.sh case <suite> <case> [engine] [variants]` command that reruns only that case. Python tests in `tests/python/test_pyffish_api.py` verify the Python bindings directly, while chess variant rules run through native C++ test harnesses and UCI test cases.
 
 The suite wrapper also writes tab-separated `FSX_TEST_EVENT` records
-(`version`, suite, case, result, seconds, requirement, reason) and an
-`FSX_TEST_SUMMARY` with required, executed, skipped, and failed case counts.
-The first case wired to structured skip classification is the VLB smoke case:
-it is required unless `FSX_ALLOW_SMALL_BOARD=1` authorizes omitting that board
-family. Other suite-level, case-level, and partial-case skips are being
-migrated to this contract; until then, read their case logs for skip messages.
+(`version`, suite, case, result, seconds, requirement, reason), where result is
+`pass`, `fail`, `skip`, or `partial-skip`. `FSX_TEST_SUMMARY` reports required,
+executed, skipped, partial-skipped, and failed case counts. Partial skips mean
+the case passed but explicitly reported an omitted sub-check; board-family
+filtering uses this path. Whole-case skips are counted as optional only when
+the case is explicitly optional for the active profile. Multi-suite runs also
+print a summary that totals their per-suite records, including in verbose mode.
 
 Passing tests run quietly and save their logs in `.local/build/test-run/`. Without verbose output, multiple suites run in parallel. With `VERBOSE=1`, the runner runs suites one at a time and prints full output.
 

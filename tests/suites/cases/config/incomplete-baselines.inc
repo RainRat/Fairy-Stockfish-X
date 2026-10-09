@@ -40,7 +40,7 @@ assert_contains "${dots_out}" "Nodes searched: 12" "dots-boxes-2x2 wall placemen
 camel_out=$(run_uci camel-rhino "position startpos
 go perft 1")
 if grep -Fq "unknown variant 'camel-rhino'; keeping 'chess'" <<<"${camel_out}"; then
-  echo "camel-rhino skipped by this engine build"
+  fsx_test_note_skip "camel-rhino is unavailable in this engine build"
 else
   assert_contains "${camel_out}" "variant camel-rhino" "camel-rhino loads in large-board builds"
   assert_contains "${camel_out}" "Nodes searched: 68" "camel-rhino perft node count"

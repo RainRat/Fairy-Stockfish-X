@@ -450,7 +450,7 @@ INI
   out=$(run_raw_cmds "${tmp_ini}" passive-blast-test $'position fen 4k3/8/8/4f3/8/4K3/8/8 w - - 0 1\ngo perft 1')
   if grep -q "Can not use kings with blastPassiveTypes." <<<"${out}" || \
      grep -q "unknown variant 'passive-blast-test'" <<<"${out}"; then
-    echo "skip: passive blast regression not supported by this build"
+    fsx_test_note_skip "passive-blast test variant was rejected by this engine build"
     rm -f "${tmp_ini}"
     return 0
   fi

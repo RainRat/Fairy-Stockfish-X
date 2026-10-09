@@ -5,6 +5,13 @@ SCRIPT_DIR=$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${SCRIPT_DIR}/../../../../tests/lib/uci.sh"
 
 init_test_env "${1:-}" "${2:-}" "nnue variant dimension guard"
+if [[ ! -x "${ENGINE}" ]]; then
+  if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+    fsx_test_skip "VLB engine for NNUE dimension guard is unavailable at ${ENGINE}; skip allowed by FSX_ALLOW_SMALL_BOARD=1"
+  fi
+  echo "NNUE dimension guard requires a VLB engine: ${ENGINE}" >&2
+  exit 1
+fi
 
 load_inline_variants <<'EOF'
 [nnguard:fairy]
@@ -31,11 +38,6 @@ position startpos
 go depth 1
 EOF
 )
-
-if grep -Eq "unknown variant 'nnguard'|variants skipped because of board size limits" <<<"${out}"; then
-  echo "nnue variant dimension guard skipped: engine cannot load nnguard board size"
-  exit 0
-fi
 
 assert_contains "$out" "info string NNUE disabled for variant nnguard"
 assert_contains "$out" "info string classical evaluation enabled"

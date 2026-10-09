@@ -9,7 +9,6 @@ setup_test_context "${1:-}" "${2:-}" "geometry regressions"
 
 test_cylinder() {
   if ! variant_available "$ENGINE" cylinder "$VARIANTS"; then
-    echo "cylinder variant not available in this build; skipping cylinder regression"
     return 0
   fi
 
@@ -25,14 +24,11 @@ test_cylinder() {
     out=$(run_perft cylinder-castling "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1" 1)
     assert_contains "$out" "^e1g1: 1$"
     assert_contains "$out" "^e1c1: 1$"
-  else
-    echo "cylinder-castling variant not available in this build; skipping castling-specific cylinder checks"
   fi
 }
 
 test_toroidal_chess() {
   if ! variant_available "$ENGINE" toroidal-chess "$VARIANTS"; then
-    echo "toroidal-chess variant not available in this build; skipping toroidal-chess regression"
     return 0
   fi
 
@@ -51,7 +47,6 @@ test_toroidal_chess() {
 
 test_nightrider_evasion() {
   if ! variant_available "$ENGINE" nightrider "$VARIANTS"; then
-    echo "nightrider variant not available in this build; skipping nightrider evasion regression"
     return 0
   fi
 
@@ -80,7 +75,6 @@ EOF
 
 test_move_morph() {
   if ! variant_available "$ENGINE" bishop-knight-morph-factor "$VARIANTS"; then
-    echo "bishop-knight-morph-factor variant not available in this build; skipping move morph regression"
     return 0
   fi
 

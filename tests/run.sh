@@ -7,6 +7,12 @@ CXX=${CXX:-${COMPILER:-g++}}
 SUITE_DIR="${ROOT_DIR}/tests/suites"
 VARIANTS=${VARIANTS:-${ROOT_DIR}/src/variants.ini}
 RUN_DIR="${ROOT_DIR}/.local/build/test-run"
+FSX_TEST_PROFILE=${FSX_TEST_PROFILE:-strict}
+case "${FSX_TEST_PROFILE}" in
+    strict|portable) ;;
+    *) echo "FSX_TEST_PROFILE must be 'strict' or 'portable'" >&2; exit 2 ;;
+esac
+export FSX_TEST_PROFILE
 source "${ROOT_DIR}/tests/lib/build-signature.sh"
 # Default harness/test parallelism to all cores; children (.inc cases,
 # engine-rules) inherit this. Override with JOBS=N.
@@ -32,6 +38,17 @@ declare -A SUITE_PREREQS=(
   [captures-effects]=engine,objects,expect [promotion-drops]=engine [state-transitions]=engine,objects
   [notation-protocol]=engine,expect [variants-smoke]=engine,objects [search-evaluation]=engine,expect
   [spells]=engine,objects
+)
+declare -A SUITE_ENGINE_ROLE=(
+  [config]=large-allvars [movement]=large-allvars [royal-legality]=large-allvars
+  [captures-effects]=large-allvars [promotion-drops]=large-allvars
+  [state-transitions]=large-allvars [notation-protocol]=large-allvars
+  [variants-smoke]=large-allvars [search-evaluation]=large-allvars [spells]=large-allvars
+)
+# Auxiliary roles are consumed directly by cases, not just by the main engine.
+declare -A SUITE_AUX_ROLES=(
+  [movement]=very-large-allvars [variants-smoke]=large,normal,very-large-allvars
+  [search-evaluation]=very-large-allvars
 )
 
 ALL_SUITES=(config movement royal-legality captures-effects promotion-drops state-transitions notation-protocol variants-smoke search-evaluation spells)
@@ -71,10 +88,22 @@ check_named_engine_artifact() {
 }
 
 check_named_engines() {
+    local auxiliary
     check_named_engine_artifact "$1"
     if [[ " ${SUITES_TO_RUN[*]} " == *" movement "* \
-        || " ${SUITES_TO_RUN[*]} " == *" variants-smoke "* ]]; then
-        check_named_engine_artifact "${ROOT_DIR}/src/stockfish-vlb"
+        || " ${SUITES_TO_RUN[*]} " == *" variants-smoke "* \
+        || " ${SUITES_TO_RUN[*]} " == *" search-evaluation "* ]]; then
+        auxiliary=$(normalize_engine "${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}")
+        check_engine_role "$auxiliary" very-large-allvars
+        [[ ! -x "$auxiliary" ]] || check_engine_freshness "$auxiliary"
+    fi
+    if [[ " ${SUITES_TO_RUN[*]} " == *" variants-smoke "* ]]; then
+        auxiliary=$(normalize_engine "${LARGE_ENGINE:-${ROOT_DIR}/src/stockfish-large}")
+        check_engine_role "$auxiliary" large
+        [[ ! -x "$auxiliary" ]] || check_engine_freshness "$auxiliary"
+        auxiliary=$(normalize_engine "${NORMAL_ENGINE:-${ROOT_DIR}/src/stockfish}")
+        check_engine_role "$auxiliary" normal
+        [[ ! -x "$auxiliary" ]] || check_engine_freshness "$auxiliary"
     fi
 }
 
@@ -118,6 +147,36 @@ check_engine() {
         fi
         return 1
     fi
+    check_engine_role "$engine" "${SUITE_ENGINE_ROLE[$suite]}"
+}
+
+check_engine_role() {
+    local engine="$1" role="$2" profile board all
+    [[ "${FSX_TEST_PROFILE}" == portable ]] && return 0
+    if [[ ! -x "$engine" ]]; then
+        if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+            return 0
+        fi
+        echo "required ${role} engine is missing: ${engine}" >&2
+        return 1
+    fi
+    profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$engine")
+    board="${profile#*board=}"; board="${board%%;*}"
+    all="${profile#*all=}"; all="${all%%;*}"
+    case "$role:$board:$all" in
+        large-allvars:large:yes|large-allvars:very-large:yes|very-large-allvars:very-large:yes|large:large:*|large:very-large:*|normal:normal:*) ;;
+        *)
+            echo "required engine role ${role} does not match ${engine} (recorded profile: ${profile:-unverified})." >&2
+            case "$role" in
+                large-allvars) echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2 ;;
+                very-large-allvars) echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes EXE=stockfish-vlb" >&2 ;;
+                large) echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large" >&2 ;;
+                normal) echo "build with: tests/build.sh ARCH=x86-64-modern EXE=stockfish" >&2 ;;
+            esac
+            echo "set FSX_TEST_PROFILE=portable for intentional compatibility runs" >&2
+            return 1
+            ;;
+    esac
 }
 
 check_engine_freshness() {
@@ -149,11 +208,11 @@ check_prerequisites() {
 }
 
 print_list() {
-    printf '%-22s %-7s %-8s %-18s %s\n' suite timeout board prerequisites profiles
+    printf '%-22s %-7s %-8s %-24s %-22s %-30s %s\n' suite timeout board prerequisites main-role auxiliary-roles profiles
     for suite in "${ALL_SUITES[@]}"; do
         profile=full
         [[ " ${FAST_SUITES[*]} " == *" ${suite} "* ]] && profile=fast,full
-        printf '%-22s %-7s %-8s %-18s %s\n' "$suite" "${SUITE_TIMEOUT[$suite]}s" "${SUITE_FAMILY[$suite]}" "${SUITE_PREREQS[$suite]}" "$profile"
+        printf '%-22s %-7s %-8s %-24s %-22s %-30s %s\n' "$suite" "${SUITE_TIMEOUT[$suite]}s" "${SUITE_FAMILY[$suite]}" "${SUITE_PREREQS[$suite]}" "${SUITE_ENGINE_ROLE[$suite]}" "${SUITE_AUX_ROLES[$suite]:-none}" "$profile"
     done
 }
 
@@ -170,12 +229,18 @@ run_one() {
     esac
     if [[ -n "$log_dir" ]]; then
         log="${log_dir}/${suite}.log"
-        if timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants" >"$log" 2>&1; then
+        local status=0
+        if [[ "${VERBOSE:-0}" == 1 ]]; then
+            timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants" 2>&1 | tee "$log" || status=$?
+        else
+            timeout "${SUITE_TIMEOUT[$suite]}s" bash "${SUITE_DIR}/${suite}.sh" "$engine" "$variants" >"$log" 2>&1 || status=$?
+        fi
+        if (( status == 0 )); then
             echo "ok: ${label} (log: ${log})"
             grep '^FSX_TEST_SUMMARY' "$log" || true
         else
             echo "FAILED: ${label}"
-            cat "$log"
+            [[ "${VERBOSE:-0}" == 1 ]] || cat "$log"
             if [[ -n "${FSX_CASE_FILTER:-}" ]]; then
                 printf 'rerun: tests/run.sh case %q %q %q %q\n' \
                     "${suite}" "${FSX_CASE_FILTER}" "${engine}" "${variants}" >&2
@@ -200,10 +265,31 @@ run_one() {
 }
 
 run_suite_list() {
-    local engine="$1" variants="$2" suite log_dir="${3:-}"
+    local engine="$1" variants="$2" suite log_dir="${3:-}" status=0
     for suite in "${SUITES_TO_RUN[@]}"; do
-        run_one "$suite" "$engine" "$variants" "$log_dir"
+        run_one "$suite" "$engine" "$variants" "$log_dir" || status=1
     done
+    return "$status"
+}
+
+summarize_suite_logs() {
+    local log_dir="$1" profile="$2" file marker version suite required executed skipped partial failed
+    local suite_count=0 total_required=0 total_executed=0 total_skipped=0 total_partial=0 total_failed=0
+    for file in "${log_dir}"/*.log; do
+        [[ -f "$file" ]] || continue
+        while IFS=$'\t' read -r marker version suite required executed skipped partial failed; do
+            [[ "$marker" == FSX_TEST_SUMMARY && "$version" == 1 ]] || continue
+            suite_count=$((suite_count + 1))
+            total_required=$((total_required + ${required#required=}))
+            total_executed=$((total_executed + ${executed#executed=}))
+            total_skipped=$((total_skipped + ${skipped#skipped=}))
+            total_partial=$((total_partial + ${partial#partial_skipped=}))
+            total_failed=$((total_failed + ${failed#failed=}))
+        done <"$file"
+    done
+    printf 'FSX_TEST_SUMMARY\t1\t%s\tsuites=%d\trequired=%d\texecuted=%d\tskipped=%d\tpartial_skipped=%d\tfailed=%d\n' \
+        "$profile" "$suite_count" "$total_required" "$total_executed" \
+        "$total_skipped" "$total_partial" "$total_failed"
 }
 
 prepare_python() {
@@ -284,7 +370,16 @@ prepare_shared_objects() {
 run_fast_parallel() {
     local engine="$1" variants="$2" profile="${3:-fast}" suite pid status=0
     if [[ "${VERBOSE:-0}" == 1 ]]; then
-        run_suite_list "$engine" "$variants"
+        mkdir -p "$RUN_DIR"
+        local log_dir
+        log_dir=$(mktemp -d "${RUN_DIR}/verbose-XXXXXX")
+        export FSX_CASE_LOG_ROOT="${log_dir}/cases"
+        if ! run_suite_list "$engine" "$variants" "$log_dir"; then
+            summarize_suite_logs "$log_dir" "$profile"
+            echo "${profile} profile failed; logs: ${log_dir}" >&2
+            return 1
+        fi
+        summarize_suite_logs "$log_dir" "$profile"
         echo "${profile} profile passed"
         return 0
     fi
@@ -295,6 +390,7 @@ run_fast_parallel() {
     # Config runs Python and many engine processes; avoid competing suites.
     if [[ " ${SUITES_TO_RUN[*]} " == *" config "* ]]; then
         if ! run_one config "$engine" "$variants" "$log_dir"; then
+            summarize_suite_logs "$log_dir" "$profile"
             echo "${profile} profile failed; logs: ${log_dir}" >&2
             return 1
         fi
@@ -310,6 +406,7 @@ run_fast_parallel() {
         pid=${pids[$suite]}
         if ! wait "$pid"; then status=1; fi
     done
+    summarize_suite_logs "$log_dir" "$profile"
     if (( status != 0 )); then
         echo "${profile} profile failed; logs: ${log_dir}" >&2
         return 1

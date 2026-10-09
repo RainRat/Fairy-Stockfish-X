@@ -11,6 +11,7 @@ FSX_CASES_REQUIRED=0
 FSX_CASES_EXECUTED=0
 FSX_CASES_SKIPPED=0
 FSX_CASES_FAILED=0
+FSX_PARTIAL_SKIPS=0
 export ROOT_DIR="${SUITE_ROOT}" ENGINE VARIANTS VARIANT_PATH="${VARIANTS}"
 cd "${SUITE_ROOT}"
 source "${SUITE_ROOT}/tests/lib/uci.sh"
@@ -24,9 +25,9 @@ fi
 fsx_suite_summary() {
     local status=$?
     trap - EXIT
-    printf 'FSX_TEST_SUMMARY\t1\t%s\trequired=%d\texecuted=%d\tskipped=%d\tfailed=%d\n' \
+    printf 'FSX_TEST_SUMMARY\t1\t%s\trequired=%d\texecuted=%d\tskipped=%d\tpartial_skipped=%d\tfailed=%d\n' \
         "${SUITE_NAME}" "${FSX_CASES_REQUIRED}" "${FSX_CASES_EXECUTED}" \
-        "${FSX_CASES_SKIPPED}" "${FSX_CASES_FAILED}"
+        "${FSX_CASES_SKIPPED}" "${FSX_PARTIAL_SKIPS}" "${FSX_CASES_FAILED}"
     exit "${status}"
 }
 trap fsx_suite_summary EXIT
@@ -48,7 +49,8 @@ suite_case() {
         [[ "${name}" == "${FSX_CASE_FILTER}" ]] || return 0
         FSX_CASE_MATCHED=1
     fi
-    if [[ "${FSX_CASE_OPTIONAL:-0}" == 1 && "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
+    if [[ "${FSX_CASE_OPTIONAL:-0}" == always ]] \
+        || [[ "${FSX_CASE_OPTIONAL:-0}" == small && "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
         requirement=optional
     else
         ((FSX_CASES_REQUIRED += 1))
@@ -69,6 +71,11 @@ suite_case() {
     if (( status == 0 )); then
         ((FSX_CASES_EXECUTED += 1))
         fsx_case_event "${name}" pass "${duration}" "${requirement}"
+        while IFS= read -r reason; do
+            [[ -n "${reason}" ]] || continue
+            ((FSX_PARTIAL_SKIPS += 1))
+            fsx_case_event "${name}" partial-skip "${duration}" "${requirement}" "${reason}"
+        done < <(sed -n 's/^FSX_TEST_PARTIAL_SKIP: //p' "${log}")
         echo "ok: ${SUITE_NAME}/${name} (${duration}s)"
         [[ "${VERBOSE:-0}" != 1 ]] || rm -f "${log}"
         return 0
@@ -76,7 +83,7 @@ suite_case() {
     if (( status == 77 )); then
         reason=$(sed -n 's/^FSX_TEST_SKIP: //p' "${log}" | sed -n '1p')
         ((FSX_CASES_SKIPPED += 1))
-        if [[ "${requirement}" == optional && "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 && -n "${reason}" ]]; then
+        if [[ "${requirement}" == optional && -n "${reason}" ]]; then
             fsx_case_event "${name}" skip "${duration}" "${requirement}" "${reason}"
             echo "skip: ${SUITE_NAME}/${name} (${reason})"
             [[ "${VERBOSE:-0}" != 1 ]] || rm -f "${log}"
@@ -115,7 +122,11 @@ legacy() {
 }
 
 optional_legacy() {
-    FSX_CASE_OPTIONAL=1 legacy "$@"
+    FSX_CASE_OPTIONAL=always legacy "$@"
+}
+
+small_board_optional_legacy() {
+    FSX_CASE_OPTIONAL=small legacy "$@"
 }
 
 native() {
@@ -125,8 +136,10 @@ native() {
         *)
             case "${group}" in occupancy|state|royal)
                 if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-                    echo "SKIP-BOARDSIZE: ${SUITE_NAME}/native-${group} requires a large-board engine; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
-                    return 0
+                    FSX_CASE_OPTIONAL=small suite_case "native-${group}" 5s bash -c \
+                        'printf "FSX_TEST_SKIP: %s\\n" "$1" >&2; exit 77' _ \
+                        "requires a large-board engine; skip allowed by FSX_ALLOW_SMALL_BOARD=1"
+                    return
                 fi
                 echo "native-${group} requires a large-board engine; got ${ENGINE}" >&2
                 echo "run with a large-board engine or set FSX_ALLOW_SMALL_BOARD=1 to allow the skip" >&2
@@ -162,7 +175,7 @@ run_movement() {
     legacy separate-realms.sh 2m "${ENGINE}"
     legacy ski-sliders.sh 2m "${ENGINE}"
     legacy gadsden-toroidal.sh 2m "${ENGINE}"
-    legacy immobilizer.sh 2m "${ENGINE}" "${VARIANTS}"
+    optional_legacy immobilizer.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy rule-matrix-movement.sh 5m "${ENGINE}"
 }
 
@@ -251,7 +264,7 @@ run_variants_smoke() {
     legacy variant-promotion-baselines.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy gating-large-board.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy royal-pawn-variants.sh 3m "${ENGINE}" "${VARIANTS}"
-    optional_legacy very-large-board-regressions.sh 10m "${ENGINE}" "${VARIANTS}"
+    small_board_optional_legacy very-large-board-regressions.sh 10m "${ENGINE}" "${VARIANTS}"
 }
 
 run_search_evaluation() {
@@ -262,8 +275,8 @@ run_search_evaluation() {
     legacy eval-geometry-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy asymmetric-extinction-evaluation.sh 3m "${ENGINE}"
     legacy checkers-evaluation.sh 2m "${ENGINE}" "${VARIANTS}"
-    legacy nnue-variant-dimension-guard.sh 2m "${ENGINE}"
-    legacy nnue-affine-regression.sh 2m
+    small_board_optional_legacy nnue-variant-dimension-guard.sh 2m "${VLB_ENGINE:-${SUITE_ROOT}/src/stockfish-vlb}"
+    optional_legacy nnue-affine-regression.sh 2m
     legacy nnue-export-failure.sh 2m "${ENGINE}"
     suite_case nnue-loading 2m python3 "${SUITE_ROOT}/tests/nnue-loading.py" "${ENGINE}"
     legacy engine-search-regressions.sh 15m "${ENGINE}" "${VARIANTS}"

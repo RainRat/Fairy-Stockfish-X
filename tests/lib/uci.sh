@@ -18,6 +18,12 @@ fsx_test_skip() {
   exit 77
 }
 
+fsx_test_note_skip() {
+  local reason="$*"
+  [[ -n "${reason}" ]] || reason="no reason provided"
+  printf 'FSX_TEST_PARTIAL_SKIP: %s\n' "${reason}" >&2
+}
+
 FSX_EXIT_CLEANUPS=()
 
 fsx_run_exit_cleanups() {
@@ -494,11 +500,13 @@ fsx_enforce_board_status() {
       ;;
     out-of-scope)
       echo "SKIP-BOARDSIZE: ${variant} is outside the expected suite board; skipping on ${engine##*/}" >&2
+      fsx_test_note_skip "${variant} is outside the expected suite board ${FSX_EXPECTED_BOARD:-}; skipped on ${engine##*/}"
       return 1
       ;;
     in-scope-missing)
       if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
         echo "SKIP-BOARDSIZE: ${variant} exceeds ${engine##*/} limits; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+        fsx_test_note_skip "${variant} exceeds ${engine##*/} limits; allowed by FSX_ALLOW_SMALL_BOARD=1"
         return 1
       fi
       echo "expected variant '${variant}' fits the suite board but ${engine##*/} cannot load it; refusing to silently drop coverage" >&2
@@ -506,6 +514,10 @@ fsx_enforce_board_status() {
       exit 1
       ;;
     *)
+      if [[ "${FSX_TEST_PROFILE:-strict}" == portable ]]; then
+        fsx_test_note_skip "${variant} is unavailable in portable profile on ${engine##*/}"
+        return 1
+      fi
       echo "expected variant '${variant}' is missing from ${variant_path}" >&2
       echo "build target ${engine##*/} should provide it; treat this as a regression" >&2
       exit 1

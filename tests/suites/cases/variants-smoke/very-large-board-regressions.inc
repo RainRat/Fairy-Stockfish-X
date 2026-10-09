@@ -394,7 +394,7 @@ test_vlb_overlap_parity() {
   local normal_engine="${NORMAL_ENGINE:-${engine_dir}/stockfish}"
   if [[ ! -x "${normal_engine}" ]]; then
     if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
-      echo "SKIP-BOARDSIZE: normal engine unavailable for VLB overlap parity; skip allowed by FSX_ALLOW_SMALL_BOARD=1" >&2
+      fsx_test_note_skip "normal engine role unavailable at ${normal_engine}; overlap parity omitted by FSX_ALLOW_SMALL_BOARD=1"
       return 0
     fi
     echo "VLB overlap parity requires a normal-board engine; none at ${normal_engine}" >&2
