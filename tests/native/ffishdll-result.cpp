@@ -1,6 +1,8 @@
+#include <atomic>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 extern "C" {
 using fsf_board = void*;
@@ -8,6 +10,7 @@ void fsf_init();
 int fsf_try_load_variant_config(const char* content);
 fsf_board fsf_new_board(const char* variant, const char* fen, bool is960);
 void fsf_free_board(fsf_board board);
+void fsf_set_option_bool(const char* name, bool value);
 const char* fsf_legal_moves(fsf_board board);
 bool fsf_has_insufficient_material(fsf_board board, bool turnColor);
 bool fsf_is_insufficient_material(fsf_board board);
@@ -59,6 +62,34 @@ int main() {
                   && take_string(fsf_result(board, true)) == "*",
               "DLL inferred a result for a playable no-royal position");
         fsf_free_board(board);
+
+        std::atomic<bool> start{false};
+        std::atomic<bool> failed{false};
+        auto wait_for_start = [&] {
+            while (!start.load(std::memory_order_acquire))
+                std::this_thread::yield();
+        };
+        std::thread optionSetter([&] {
+            wait_for_start();
+            for (int i = 0; i < 200; ++i)
+                fsf_set_option_bool("DynamicMagicsByBoardSize", i % 2);
+        });
+        std::thread boardCreator([&] {
+            wait_for_start();
+            for (int i = 0; i < 200; ++i) {
+                fsf_board concurrentBoard = fsf_new_board("chess", nullptr, false);
+                if (!concurrentBoard) {
+                    failed.store(true, std::memory_order_relaxed);
+                    continue;
+                }
+                fsf_free_board(concurrentBoard);
+            }
+        });
+        start.store(true, std::memory_order_release);
+        optionSetter.join();
+        boardCreator.join();
+        check(!failed.load(std::memory_order_relaxed),
+              "option updates raced with DLL board construction");
     } catch (const std::exception& error) {
         std::cerr << "ffishdll result regression failed: " << error.what() << '\n';
         return 1;

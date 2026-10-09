@@ -91,9 +91,15 @@ Empty names as well as `"Standard"`/`"standard"` resolve to `chess`, matching
 Use `fsf_available_variants()` to list the names this build accepts.
 
 ## Threading
-`fsf_init()` is thread-safe. However, board operations are not synchronized. Use a separate board instance per thread, or use locks when accessing the same board across multiple threads.
+`fsf_init()` is thread-safe. Board operations are not synchronized: use a
+separate board instance per thread, or use a lock when accessing one board from
+multiple threads. Operations on separate boards may run concurrently.
 
-Variant configuration updates global engine state. Functions like `fsf_new_board` and `fsf_load_variant_config` synchronize internally, but variant settings are shared across all threads in the process.
+Variant configuration and option updates change global engine state. The DLL
+serializes these updates with board creation and with each other. Do not change
+options or load variant configuration while any thread is using a board. Make
+global changes before starting parallel board operations; the resulting
+variants and options are shared by all boards in the process.
 
 ## Complete usage example
 ```cpp

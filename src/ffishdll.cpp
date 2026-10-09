@@ -433,6 +433,8 @@ std::string info() { return engine_info(); }
 
 template <typename T>
 void set_option(std::string name, T value) {
+  ensure_stockfish_initialized();
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
   if (Options.count(name)) {
     Options[name] = value;
     Board::sfInitialized.store(false, std::memory_order_relaxed);
