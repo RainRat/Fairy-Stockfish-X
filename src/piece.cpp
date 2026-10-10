@@ -621,6 +621,10 @@ namespace {
                   };
                   auto add_step = [&](int dr, int df) {
                       if (hasUniversalHopper) {
+                          // Universal hopper rays are named-atom steps, so they must
+                          // satisfy the decode_direction precondition. U is rejected
+                          // above and never reaches this path.
+                          assert(std::abs(df) <= int(FILE_NB) / 2);
                           p->universalHopper[initial][modality][Direction(dr * FILE_NB + df)] = currentHopperProfile;
                           if (dynamicDistance && rider)
                               p->slider[initial][modality][Direction(dr * FILE_NB + df)] = DYNAMIC_SLIDER_LIMIT;
@@ -802,8 +806,17 @@ namespace {
               commit_atom(riderIt->second, true, i, c);
           }
           // Universal leaper: U can target any square on board.
+          // Kept separate from the universal hopper path: U uses tuple
+          // storage and never takes {...} hopper parameters.
           else if (c == 'U')
           {
+              if (hasUniversalHopper)
+              {
+                  std::cerr << "Invalid Betza 'U' with universal hopper parameters in '" << betza
+                            << "': U is a universal leaper and cannot take {...} hopper parameters." << std::endl;
+                  fail_piece();
+                  continue;
+              }
               std::vector<std::pair<int, int>> universalAtoms;
               universalAtoms.reserve((int(RANK_MAX) + 1) * (int(FILE_MAX) + 1) - 1);
               for (int dr = 0; dr <= int(RANK_MAX); ++dr)
