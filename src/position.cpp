@@ -7521,6 +7521,8 @@ bool Position::gives_check(Move m) const {
               royalSq = square<KING>(~sideToMove);
 
           StateInfo nextState;
+          // The reference must probe the committed position, even under an outer simulation.
+          SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
           ScopedProbeMove probe(*this, m, nextState);
           bool slowResult = is_clone_move(m)
                          ? bool(checkers())

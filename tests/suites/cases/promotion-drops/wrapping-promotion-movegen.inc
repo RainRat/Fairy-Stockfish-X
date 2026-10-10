@@ -90,7 +90,8 @@ startFen = 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
 toroidal = true
 castling = false
 promotionPieceTypes = q r b n
-startFen = 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
+# Keep the kings apart across the toroidal rank boundary (e8 and e1 are adjacent).
+startFen = 8/P7/8/4k3/8/8/8/4K3 w - - 0 1
 
 [promo-mapped:chess]
 castling = false
@@ -114,7 +115,7 @@ static void test_wrapped_promotion_partition() {
     expect(normalQuiets.contains(quietPromo), "normal QUIETS should include quiet promotion");
 
     Position wrappedPos;
-    wrappedPos.set(variants.get("promo-wrap"), "4k3/P7/8/8/8/8/8/4K3 w - - 0 1", false, &st, nullptr);
+    wrappedPos.set(variants.get("promo-wrap"), "8/P7/8/4k3/8/8/8/4K3 w - - 0 1", false, &st, nullptr);
     const auto wrappedNonEvasions = MoveList<NON_EVASIONS>(wrappedPos);
     const auto wrappedQuiets = MoveList<QUIETS>(wrappedPos);
     expect(wrappedNonEvasions.contains(quietPromo), "wrapped NON_EVASIONS should include quiet promotion");
