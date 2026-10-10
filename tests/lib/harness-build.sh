@@ -12,6 +12,8 @@
 #   stockfish-large large board, all variants (objects)
 #   stockfish-allvars large board, all variants, NNUE-enabled objects
 #   stockfish-vlb   very-large board, all variants, NNUE-enabled objects
+# Known binaries also carry their recorded ARCH/debug/optimize flags into the
+# harness objects. Custom engine names leave the object's profile to the caller.
 # Unknown engine names reuse the existing position.o board-family probe and
 # require their object family to have been prepared by the caller.
 
@@ -109,12 +111,21 @@ fsx_harness_init() {
 
   # Match the tested engine's own architecture when it was built via
   # tests/build.sh (recorded profile). Rebuilding the in-tree objects with a
-  # different ARCH would silently replace the binary under test, so prefer
-  # the recorded value and keep the portable default only as a fallback.
+  # different profile would silently replace the binary under test, so prefer
+  # its architecture and debug/optimization flags; keep defaults as fallback.
   if [[ "${FSX_HARNESS_KNOWN_ENGINE_CONFIG}" == true ]]; then
-    local recorded_arch=""
-    recorded_arch=$(fsx_build_recorded_profile "${root_dir}" "${engine}" 2>/dev/null \
-      | tr ';' '\n' | sed -n 's/^arch=//p' | tail -n1 || true)
+    local recorded_profile="" recorded_arch="" recorded_debug="" recorded_optimize=""
+    local profile_field
+    recorded_profile=$(fsx_build_recorded_profile "${root_dir}" "${engine}" 2>/dev/null || true)
+    local -a recorded_fields=()
+    IFS=';' read -r -a recorded_fields <<<"${recorded_profile}"
+    for profile_field in "${recorded_fields[@]}"; do
+      case "${profile_field}" in
+        arch=*) recorded_arch="${profile_field#arch=}" ;;
+        debug=yes|debug=no) recorded_debug="${profile_field#debug=}" ;;
+        optimize=yes|optimize=no) recorded_optimize="${profile_field#optimize=}" ;;
+      esac
+    done
     if [[ -n "${recorded_arch}" ]]; then
       local build_arg_idx
       for build_arg_idx in "${!FSX_HARNESS_BUILD_ARGS[@]}"; do
@@ -123,6 +134,10 @@ fsx_harness_init() {
         fi
       done
     fi
+    [[ -z "${recorded_debug}" ]] \
+      || FSX_HARNESS_BUILD_ARGS+=("debug=${recorded_debug}")
+    [[ -z "${recorded_optimize}" ]] \
+      || FSX_HARNESS_BUILD_ARGS+=("optimize=${recorded_optimize}")
   fi
 
   # Preserve support for custom engine names used by local harnesses. The
