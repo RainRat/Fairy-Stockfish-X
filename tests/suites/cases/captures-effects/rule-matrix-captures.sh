@@ -75,6 +75,45 @@ UCI
 )
 assert_not_contains_literal "$out" "d5d4: 1" "wildcard capture prohibition remains directional"
 
+for capture_case in 'R s d4d5' 'P r d4d5' 'S p d4d5'; do
+  read -r attacker victim move <<<"$capture_case"
+  fen="9/9/9/9/3${victim}5/3${attacker}5/9/9/9 w - - 0 1"
+  out=$(run_uci "$ENGINE" "$VARIANTS" intransitive <<UCI
+position fen ${fen}
+go perft 1
+UCI
+)
+  assert_contains_literal "$out" "${move}: 1" "intransitive ${attacker}-${victim} capture is allowed"
+done
+
+for forbidden_case in 'R p d4d5' 'P s d4d5' 'S r d4d5'; do
+  read -r attacker victim move <<<"$forbidden_case"
+  fen="9/9/9/9/3${victim}5/3${attacker}5/9/9/9 w - - 0 1"
+  out=$(run_uci "$ENGINE" "$VARIANTS" intransitive <<UCI
+position fen ${fen}
+go perft 1
+UCI
+)
+  assert_not_contains_literal "$out" "${move}: 1" "intransitive ${attacker}-${victim} capture is forbidden"
+done
+
+intransitive_start=$(run_uci "$ENGINE" "$VARIANTS" intransitive <<'UCI'
+position startpos
+d
+UCI
+)
+assert_contains_literal "$intransitive_start" \
+  '9/4pr3/4spr2/5spr1/1PS3sp1/1RPS5/2RPS4/3RP4/9 w - - 0 1' \
+  "Intransitive starts from the illustrated 9x9 setup with Blue to move"
+
+intransitive_goal=$(run_uci "$ENGINE" "$VARIANTS" intransitive <<'UCI'
+position fen 9/7R1/9/9/9/9/9/r8/9 w - - 0 1 moves h8i9
+go depth 1
+UCI
+)
+assert_contains_literal "$intransitive_goal" 'info depth 0 score mate 0' \
+  "any Intransitive piece reaching the opponent's corner wins"
+
 out=$(run_uci "$ENGINE" "$VARIANTS" capture-anything <<'UCI'
 position startpos
 go perft 1
