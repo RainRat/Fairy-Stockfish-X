@@ -42,6 +42,18 @@ namespace Stockfish {
 
 class Thread {
 
+  // Positions can share a Thread object across the UCI and search threads.
+  // Keep move buffers local to their owning OS thread to avoid racing the pool.
+  struct MoveBufferPool {
+    std::vector<std::unique_ptr<ExtMove[]>> owned;
+    std::vector<ExtMove*> available;
+  };
+
+  static MoveBufferPool& move_buffer_pool() {
+    static thread_local MoveBufferPool pool;
+    return pool;
+  }
+
   std::mutex mutex;
   std::condition_variable cv;
   size_t idx;
@@ -80,23 +92,20 @@ public:
   Score trend;
 
   ExtMove* acquire_buffer() {
-    if (availableBuffers.empty()) {
-      bufferPool.push_back(std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY));
-      return bufferPool.back().get();
+    auto& pool = move_buffer_pool();
+    if (pool.available.empty()) {
+      pool.owned.push_back(std::make_unique<ExtMove[]>(MOVEGEN_OVERFLOW_CAPACITY));
+      return pool.owned.back().get();
     }
-    ExtMove* b = availableBuffers.back();
-    availableBuffers.pop_back();
+    ExtMove* b = pool.available.back();
+    pool.available.pop_back();
     return b;
   }
 
   void release_buffer(ExtMove* b) {
     if (b)
-      availableBuffers.push_back(b);
+      move_buffer_pool().available.push_back(b);
   }
-
-private:
-  std::vector<std::unique_ptr<ExtMove[]>> bufferPool;
-  std::vector<ExtMove*> availableBuffers;
 };
 
 
