@@ -2458,6 +2458,7 @@ Variant* Variant::conclude() {
     int nnuePieceIndices = nnueNonDropPieceIndices + 2 * (pieceTypes.count() - (nnueKing != NO_PIECE_TYPE)) * nnuePockets;
     bool nnueHasWalls = wallingRule != NO_WALLING
                      || petrifyOnCaptureTypes != NO_PIECE_SET
+                     || holeRule != NO_HOLE
                      || startFen.find('*') != std::string::npos
                      || startFen.find('_') != std::string::npos;
     nnueWallIndexBase = nnueHasWalls ? nnuePieceIndices : -1;

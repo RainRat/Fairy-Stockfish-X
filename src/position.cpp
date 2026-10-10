@@ -10221,6 +10221,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       st->lionTradeSquares = Bitboard(0);
   }
 
+  // Cheshire Cat style: a square vacated by a piece becomes an inaccessible,
+  // transparent hole. Keep the hole in state and the position key so it remains
+  // unavailable after later moves and is distinguished for repetition.
+  if (hole_rule() == HOLE_ON_MOVE && !dropMove && !passMove && from != to && is_ok(from))
+  {
+      Bitboard vacatedSquares = square_bb(from);
+      if (type_of(m) == CASTLING)
+          vacatedSquares |= square_bb(to_sq(m)); // The encoded destination is the rook's origin.
+      vacatedSquares &= ~pieces() & ~st->holeSquares;
+      while (vacatedSquares)
+      {
+          Square sq = pop_lsb(vacatedSquares);
+          st->holeSquares |= sq;
+          k ^= Zobrist::hole[sq];
+      }
+  }
+
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;

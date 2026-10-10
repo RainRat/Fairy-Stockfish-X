@@ -657,6 +657,10 @@ enum WallingRule {
   NO_WALLING, ARROW, DUCK, EDGE, PAST, STATIC
 };
 
+enum HoleRule {
+  NO_HOLE, HOLE_ON_MOVE
+};
+
 enum PointsRule {
   POINTS_NONE, POINTS_US, POINTS_THEM, POINTS_OWNER, POINTS_NON_OWNER
 };

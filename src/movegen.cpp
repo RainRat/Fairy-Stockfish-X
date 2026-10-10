@@ -587,7 +587,10 @@ namespace {
     Bitboard occupancy = pos.pieces();
     if (const SpellContext* spellCtx = current_spell_context(); spellCtx && Us == pos.side_to_move())
         occupancy &= ~spellCtx->jumpRemoved;
-    const Bitboard movable    = pos.board_bb(Us, PAWN) & ~occupancy;
+    Bitboard pawnTransitSquares = pos.board_bb(Us, PAWN);
+    if (pos.hole_rule() == HOLE_ON_MOVE)
+        pawnTransitSquares |= pos.hole_squares();
+    const Bitboard movable = pawnTransitSquares & ~occupancy;
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
     const Bitboard capturable = pos.board_bb(Us, PAWN)
                               & (pos.self_capture(PAWN) ? (pos.pieces(Them) | friendlyCapturable | neutral)

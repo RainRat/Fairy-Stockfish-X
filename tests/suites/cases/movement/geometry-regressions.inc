@@ -189,6 +189,49 @@ d
 EOF
 )
   assert_contains_literal "$after_move" "Fen: 7k/8/8/8/3_Rp2/8/8/4K3 b - - 1 1" "hole persists after move"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^e1g1: 1$" "Cheshire disables castling"
+  assert_not_contains "$out" "^e1c1: 1$" "Cheshire disables castling"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/8/8/8/4K3 w E - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^e1h4: 1$" "Cheshire king has one queen-like first move"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/8/3_4/3P4/7K w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^d2d4: 1$" "Cheshire pawn may pass over a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 3k4/p7/8/8/8/3_4/8/3R3K b - - 0 1
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^a7a6: 1$" "Cheshire check passes through a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position startpos moves e2e4 a7a6 e1e3
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: rnbqkbnr/_ppppppp/p7/8/4P3/4K3/PPPP_PPP/RNBQ_BNR b e - 1 2" "Cheshire marks every vacated square as a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/8/8/8/4K3 w E - 0 1 moves e1e2 h8h7
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^e2h5: 1$" "Cheshire king cannot reuse its queen-like first move"
 }
 
 test_cylinder
