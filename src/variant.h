@@ -344,6 +344,7 @@ struct Variant {
   ColorSetting<std::array<PieceType, PIECE_TYPE_NB>> gatingPieceAfter = ColorSetting<std::array<PieceType, PIECE_TYPE_NB>>(std::array<PieceType, PIECE_TYPE_NB>{});
   PieceType firstMovePieceType[PIECE_TYPE_NB] = {};
   bool firstMoveLoseOnCheck = false;
+  HoleRule holeRule = NO_HOLE;
   WallingRule wallingRule = NO_WALLING;
   ColorSetting<bool> wallingSide = ColorSetting<bool>(true);
   ColorSetting<Bitboard> wallingRegion = ColorSetting<Bitboard>(AllSquares, AllSquares);

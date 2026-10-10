@@ -587,7 +587,10 @@ namespace {
     Bitboard occupancy = pos.pieces();
     if (const SpellContext* spellCtx = current_spell_context(); spellCtx && Us == pos.side_to_move())
         occupancy &= ~spellCtx->jumpRemoved;
-    const Bitboard movable    = pos.board_bb(Us, PAWN) & ~occupancy;
+    Bitboard pawnTransitSquares = pos.board_bb(Us, PAWN);
+    if (pos.hole_rule() == HOLE_PAST)
+        pawnTransitSquares |= pos.hole_squares();
+    const Bitboard movable = pawnTransitSquares & ~occupancy;
     const Bitboard friendlyCapturable = pos.pieces(Us) & ~pos.pieces(Us, KING);
     const Bitboard capturable = pos.board_bb(Us, PAWN)
                               & (pos.self_capture(PAWN) ? (pos.pieces(Them) | friendlyCapturable | neutral)
@@ -605,7 +608,8 @@ namespace {
             Square from = pop_lsb(remaining);
             Bitboard quiets = pos.moves_from(Us, PAWN, from) & target;
             Bitboard attacks = pos.attacks_from(Us, PAWN, from) & capturable & localCaptureTarget;
-            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.dead_squares() & localCaptureTarget;
+            Bitboard epSquares = pos.attacks_from(Us, PAWN, from) & pos.ep_squares() & ~pos.dead_squares()
+                               & ~pos.hole_squares() & localCaptureTarget;
             epSquares &= ~pos.pieces() | (pos.potions_enabled() ? pos.pieces(Them) : Bitboard(0));
             if (pos.potions_enabled())
                 attacks &= ~(pos.ep_squares() & pos.pieces(Them));
@@ -823,7 +827,7 @@ namespace {
         emit_normal_moves(brc, UpRight);
         emit_normal_moves(blc, UpLeft);
 
-        Bitboard epSquares = pos.ep_squares() & ~pos.dead_squares();
+        Bitboard epSquares = pos.ep_squares() & ~pos.dead_squares() & ~pos.hole_squares();
         epSquares &= ~pos.pieces() | (pos.potions_enabled() ? pos.pieces(Them) : Bitboard(0));
         for (; epSquares; )
         {
@@ -897,7 +901,9 @@ namespace {
             captureSquares = 0;
         Bitboard quietSquares   = (quiets & ~pos.pieces()) & target;
         Bitboard b = captureSquares | quietSquares;
-        Bitboard epSquares = (pos.en_passant_types(Us) & piece_set(Pt)) ? (attacks & pos.ep_squares() & ~pos.pieces()) : Bitboard(0);
+        Bitboard epSquares = (pos.en_passant_types(Us) & piece_set(Pt))
+                           ? (attacks & pos.ep_squares() & ~pos.pieces() & ~pos.hole_squares())
+                           : Bitboard(0);
         Bitboard b1 = b & ~epSquares;
         Bitboard pawnLikeDoubleSteps = 0;
         Bitboard pawnLikeTripleSteps = 0;
@@ -1504,6 +1510,7 @@ namespace {
                 {
                     Square from = pop_lsb(froms);
                     Bitboard b = (pos.moves_from(Us, extraPt, from) | pos.attacks_from(Us, extraPt, from)) & target & ~pos.pieces(Us);
+                    b &= ~(pos.moves_from(Us, pt, from) | pos.attacks_from(Us, pt, from));
                     if (Type == QUIET_CHECKS)
                         b &= pos.check_squares(extraPt);
                     while (b)

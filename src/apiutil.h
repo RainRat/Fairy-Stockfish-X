@@ -929,7 +929,7 @@ inline Validation fill_char_board(CharBoard& board, const std::string& fenBoard,
             i += 1;
             continue;
         }
-        if (c == '*' || c == '^')
+        if (c == '*' || c == '^' || c == '_')
         {
             ++i;
             ++fileIdx;
@@ -1510,7 +1510,7 @@ inline Validation check_digit_field(const std::string& field) {
 }
 
 inline std::string get_valid_special_chars(const Variant* v) {
-    std::string validSpecialCharactersFirstField = "/*^";
+    std::string validSpecialCharactersFirstField = "/*^_";
     // Whether or not '-', '+', '~', '[', ']' are valid depends on the variant being played.
     if (v->shogiStylePromotions)
         validSpecialCharactersFirstField += '+';

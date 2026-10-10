@@ -339,6 +339,7 @@ struct StateInfoCopied {
   Square castlingKingSquare[COLOR_NB];
   Bitboard wallSquares;
   Bitboard deadSquares;
+  Bitboard holeSquares;
   Bitboard gatesBB[COLOR_NB];
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
@@ -624,6 +625,7 @@ public:
   bool two_boards() const;
   Bitboard board_bb() const;
   Bitboard dead_squares() const;
+  Bitboard hole_squares() const;
   Bitboard board_bb(Color c, PieceType pt) const;
   PieceSet piece_types() const;
   const std::string& piece_to_char() const;
@@ -810,6 +812,7 @@ public:
   Bitboard adjacent_swap_targets_from(Color c, Square from) const;
   PieceType first_move_piece_type(PieceType pt) const;
   bool first_move_lose_on_check() const;
+  HoleRule hole_rule() const;
   bool first_rank_pawn_drops() const;
   bool can_drop(Color c, PieceType pt) const;
   bool has_exchange() const;
@@ -1458,11 +1461,15 @@ inline bool Position::two_boards() const {
 }
 
 inline Bitboard Position::board_bb() const {
-  return board_size_bb(var_ref().maxFile, var_ref().maxRank) & ~st->wallSquares;
+  return board_size_bb(var_ref().maxFile, var_ref().maxRank) & ~(st->wallSquares | st->holeSquares);
 }
 
 inline Bitboard Position::dead_squares() const {
   return st->deadSquares;
+}
+
+inline Bitboard Position::hole_squares() const {
+  return st->holeSquares;
 }
 
 inline Bitboard Position::board_bb(Color c, PieceType pt) const {
@@ -3621,6 +3628,11 @@ inline PieceType Position::first_move_piece_type(PieceType pt) const {
 inline bool Position::first_move_lose_on_check() const {
   assert(var != nullptr);
   return var->firstMoveLoseOnCheck;
+}
+
+inline HoleRule Position::hole_rule() const {
+  assert(var != nullptr);
+  return var->holeRule;
 }
 
 inline Bitboard Position::clone_targets_from(Color c, Square from) const {

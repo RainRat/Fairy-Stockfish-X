@@ -143,8 +143,129 @@ EOF
 
 }
 
+test_hole_squares() {
+  load_inline_variants <<'INI'
+[hole-squares:chess]
+castling = false
+
+[hole-hopper:chess]
+customPiece1 = h:gR
+castling = false
+INI
+
+  local out with_hole_key without_hole_key after_move
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-squares <<'EOF'
+position fen 7k/8/8/8/R2_1p2/8/8/4K3 w - - 0 1
+d
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "Fen: 7k/8/8/8/R2_1p2/8/8/4K3 w - - 0 1" "hole square FEN round-trip"
+  assert_contains "$out" "^a4e4: 1$" "rook slides through hole square"
+  assert_contains "$out" "^a4f4: 1$" "rook captures beyond hole square"
+  assert_not_contains "$out" "^a4d4: 1$" "piece cannot land on hole square"
+  with_hole_key=$(sed -n 's/^Key: //p' <<<"$out" | head -n1)
+
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-hopper <<'EOF'
+position fen 7k/8/8/8/H2_1p2/8/8/4K3 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a4g4: 1$" "hopper crosses an empty hole square"
+  assert_not_contains "$out" "^a4d4: 1$" "hopper cannot land on hole square"
+
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-squares <<'EOF'
+position fen 7k/8/8/8/R4p2/8/8/4K3 w - - 0 1
+d
+EOF
+)
+  without_hole_key=$(sed -n 's/^Key: //p' <<<"$out" | head -n1)
+  [[ -n "$with_hole_key" && -n "$without_hole_key" && "$with_hole_key" != "$without_hole_key" ]] \
+    || fsx_error "hole-square Zobrist key" "$LINENO"
+
+  after_move=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-squares <<'EOF'
+position fen 7k/8/8/8/R2_1p2/8/8/4K3 w - - 0 1 moves a4e4
+d
+EOF
+)
+  assert_contains_literal "$after_move" "Fen: 7k/8/8/8/3_Rp2/8/8/4K3 b - - 1 1" "hole persists after move"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position startpos
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^e1g1: 1$" "Cheshire disables castling"
+  assert_not_contains "$out" "^e1c1: 1$" "Cheshire disables castling"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/8/8/8/4K3 w E - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^e1h4: 1$" "Cheshire king has one queen-like first move"
+  [[ $(grep -c '^e1f1: 1$' <<<"$out") -eq 1 ]] \
+    || fsx_error "Cheshire does not duplicate the king's ordinary first-move targets" "$LINENO"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/8/3_4/3P4/7K w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^d2d4: 1$" "Cheshire pawn may pass over a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/3p4/4_3/4P3/7K w - - 0 1 moves e2e4
+d
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "Fen: 7k/8/8/8/3pP3/4_3/4_3/7K b - - 0 1" "double-step across hole does not grant en passant onto hole"
+  assert_not_contains "$out" "^d4e3: 1$" "en passant cannot land on a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/3pP3/4_3/8/7K b - e3 0 1
+d
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "Fen: 7k/8/8/8/3pP3/4_3/8/7K b - - 0 1" "FEN en passant right on a hole is discarded"
+  assert_not_contains "$out" "^d4e3: 1$" "parsed en passant cannot land on a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 3k4/p7/8/8/8/3_4/8/3R3K b - - 0 1
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^a7a6: 1$" "Cheshire check passes through a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position startpos moves e2e4 a7a6 e1e3
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: rnbqkbnr/_ppppppp/p7/8/4P3/4K3/PPPP_PPP/RNBQ_BNR b e - 1 2" "Cheshire marks every vacated square as a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/8/8/8/4K3 w E - 0 1 moves e1e2 h8h7
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^e2h5: 1$" "Cheshire king cannot reuse its queen-like first move"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position startpos
+go perft 3
+d
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 8374$" "Cheshire recursive hole-state perft"
+  assert_contains_literal "$out" "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Ee - 0 1" "perft restores the Cheshire root position"
+}
+
 test_cylinder
 test_toroidal_chess
 test_nightrider_evasion
 test_move_morph
 test_edge_insert
+test_hole_squares

@@ -830,6 +830,14 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, HoleRule& target) {
+        static constexpr auto values = std::array{
+            std::pair{"past", HOLE_PAST},
+            std::pair{"none", NO_HOLE},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, ColorChangeTrigger& target) {
         static constexpr auto values = std::array{
             std::pair{"capture", ColorChangeTrigger::ON_CAPTURE},
@@ -1222,6 +1230,7 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
                                   : std::is_same_v<T, EnPassantPassedSquares> ? "EnPassantPassedSquares"
                                   : std::is_same_v<T, LibertyAction> ? "LibertyAction"
                                   : std::is_same_v<T, WallingRule> ? "WallingRule"
+                                  : std::is_same_v<T, HoleRule> ? "HoleRule"
                                   : std::is_same_v<T, std::vector<int>> ? "vector<int>"
                                   : typeid(T).name();
             std::cerr << key << " - Invalid value " << it->second << " for type " << typeName << std::endl;
@@ -2126,6 +2135,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("potionDropOnOccupied", v->potionDropOnOccupied);
     parse_attribute("immobilityIllegal", v->immobilityIllegal);
     parse_attribute("gating", v->gating);
+    parse_attribute("holeRule", v->holeRule);
     parse_attribute("wallingRule", v->wallingRule);
     parse_color_setting("walling", v->wallingSide);
     parse_color_setting("wallingRegion", v->wallingRegion);
