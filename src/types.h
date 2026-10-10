@@ -658,7 +658,7 @@ enum WallingRule {
 };
 
 enum HoleRule {
-  NO_HOLE, HOLE_ON_MOVE
+  NO_HOLE, HOLE_PAST
 };
 
 enum PointsRule {

@@ -832,7 +832,7 @@ namespace {
 
     template <> bool set(const std::string& value, HoleRule& target) {
         static constexpr auto values = std::array{
-            std::pair{"move", HOLE_ON_MOVE},
+            std::pair{"past", HOLE_PAST},
             std::pair{"none", NO_HOLE},
         };
         return parse_named_value(value, target, values);

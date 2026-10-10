@@ -2172,6 +2172,7 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
               bool jumpedEnPassant = potions_enabled() && (pieces(~sideToMove) & epSquare);
 
               if (   (var->enPassantRegion[sideToMove] & epSquare)
+                  && !(st->holeSquares & epSquare)
                   && (   !var->fastAttacks
                       || (var->enPassantTypes[sideToMove] & ~piece_set(PAWN))
                       || (   pawn_attacks_bb(~sideToMove, epSquare) & pieces(sideToMove, PAWN)
@@ -9270,6 +9271,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
           auto maybe_add_ep = [&](Square epSq) {
               if (   epSq != SQ_NONE
+                  && !(st->holeSquares & epSq)
                   && (var->enPassantRegion[them] & epSq)
                   && (((topology_wraps() ? attacks_from(us, PAWN, epSq) : pawn_attacks_bb(us, epSq)) & pieces(them, PAWN))
                       || (var->enPassantTypes[them] & ~piece_set(PAWN)))
@@ -9397,6 +9399,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
       else
           st->epSquares = between_bb(from, to) & var->enPassantRegion[them];
+      st->epSquares &= ~st->holeSquares;
       if (st->epSquares)
       {
           switch (var->enPassantPassedSquares)
@@ -10224,7 +10227,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Cheshire Cat style: a square vacated by a piece becomes an inaccessible,
   // transparent hole. Keep the hole in state and the position key so it remains
   // unavailable after later moves and is distinguished for repetition.
-  if (hole_rule() == HOLE_ON_MOVE && !dropMove && !passMove && from != to && is_ok(from))
+  if (hole_rule() == HOLE_PAST && !dropMove && !passMove && from != to && is_ok(from))
   {
       Bitboard vacatedSquares = square_bb(from);
       if (type_of(m) == CASTLING)

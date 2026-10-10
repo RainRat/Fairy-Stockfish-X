@@ -204,6 +204,8 @@ go perft 1
 EOF
 )
   assert_contains "$out" "^e1h4: 1$" "Cheshire king has one queen-like first move"
+  [[ $(grep -c '^e1f1: 1$' <<<"$out") -eq 1 ]] \
+    || fsx_error "Cheshire does not duplicate the king's ordinary first-move targets" "$LINENO"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
 position fen 7k/8/8/8/8/3_4/3P4/7K w - - 0 1
@@ -211,6 +213,24 @@ go perft 1
 EOF
 )
   assert_contains "$out" "^d2d4: 1$" "Cheshire pawn may pass over a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/3p4/4_3/4P3/7K w - - 0 1 moves e2e4
+d
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "Fen: 7k/8/8/8/3pP3/4_3/4_3/7K b - - 0 1" "double-step across hole does not grant en passant onto hole"
+  assert_not_contains "$out" "^d4e3: 1$" "en passant cannot land on a hole"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position fen 7k/8/8/8/3pP3/4_3/8/7K b - e3 0 1
+d
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "Fen: 7k/8/8/8/3pP3/4_3/8/7K b - - 0 1" "FEN en passant right on a hole is discarded"
+  assert_not_contains "$out" "^d4e3: 1$" "parsed en passant cannot land on a hole"
 
   out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
 position fen 3k4/p7/8/8/8/3_4/8/3R3K b - - 0 1
@@ -232,6 +252,15 @@ go perft 1
 EOF
 )
   assert_not_contains "$out" "^e2h5: 1$" "Cheshire king cannot reuse its queen-like first move"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" cheshire <<'EOF'
+position startpos
+go perft 3
+d
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 8374$" "Cheshire recursive hole-state perft"
+  assert_contains_literal "$out" "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Ee - 0 1" "perft restores the Cheshire root position"
 }
 
 test_cylinder
