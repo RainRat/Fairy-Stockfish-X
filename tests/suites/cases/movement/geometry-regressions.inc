@@ -143,8 +143,57 @@ EOF
 
 }
 
+test_hole_squares() {
+  load_inline_variants <<'INI'
+[hole-squares:chess]
+castling = false
+
+[hole-hopper:chess]
+customPiece1 = h:gR
+castling = false
+INI
+
+  local out with_hole_key without_hole_key after_move
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-squares <<'EOF'
+position fen 7k/8/8/8/R2_1p2/8/8/4K3 w - - 0 1
+d
+go perft 1
+EOF
+)
+  assert_contains_literal "$out" "Fen: 7k/8/8/8/R2_1p2/8/8/4K3 w - - 0 1" "hole square FEN round-trip"
+  assert_contains "$out" "^a4e4: 1$" "rook slides through hole square"
+  assert_contains "$out" "^a4f4: 1$" "rook captures beyond hole square"
+  assert_not_contains "$out" "^a4d4: 1$" "piece cannot land on hole square"
+  with_hole_key=$(sed -n 's/^Key: //p' <<<"$out" | head -n1)
+
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-hopper <<'EOF'
+position fen 7k/8/8/8/H2_1p2/8/8/4K3 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^a4g4: 1$" "hopper crosses an empty hole square"
+  assert_not_contains "$out" "^a4d4: 1$" "hopper cannot land on hole square"
+
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-squares <<'EOF'
+position fen 7k/8/8/8/R4p2/8/8/4K3 w - - 0 1
+d
+EOF
+)
+  without_hole_key=$(sed -n 's/^Key: //p' <<<"$out" | head -n1)
+  [[ -n "$with_hole_key" && -n "$without_hole_key" && "$with_hole_key" != "$without_hole_key" ]] \
+    || fsx_error "hole-square Zobrist key" "$LINENO"
+
+  after_move=$(run_uci "$ENGINE" "$FSX_TMP_INI" hole-squares <<'EOF'
+position fen 7k/8/8/8/R2_1p2/8/8/4K3 w - - 0 1 moves a4e4
+d
+EOF
+)
+  assert_contains_literal "$after_move" "Fen: 7k/8/8/8/3_Rp2/8/8/4K3 b - - 1 1" "hole persists after move"
+}
+
 test_cylinder
 test_toroidal_chess
 test_nightrider_evasion
 test_move_morph
 test_edge_insert
+test_hole_squares

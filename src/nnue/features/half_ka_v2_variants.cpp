@@ -92,7 +92,7 @@ namespace Stockfish::Eval::NNUE::Features {
 
     if (pos.nnue_wall_index_base() >= 0)
     {
-      Bitboard walls = pos.state()->wallSquares;
+      Bitboard walls = pos.state()->wallSquares | pos.state()->holeSquares;
       while (walls)
       {
         Square s = pop_lsb(walls);
@@ -191,9 +191,12 @@ namespace Stockfish::Eval::NNUE::Features {
 
     if (pos.nnue_wall_index_base() >= 0)
     {
-      Bitboard prevWalls = st->previous ? st->previous->wallSquares : Bitboard(0);
-      Bitboard removedWalls = prevWalls & ~st->wallSquares;
-      Bitboard addedWalls = st->wallSquares & ~prevWalls;
+      Bitboard prevWalls = st->previous
+                         ? st->previous->wallSquares | st->previous->holeSquares
+                         : Bitboard(0);
+      Bitboard walls = st->wallSquares | st->holeSquares;
+      Bitboard removedWalls = prevWalls & ~walls;
+      Bitboard addedWalls = walls & ~prevWalls;
       while (removedWalls)
         removed.push_back(make_wall_index(perspective, pop_lsb(removedWalls), oriented_ksq, pos));
       while (addedWalls)
@@ -275,7 +278,11 @@ namespace Stockfish::Eval::NNUE::Features {
     int cost = st->dirtyPiece.dirty_num;
     if (currentNnueVariant && currentNnueVariant->nnueWallIndexBase >= 0)
     {
-      Bitboard diff = st->previous ? st->wallSquares ^ st->previous->wallSquares : st->wallSquares;
+      Bitboard walls = st->wallSquares | st->holeSquares;
+      Bitboard prevWalls = st->previous
+                         ? st->previous->wallSquares | st->previous->holeSquares
+                         : Bitboard(0);
+      Bitboard diff = walls ^ prevWalls;
       cost += popcount(diff);
     }
     if (currentNnueVariant && currentNnueVariant->nnuePointsIndexBase >= 0)
@@ -319,7 +326,7 @@ namespace Stockfish::Eval::NNUE::Features {
   int HalfKAv2Variants::refresh_cost(const Position& pos) {
     int cost = pos.count<ALL_PIECES>();
     if (pos.nnue_wall_index_base() >= 0)
-      cost += popcount(pos.state()->wallSquares);
+      cost += popcount(pos.state()->wallSquares | pos.state()->holeSquares);
     if (pos.nnue_points_index_base() >= 0)
     {
       if (pos.nnue_points_score_planes())

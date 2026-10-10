@@ -339,6 +339,7 @@ struct StateInfoCopied {
   Square castlingKingSquare[COLOR_NB];
   Bitboard wallSquares;
   Bitboard deadSquares;
+  Bitboard holeSquares;
   Bitboard gatesBB[COLOR_NB];
   Bitboard not_moved_pieces[COLOR_NB];
   Bitboard potionZones[COLOR_NB][Variant::POTION_TYPE_NB];
@@ -1458,7 +1459,7 @@ inline bool Position::two_boards() const {
 }
 
 inline Bitboard Position::board_bb() const {
-  return board_size_bb(var_ref().maxFile, var_ref().maxRank) & ~st->wallSquares;
+  return board_size_bb(var_ref().maxFile, var_ref().maxRank) & ~(st->wallSquares | st->holeSquares);
 }
 
 inline Bitboard Position::dead_squares() const {

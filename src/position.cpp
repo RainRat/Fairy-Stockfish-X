@@ -905,6 +905,7 @@ namespace Zobrist {
   Key potionCooldown[COLOR_NB][Variant::POTION_TYPE_NB][POTION_COOLDOWN_BITS];
   Key wall[SQUARE_NB];
   Key dead[SQUARE_NB];
+  Key hole[SQUARE_NB];
   Key orientation[4][SQUARE_NB];
   Key promotionOrigin[PIECE_NB][SQUARE_NB];
   Key passState[3];
@@ -1137,6 +1138,8 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
           os << " ^";
       else if (pos.state()->wallSquares & sq)
           os << " *";
+      else if (pos.state()->holeSquares & sq)
+          os << " _";
       else if (pos.variant()->shogiStylePromotions && pos.unpromoted_piece_on(sq))
           os << "+" << pos.piece_symbol(pos.unpromoted_piece_on(sq));
       else if (((pos.captures_to_hand() && !pos.drop_loop()) || pos.two_boards()) && pos.is_promoted(sq))
@@ -1224,6 +1227,8 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
               os << " | ^";
           else if (pos.state()->wallSquares & sq)
               os << " | *";
+          else if (pos.state()->holeSquares & sq)
+              os << " | _";
           else if (pos.variant()->shogiStylePromotions && pos.unpromoted_piece_on(sq))
               os << " |+" << pos.piece_symbol(pos.unpromoted_piece_on(sq));
           else if (((pos.captures_to_hand() && !pos.drop_loop()) || pos.two_boards()) && pos.is_promoted(sq))
@@ -1436,6 +1441,9 @@ Key Position::layout_key() const {
   for (Bitboard b = st->deadSquares; b; )
       k ^= Zobrist::dead[pop_lsb(b)];
 
+  for (Bitboard b = st->holeSquares; b; )
+      k ^= Zobrist::hole[pop_lsb(b)];
+
   for (Bitboard b = st->promotionDeferred; b; )
       k ^= Zobrist::promotionDeferred[pop_lsb(b)];
 
@@ -1594,6 +1602,7 @@ void Position::init() {
   {
       Zobrist::wall[s] = rng.rand<Key>();
       Zobrist::dead[s] = rng.rand<Key>();
+      Zobrist::hole[s] = rng.rand<Key>();
   }
 
   for (int i = NO_EG_EVAL; i < EG_EVAL_NB; ++i)
@@ -1841,6 +1850,12 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
           // Dead square (neutral capturable blocker)
           st->deadSquares |= sq;
           byTypeBB[ALL_PIECES] |= sq;
+          ++sq;
+      }
+      else if (token == '_')
+      {
+          // Hole square: inaccessible, but transparent to sliders and hoppers.
+          st->holeSquares |= sq;
           ++sq;
       }
 
@@ -2610,6 +2625,9 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
           si->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc];
   }
 
+  for (Bitboard b = si->holeSquares; b; )
+      si->key ^= Zobrist::hole[pop_lsb(b)];
+
   for (Bitboard b = si->epSquares; b; )
       si->key ^= Zobrist::enpassant[pop_lsb(b)];
 
@@ -2847,9 +2865,10 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
           bool hasPiece = bool(pieces() & s);
           bool hasWall = bool(st->wallSquares & s);
           bool hasDead = bool(st->deadSquares & s);
+          bool hasHole = bool(st->holeSquares & s);
           bool hidden = bool(fogArea & s);
 
-          if (!hasPiece && !hasWall && !hasDead && !hidden)
+          if (!hasPiece && !hasWall && !hasDead && !hasHole && !hidden)
           {
               ++emptyCnt;
               continue;
@@ -2861,8 +2880,8 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
               emptyCnt = 0;
           }
 
-          if (hasDead || hasWall || hidden)
-              ss << (hasDead ? "^" : "*");
+          if (hasDead || hasWall || hasHole || hidden)
+              ss << (hasDead ? "^" : hasWall ? "*" : hasHole ? "_" : "*");
           else if (var->shogiStylePromotions && unpromoted_piece_on(s))
           {
               // Promoted shogi pieces, e.g., +r for dragon
