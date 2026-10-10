@@ -2096,8 +2096,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         if (config.find(boolKey + "Black") != config.end())
             applySide(BLACK, legacy.byColor[BLACK]);
     };
-    if (!parse_color_setting_piece("dropOnOppositeColors", v->dropOnOppositeColors, v)) return false;
+    // Legacy aliases fold first so explicit new keys win when both are present.
     fold_legacy_drop_bool("dropOppositeColoredBishop", BISHOP, v->dropOnOppositeColors);
+    if (!parse_color_setting_piece("dropOnOppositeColors", v->dropOnOppositeColors, v)) return false;
     parse_attribute("dropPromoted", v->dropPromoted);
     parse_attribute("symmetricDropTypes", v->symmetricDropTypes, v);
     parse_attribute("captureDrops", v->captureDrops, v);
@@ -2209,8 +2210,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("stalemateValue", v->stalemateValue);
     parse_attribute("stalematePieceCount", v->stalematePieceCount);
     parse_color_setting("checkmateValue", v->checkmateValue);
-    if (!parse_color_setting_piece("dropNoCheckmate", v->dropNoCheckmate, v)) return false;
+    // Legacy alias folds first so explicit dropNoCheckmate wins when both are present.
     fold_legacy_drop_bool("shogiPawnDropMateIllegal", SHOGI_PAWN, v->dropNoCheckmate);
+    if (!parse_color_setting_piece("dropNoCheckmate", v->dropNoCheckmate, v)) return false;
     parse_attribute("shatarMateRule", v->shatarMateRule);
     parse_attribute("bikjangRule", v->bikjangRule);
     parse_attribute("pseudoRoyalTypes", v->pseudoRoyalTypes, v);
@@ -3156,20 +3158,32 @@ Variant* VariantParser<DoCheck>::parse(Variant* v) {
 
     // Fail early when a variant exceeds compile-time board dimensions.
     if ((cfgMaxRank >= 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
+    {
+        if (DoCheck)
+            std::cerr << "maxRank/maxFile exceeds supported board dimensions." << std::endl;
         return nullptr;
+    }
 
     if (itRank != config.end())
     {
         int parsedRank = 0;
         if (!parse_rank_index(itRank->second, parsedRank))
+        {
+            if (DoCheck)
+                std::cerr << "Invalid maxRank value: '" << itRank->second << "'." << std::endl;
             return nullptr;
+        }
         v->maxRank = Rank(parsedRank);
     }
     if (itFile != config.end())
     {
         int parsedFile = 0;
         if (!parse_file_index(itFile->second, parsedFile))
+        {
+            if (DoCheck)
+                std::cerr << "Invalid maxFile value: '" << itFile->second << "'." << std::endl;
             return nullptr;
+        }
         v->maxFile = File(parsedFile);
     }
 

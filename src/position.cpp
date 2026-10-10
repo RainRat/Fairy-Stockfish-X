@@ -6036,6 +6036,12 @@ bool Position::legal(Move m) const {
   }
   if (rifleShot && is_any_promotion(m))
       return false;
+  // Rifle captures leave the mover in place, so there is no gating
+  // destination to resolve. Reject instead of silently dropping the gate.
+  // Laser rotations share the gating payload but never place a piece, so
+  // they remain legal with rifle captures.
+  if (rifleShot && !var->laserGame && is_gating(m) && gating_type(m) != NO_PIECE_TYPE)
+      return false;
   if (!dropMove && !is_any_promotion(m))
   {
       Piece mover = moved_piece(m);
@@ -9628,7 +9634,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   }
 
   // Remove king leaping right when aimed by a rook
-  if (cambodian_moves() && type_of(pc) == ROOK && (square<KING>(them) & gates(them) & attacks_bb<ROOK>(to)))
+  if (cambodian_moves() && type_of(pc) == ROOK && count<KING>(them) == 1 && (square<KING>(them) & gates(them) & attacks_bb<ROOK>(to)))
       st->gatesBB[them] ^= square<KING>(them);
 
   //resolve blast and custodial capture. custodial capture is essentially blast with extra restrictions
@@ -13055,8 +13061,8 @@ bool Position::pos_is_ok() const {
 #endif
 
   if (   (sideToMove != WHITE && sideToMove != BLACK)
-      || (count<KING>(WHITE) && piece_on(square<KING>(WHITE)) != make_piece(WHITE, KING))
-      || (count<KING>(BLACK) && piece_on(square<KING>(BLACK)) != make_piece(BLACK, KING))
+      || (count<KING>(WHITE) == 1 && piece_on(square<KING>(WHITE)) != make_piece(WHITE, KING))
+      || (count<KING>(BLACK) == 1 && piece_on(square<KING>(BLACK)) != make_piece(BLACK, KING))
       || (ep_squares() & ~(var->enPassantRegion[WHITE] | var->enPassantRegion[BLACK])))
       assert(0 && "pos_is_ok: Default");
 
@@ -13067,7 +13073,7 @@ bool Position::pos_is_ok() const {
   // opposing King attacked, so the orthodox reachability invariant does not
   // apply to them.
   if (   !allow_checks()
-      && pieceCount[make_piece(~sideToMove, KING)]
+      && pieceCount[make_piece(~sideToMove, KING)] == 1
       && (attackers_to_king(square<KING>(~sideToMove), sideToMove) & pieces(sideToMove)))
       assert(0 && "pos_is_ok: Kings");
 

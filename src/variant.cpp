@@ -2834,7 +2834,12 @@ void VariantMap::parse_istream(std::istream& file) {
                     std::getline(ss, value);
                     const auto first = key.find_first_not_of(" \t");
                     if (first == std::string::npos)
+                    {
+                        if (DoCheck)
+                            std::cerr << "Invalid syntax: '" << input << "'." << std::endl;
+                        invalidSyntax = true;
                         continue;
+                    }
                     const auto last = key.find_last_not_of(" \t");
                     if (value.find_first_not_of(" \t") == std::string::npos)
                         value.clear();
@@ -2842,6 +2847,8 @@ void VariantMap::parse_istream(std::istream& file) {
                     {
                         const auto value_first = value.find_first_not_of(" \t");
                         value.erase(0, value_first);
+                        const auto value_last = value.find_last_not_of(" \t");
+                        value.erase(value_last + 1);
                     }
                     attribs[key.substr(first, last - first + 1)] = value;
                 }

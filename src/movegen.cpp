@@ -1367,11 +1367,14 @@ namespace {
 #endif
     const bool useFastStandardPawnGenerator = pos.variant()->useFastStandardPawnGenerator;
 
-    // Freeze and trap effects can resolve a check without capturing or blocking
-    // its checker. Keep all candidates in this case, including double check,
-    // and let legal() determine whether the effect neutralizes the checkers.
+    // Freeze, trap, and blast effects can resolve a check without capturing
+    // or blocking its checker. Keep all candidates in this case, including
+    // double check, and let legal() determine whether the effect neutralizes
+    // the checkers.
     const bool effectEvasions = Type == EVASIONS
-                              && (pos.variant()->freezePieceTypes || pos.variant()->trapRegion);
+                              && (pos.variant()->freezePieceTypes || pos.variant()->trapRegion
+                                  || pos.blast_on_move() || pos.blast_on_capture()
+                                  || pos.blast_on_self_destruct());
 
     // Skip generating non-king moves when in double check unless an effect can
     // change the activity of one or more checkers.
