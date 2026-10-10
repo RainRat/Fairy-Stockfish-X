@@ -491,7 +491,7 @@ struct Variant {
   bool nFoldValueAbsolute = false;
   bool perpetualCheckIllegal = false;
   bool moveRepetitionIllegal = false;
-  bool samePlayerBoardRepetitionIllegal = false;
+  int samePlayerBoardRepetitionIllegalAtN = 0;
   bool alternating2x2DropIllegal = false;
   bool pathwayDropRule = false;
   bool weakDiagonalConnect = false;

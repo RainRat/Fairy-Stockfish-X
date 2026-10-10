@@ -2188,7 +2188,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
-    parse_attribute("samePlayerBoardRepetitionIllegal", v->samePlayerBoardRepetitionIllegal);
+    parse_attribute("samePlayerBoardRepetitionIllegalAtN", v->samePlayerBoardRepetitionIllegalAtN);
     parse_attribute("alternating2x2DropIllegal", v->alternating2x2DropIllegal);
     parse_attribute("pathwayDropRule", v->pathwayDropRule);
     parse_attribute("weakDiagonalConnect", v->weakDiagonalConnect);
@@ -2779,6 +2779,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "flagPieceCount must be non-negative." << std::endl;
+        valid = false;
+    }
+    if (v->samePlayerBoardRepetitionIllegalAtN < 0)
+    {
+        if (DoCheck)
+            std::cerr << "samePlayerBoardRepetitionIllegalAtN must be non-negative." << std::endl;
         valid = false;
     }
     if (v->antiRoyalCount < 0)

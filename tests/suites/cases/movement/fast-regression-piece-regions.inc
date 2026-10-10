@@ -79,7 +79,10 @@ startFen = 8/8/8/8/8/8/8/4K3[M]
 startFen = 4k3/8/8/8/8/8/R7/4K3 w - - 0 1
 
 [same-player-repeat-illegal:same-player-repeat-control]
-samePlayerBoardRepetitionIllegal = true
+samePlayerBoardRepetitionIllegalAtN = 1
+
+[same-player-repeat-twice:same-player-repeat-control]
+samePlayerBoardRepetitionIllegalAtN = 2
 
 [flip5:chess]
 maxRank = 5
@@ -195,6 +198,20 @@ go perft 1
 CMDS
 )
 assert_contains "$out" "^e1d1: 1$"
+
+out=$(run_uci "$ENGINE" "$TMP_VARIANTS" same-player-repeat-twice <<'CMDS'
+position startpos moves a2a3 e8e7 a3a2 e7e8
+go perft 1
+CMDS
+)
+assert_contains "$out" "^a2a3: 1$"
+
+out=$(run_uci "$ENGINE" "$TMP_VARIANTS" same-player-repeat-twice <<'CMDS'
+position startpos moves a2a3 e8e7 a3a2 e7e8 a2a3 e8e7 a3a2 e7e8
+go perft 1
+CMDS
+)
+assert_not_contains "$out" "^a2a3: 1$"
 
 if variant_available "$ENGINE" janggi "$VARIANTS"; then
   out=$(run_uci "$ENGINE" "$VARIANTS" janggi <<'EOF'

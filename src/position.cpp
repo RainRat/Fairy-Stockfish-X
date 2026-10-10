@@ -1499,14 +1499,14 @@ Key Position::compute_piece_state_key() const {
 
 bool Position::violates_same_player_board_repetition(Move m) const {
 
-  if (!var->samePlayerBoardRepetitionIllegal)
+  if (var->samePlayerBoardRepetitionIllegalAtN <= 0)
       return false;
 
   StateInfo nextState;
   SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
   ScopedProbeMove probe(*this, m, nextState);
 
-  bool repeated = false;
+  int repetitions = 0;
   int end = captures_to_hand() ? st->pliesFromNull
                                : std::min(st->rule50, st->pliesFromNull);
   if (end >= 4)
@@ -1515,15 +1515,15 @@ bool Position::violates_same_player_board_repetition(Move m) const {
       for (int i = 4; i <= end; i += 2)
       {
           stp = stp->previous->previous;
-          if (stp->move != MOVE_NONE && stp->layoutKey == st->layoutKey)
+          if (stp->move != MOVE_NONE && stp->layoutKey == st->layoutKey
+              && ++repetitions >= var->samePlayerBoardRepetitionIllegalAtN)
           {
-              repeated = true;
-              break;
+              return true;
           }
       }
   }
 
-  return repeated;
+  return false;
 }
 
 
@@ -10205,7 +10205,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Update the key with the final value
   st->key = k;
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegal)
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
   sideToMove = them;
 
@@ -10235,7 +10235,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
 
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegal)
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
 
   if (counting_rule())
@@ -10916,7 +10916,7 @@ void Position::do_null_move(StateInfo& newSt) {
 
   st->key ^= Zobrist::side;
   st->boardKey = st->key ^ st->reserveKey;
-  if (var->samePlayerBoardRepetitionIllegal)
+  if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
   prefetch(TT.first_entry(key()));
 
@@ -13060,7 +13060,7 @@ bool Position::pos_is_ok() const {
       && si.boardKey == st->boardKey
       && si.reserveKey == st->reserveKey
       && st->reserveKey == reserve_key()
-      && (!var->samePlayerBoardRepetitionIllegal || si.layoutKey == st->layoutKey)
+      && (var->samePlayerBoardRepetitionIllegalAtN <= 0 || si.layoutKey == st->layoutKey)
       && si.pawnKey == st->pawnKey
       && si.materialKey == st->materialKey
       && same_array(si.nonPawnMaterial, st->nonPawnMaterial)
