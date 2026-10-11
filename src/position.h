@@ -1234,6 +1234,9 @@ private:
   Bitboard compute_evasion_checkers_bb(Color side) const;
   void set_check_info(StateInfo* si) const;
   bool compute_forced_jump_followup(Square s, int step = 0) const;
+  // Exact witness check for the pseudo-legal continuation cache above: with
+  // the restriction active, any non-pass legal move is a legal continuation.
+  bool has_legal_jump_continuation() const;
   Key layout_key() const;
   bool violates_same_player_board_repetition(Move m) const;
   Key reserve_key() const;

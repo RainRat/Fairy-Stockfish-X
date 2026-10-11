@@ -363,6 +363,11 @@ struct Variant {
   PieceSet cloneMoveTypes = NO_PIECE_SET;
   bool forcedJumpContinuation = false;
   bool forcedJumpSameDirection = false;
+  // Derived in conclude(): pseudo-legal jump continuations may differ from
+  // legal ones (royal safety, evasion, pins, hop/capture bans, repetitions,
+  // non-mate checks), so the continuation bit needs exact verification.
+  // When false, the cheap pseudo-legal cache is exact by construction.
+  bool jumpContinuationsNeedLegality = false;
   bool cambodianMoves = false;
   Bitboard diagonalLines = 0;
   ColorSetting<bool> pass = ColorSetting<bool>(false);

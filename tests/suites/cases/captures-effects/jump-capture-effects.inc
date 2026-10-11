@@ -34,6 +34,11 @@ wallingBlack = true
 toroidal = true
 customPiece2 = k:mKc{hurdles: 1,1; pre: 1,1; post: 1,1; capture: locust_first; hurdle_types:enemy}K
 startFen = 8/8/8/6K1/7m/8/1m6/8 w - - 0 1
+
+[forced-jump-pin:chess]
+pieceToCharTable = PNBRQKDFGHS
+customPiece1 = d:c{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first; hurdle_types:enemy}R
+forcedJumpContinuation = true
 EOF
 tmp_ini="${FSX_TMP_INI}"
 
@@ -65,3 +70,16 @@ go perft 1
 EOF
 )
 grep -Fq "a3c1: 1" <<<"$wrapped_out"
+
+# A chain ends when its only pseudo-legal continuation is illegal: the hopper
+# lands blocking a rook pin, and the sole follow-up jump leaves the pin line,
+# exposing the king. The side must play on normally instead of being locked
+# to zero moves. c3e3 jumps over d3 along no pin (legal); e3g3 over f3 would
+# uncover Ke1 to Re8 (illegal).
+pinned_out=$(run_uci "$ENGINE" "$tmp_ini" forced-jump-pin <<'EOF'
+position fen 4r1k1/8/8/8/8/2Dp1p2/8/4K3 w - - 0 1 moves c3e3 0000
+go perft 1
+EOF
+)
+! grep -Fq "e3g3: 1" <<<"$pinned_out"
+grep -Fq "e1d1: 1" <<<"$pinned_out"

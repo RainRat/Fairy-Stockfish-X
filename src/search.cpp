@@ -1077,6 +1077,7 @@ namespace {
         &&  ss->staticEval >= beta - 20 * depth - 22 * improving + 168 * ss->ttPv + 159 + 200 * (((ss - 1)->currentMovePiece == NO_PIECE || !pos.double_step_region((ss - 1)->currentMovePiece)) && (pos.piece_types() & PAWN))
         && !excludedMove
         &&  pos.non_pawn_material(us)
+        && !pos.has_forced_jump_followup()
         &&  pos.count<ALL_PIECES>(~us) != pos.count<PAWN>(~us)
         && !pos.flip_enclosed_pieces()
         && (ss->ply >= thisThread->nmpMinPly || us != thisThread->nmpColor))

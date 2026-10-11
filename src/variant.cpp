@@ -2426,9 +2426,30 @@ Variant* Variant::conclude() {
                   && !flagMove
                   && !flagRegion[WHITE]
                   && !flagRegion[BLACK]
-                  && !mandatoryPromotionRegion[WHITE]
-                  && !mandatoryPromotionRegion[BLACK]
-                  && !pieceDrops;
+                   && !mandatoryPromotionRegion[WHITE]
+                   && !mandatoryPromotionRegion[BLACK]
+                   && !pieceDrops;
+
+    // Forced-jump continuations: the do_move cache is pseudo-legal. It is
+    // exact unless a legality filter can discriminate same-origin jumps
+    // (royal safety/evasion/pins, pseudo-/anti-royals, hop/capture bans,
+    // repetitions, immobility). Without royals there are no check squares,
+    // so checking=false alone cannot discriminate. When extending move
+    // legality with a per-destination filter, extend this gate or
+    // continuations lock up.
+    {
+        bool royalPossible = bool(pieceTypes & piece_set(KING))
+                          || (kingType != NO_PIECE_TYPE && bool(pieceTypes & piece_set(kingType)))
+                          || bool(pseudoRoyalTypes) || bool(antiRoyalTypes) || flagPieceSafe;
+        bool anyCaptureForbidden = false;
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !anyCaptureForbidden; ++pt)
+            anyCaptureForbidden = bool(captureForbidden[pt]);
+        jumpContinuationsNeedLegality = forcedJumpContinuation && !allowChecks
+                                     && (royalPossible || bool(mutuallyHopIllegalTypes)
+                                         || samePlayerBoardRepetitionIllegalAtN > 0
+                                         || anyCaptureForbidden
+                                         || immobilityIllegal);
+    }
 
     // Initialize calculated NNUE properties
     nnueKing =  pieceTypes & KING ? KING

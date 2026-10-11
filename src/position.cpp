@@ -4022,6 +4022,17 @@ bool Position::compute_forced_jump_followup(Square s, int step) const {
   return false;
 }
 
+bool Position::has_legal_jump_continuation() const {
+
+  // Call only with the pseudo-legal continuation bit set: movegen then
+  // restricts to the forced piece's jumps, so any non-pass legal move is a
+  // legal continuation witness. Pass moves don't continue the chain.
+  for (const auto& m : MoveList<LEGAL>(*this))
+      if (!is_pass(m))
+          return true;
+  return false;
+}
+
 /// Position::checked_pseudo_royals computes a bitboard of
 /// all pseudo-royal pieces of a particular color that are in check
 Bitboard Position::checked_pseudo_royals(Color c) const {
@@ -10372,6 +10383,23 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
   }
 
+  // Exactness for forced-jump continuations: the cache above is pseudo-legal
+  // and may admit continuations that are illegal (royal safety, evasion,
+  // pins, hop/capture bans, repetitions, non-mate checks). Once the side to
+  // move owns the forced piece, verify with the same generator+legality path
+  // as real play; otherwise the chain ends. Across the forced opponent pass
+  // (side to move owns nothing here) the bit is left for revalidation after
+  // the pass. Gated to variants where pseudo-legal can differ from legal, so
+  // royal-less presets keep the bit-identical fast path.
+  if (forced_jump_continuation() && st->forcedJumpHasFollowup && var->jumpContinuationsNeedLegality)
+  {
+      const Piece fp = piece_on(st->forcedJumpSquare);
+      if (fp == NO_PIECE)
+          st->forcedJumpHasFollowup = false;
+      else if (color_of(fp) == sideToMove && !has_legal_jump_continuation())
+          st->forcedJumpHasFollowup = false;
+  }
+
 #ifndef NDEBUG
   if (Eval::useNNUE)
   {
@@ -10920,6 +10948,10 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 void Position::do_null_move(StateInfo& newSt) {
 
   assert(!evasion_checkers());
+  // Nulling mid-chain would drop a mandatory continuation (chain state is
+  // move-undo state, not copied here); search must not null while a jumper
+  // is forced to continue.
+  assert(!has_forced_jump_followup());
   assert(&newSt != st);
 
   static_cast<StateInfoCopied&>(newSt) = static_cast<const StateInfoCopied&>(*st);
