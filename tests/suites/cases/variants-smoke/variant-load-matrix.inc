@@ -84,12 +84,21 @@ go perft 1")
 assert_nodes "$out" "3"
 fi
 
-# 5) Checkless: king capture is legal (checks are disabled by variant).
+# 5) Checkless: checks are illegal unless checkmate; kings stay uncapturable.
 if variant_available "checkless"; then
 out=$(run_cmds "setoption name UCI_Variant value checkless
 position fen 4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1
 go perft 1")
-assert_contains "$out" "^e2e8: 1$"
+assert_not_contains "$out" "^e2e8: 1$"
+assert_not_contains "$out" "^e2e7: 1$"
+assert_contains "$out" "^e2d3: 1$"
+# Scholar's-mate pattern: mating check allowed, non-mating checks pruned.
+out=$(run_cmds "setoption name UCI_Variant value checkless
+position fen r1bqkbnr/ppp2ppp/2np4/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 0 1
+go perft 1")
+assert_contains "$out" "^h5f7: 1$"
+assert_not_contains "$out" "^c4f7: 1$"
+assert_not_contains "$out" "^h5e5: 1$"
 fi
 
 # 5a) Janggi: non-king moves may not expose the king to a cannon check.

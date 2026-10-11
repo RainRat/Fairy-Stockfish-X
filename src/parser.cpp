@@ -717,6 +717,15 @@ namespace {
         return parse_named_value(value, target, values);
     }
 
+    template <> bool set(const std::string& value, CheckingRule& target) {
+        static constexpr auto values = std::array{
+            std::pair{"true", CheckingRule::ALLOWED},
+            std::pair{"false", CheckingRule::FORBIDDEN},
+            std::pair{"onlyMate", CheckingRule::MATE_ONLY},
+        };
+        return parse_named_value(value, target, values);
+    }
+
     template <> bool set(const std::string& value, Value& target) {
         static constexpr auto values = std::array{
             std::pair{"win", VALUE_MATE},
@@ -1215,7 +1224,8 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             std::string typeName =  std::is_same_v<T, int> ? "int"
                                   : std::is_same_v<T, Rank> ? "Rank"
                                   : std::is_same_v<T, File> ? "File"
-                                  : std::is_same_v<T, bool> ? "bool"
+                                   : std::is_same_v<T, bool> ? "bool"
+                                   : std::is_same_v<T, CheckingRule> ? "true|false|onlyMate"
                                   : std::is_same_v<T, Value> ? "Value"
                                   : std::is_same_v<T, MaterialCounting> ? "MaterialCounting"
                                   : std::is_same_v<T, CountingRule> ? "CountingRule"
@@ -2532,7 +2542,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
 
     const bool wrapsTopology = v->cylindrical || v->toroidal;
     v->rebuild_piece_symbol_maps();
-    const bool hasRoyalKing = v->checking
+    const bool hasRoyalKing = v->checking != CheckingRule::FORBIDDEN
                            && v->kingType != NO_PIECE_TYPE
                            && bool(v->pieceTypes & piece_set(v->kingType));
 
@@ -2593,13 +2603,19 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
 
     // Contradictory options
-    if (!v->checking && v->checkCounting)
+    if (v->checking != CheckingRule::ALLOWED && v->checkCounting)
     {
         if (DoCheck)
             std::cerr << "checkCounting=true requires checking=true." << std::endl;
         valid = false;
     }
-    if (DoCheck && !v->checking && v->allowChecks)
+    if (v->checking == CheckingRule::MATE_ONLY && v->allowChecks)
+    {
+        if (DoCheck)
+            std::cerr << "checking=onlyMate requires allowChecks=false: mate is defined by legal replies." << std::endl;
+        valid = false;
+    }
+    if (DoCheck && v->checking == CheckingRule::FORBIDDEN && v->allowChecks)
         std::cerr << "checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality." << std::endl;
     if (DoCheck && v->progressiveMultimove && !v->multimoves.empty())
         std::cerr << "progressiveMultimove ignores multimoves sequence." << std::endl;

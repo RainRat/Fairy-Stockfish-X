@@ -139,7 +139,10 @@ const char* walling_name(WallingRule v) {
     return names[int(v)];
 }
 const char* chasing_name(ChasingRule v) {
-    return v == AXF_CHASING ? "axf" : v == ALL_ATTACKS_CHASING ? "all" : "none";
+  return v == AXF_CHASING ? "axf" : v == ALL_ATTACKS_CHASING ? "all" : "none";
+}
+const char* checking_name(CheckingRule v) {
+  return v == CheckingRule::MATE_ONLY ? "onlyMate" : v == CheckingRule::FORBIDDEN ? "false" : "true";
 }
 const char* material_counting_name(MaterialCounting v) {
     static const char* names[] = {"none", "janggi", "unweighted", "whiteDrawOdds", "blackDrawOdds"};
@@ -467,7 +470,7 @@ std::string variant_info_json(const std::string& name) {
     gating << '}'; field(out, first, "gating", gating.str());
 
     std::ostringstream end; end << '{'; b = true;
-    field(end, b, "checking", boolean(v.checking));
+    field(end, b, "checking", quote(checking_name(v.checking)));
     field(end, b, "allowChecks", boolean(v.allowChecks));
     field(end, b, "dropChecks", boolean(v.dropChecks));
     field(end, b, "dropChecksByColor", color_bools(v.dropChecks[WHITE], v.dropChecks[BLACK]));

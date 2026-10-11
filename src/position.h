@@ -736,6 +736,7 @@ public:
   bool topology_wraps() const;
   bool is_hex_board() const;
   bool checking_permitted() const;
+  bool mate_only_checks() const;
   bool allow_checks() const;
   bool castling_ignore_check() const;
   bool drop_checks() const;
@@ -2047,7 +2048,12 @@ inline int Position::nnue_potion_cooldown_index_base() const {
 
 inline bool Position::checking_permitted() const {
   assert(var != nullptr);
-  return var->checking;
+  return var->checking != CheckingRule::FORBIDDEN;
+}
+
+inline bool Position::mate_only_checks() const {
+  assert(var != nullptr);
+  return var->checking == CheckingRule::MATE_ONLY;
 }
 
 inline bool Position::allow_checks() const {

@@ -6191,6 +6191,32 @@ bool Position::legal(Move m) const {
   if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && is_promotion_move(m)) || (!drop_checks() && dropMove)) && move_gives_check())
       return false;
 
+  // Checkless (mate-only checks): a checking move is legal only when it
+  // checkmates. Probe the move; any legal reply (or no check delivered,
+  // e.g. blast edge cases) rejects it. Mate-only checking requires
+  // allowChecks=false (parse-time), so royal safety defines mate here.
+  // Mate-testing recurses through checking replies, so break probe cycles
+  // by treating a repeated probe position as non-mate.
+  if (mate_only_checks() && !allow_checks() && move_gives_check())
+  {
+      StateInfo nextState;
+      SimulatedMoveGuard clearSimulation(*this, MOVE_NONE);
+      ScopedProbeMove probe(*this, m, nextState);
+      static thread_local std::vector<Key> mateTestHistory;
+      const Key probeKey = st->key;
+      const bool hasCycle = std::find(mateTestHistory.begin(), mateTestHistory.end(), probeKey)
+                         != mateTestHistory.end();
+      bool isMate = false;
+      if (!hasCycle)
+      {
+          mateTestHistory.push_back(probeKey);
+          isMate = bool(evasion_checkers()) && !has_legal_move_ignoring_immediate_end();
+          mateTestHistory.pop_back();
+      }
+      if (!isMate)
+          return false;
+  }
+
   // Optional rule: disallow checkmate by drops.
   // The piece-specific drop-mate ban is a stricter version of the blanket rule.
   if (   dropMove

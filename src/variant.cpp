@@ -478,7 +478,7 @@ namespace {
         v->flagRegion = Rank8BB;
         v->flagMove = true;
         v->castling = false;
-        v->checking = false;
+        v->checking = CheckingRule::FORBIDDEN;
         v->endgameEval = EG_EVAL_RK;
         return v;
     }
@@ -2368,8 +2368,8 @@ Variant* Variant::conclude() {
                          && gravity == NO_GRAVITY
                          && !blastImmuneTypes;
 
-    simpleLegality = checking
-                  && fastAttacks
+    simpleLegality = checking == CheckingRule::ALLOWED
+                   && fastAttacks
                   && pieceTypes == CHESS_PIECES
                   && pseudoRoyalTypes == NO_PIECE_SET
                   && antiRoyalTypes == NO_PIECE_SET

@@ -393,6 +393,7 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(info["board"]["startFen"], sf.start_fen("chess"))
         self.assertEqual([piece["fen"]["white"] for piece in info["pieces"]], ["P", "N", "B", "R", "Q", "K"])
         self.assertEqual(info["gameEnd"]["kingType"], "king")
+        self.assertEqual(info["gameEnd"]["checking"], "true")
         self.assertEqual(info["royalPieceTypes"], ["king"])
         self.assertFalse(info["castling"]["wins"]["white"]["kingSide"])
         self.assertIsInstance(info["protocol"]["pieceToCharTable"], str)
@@ -405,6 +406,10 @@ class TestPublicAPI(unittest.TestCase):
         janggi_info = json.loads(sf.variant_info("janggi"))
         self.assertIn("e2", janggi_info["board"]["diagonalLines"])
         self.assertEqual(janggi_info["movement"]["soldierPromotionRank"], 1)
+        self.assertEqual(json.loads(sf.variant_info("racingkings"))["gameEnd"]["checking"], "false")
+
+        sf.load_variant_config("[variantinfocheckless:chess]\nchecking = onlyMate\n")
+        self.assertEqual(json.loads(sf.variant_info("variantinfocheckless"))["gameEnd"]["checking"], "onlyMate")
 
         sf.load_variant_config("[variantinfocustomroyal:chess]\nking = k:KN\n")
         custom_royal = json.loads(sf.variant_info("variantinfocustomroyal"))

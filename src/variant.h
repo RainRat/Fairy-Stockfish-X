@@ -76,6 +76,12 @@ enum class TrapProtection {
   FRIENDLY_ORTHOGONAL
 };
 
+enum class CheckingRule {
+  ALLOWED,
+  FORBIDDEN,
+  MATE_ONLY
+};
+
 enum class SeePruningPolicy : uint8_t {
   RELIABLE,
   MOVE_SENSITIVE,
@@ -249,7 +255,7 @@ struct Variant {
   ColorSetting<PieceSet> castlingRookPieces = ColorSetting<PieceSet>(piece_set(ROOK));
   bool oppositeCastling = false;
   PieceType kingType = KING;
-  bool checking = true;
+  CheckingRule checking = CheckingRule::ALLOWED;
   bool allowChecks = false;
   bool royalPieceNoThroughCheck = false;
   bool checkedRoyalsIgnoreFreeze = false;

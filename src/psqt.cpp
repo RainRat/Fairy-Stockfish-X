@@ -319,7 +319,7 @@ void init(const Variant* v) {
                              eg_value(score) * 7000 / (7000 + eg_value(score)));
 
       // In variants where checks are prohibited, strong pieces are less mobile, so limit their value 
-      if (!v->checking)
+      if (v->checking == CheckingRule::FORBIDDEN)
           score = make_score(std::min(mg_value(score), Value(1800)) / 2,
                              std::min(eg_value(score), Value(1800)) * 3 / 5);
 
