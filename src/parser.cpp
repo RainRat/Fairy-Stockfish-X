@@ -2573,6 +2573,58 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
 
+    // Single-royal policy: at most one actual royal per side (a physical KING
+    // singleton, else a kingType singleton when no KING is present, mirroring
+    // royal_piece_type()). Zero royals is unambiguous (royal-less flows handle
+    // it explicitly); multiple royals must go through extinction or
+    // pseudo-royal mechanisms, which keep the orthodox single-royal hot paths
+    // untouched. Counts cover board and pockets.
+    {
+        int kingCount[COLOR_NB] = {};
+        int kingTypeCount[COLOR_NB] = {};
+        const bool distinctKingType = v->kingType != NO_PIECE_TYPE && v->kingType != KING;
+        const std::string& startFen = v->startFen;
+        const std::size_t pocketStart = startFen.find('[');
+        const std::size_t boardEnd = std::min(startFen.find(' '),
+                                              pocketStart == std::string::npos ? startFen.size() : pocketStart);
+        for (std::size_t i = 0; i < startFen.size(); ++i)
+        {
+            const bool inBoard = i < boardEnd;
+            const bool inPocket = pocketStart != std::string::npos && i > pocketStart
+                               && i < startFen.find(']', pocketStart);
+            if (!inBoard && !inPocket)
+                continue;
+            const char ch = startFen[i];
+            if (!std::isalpha(static_cast<unsigned char>(ch)))
+                continue;
+            const auto it = v->symbolToPiece.find(std::string(1, ch));
+            if (it == v->symbolToPiece.end())
+                continue;
+            const Piece pc = it->second;
+            const PieceType pt = type_of(pc);
+            if (pt == KING)
+                kingCount[color_of(pc)]++;
+            else if (distinctKingType && pt == v->kingType)
+                kingTypeCount[color_of(pc)]++;
+        }
+        for (Color c : { WHITE, BLACK })
+        {
+            // Ambiguous only with multiple royal candidates: several KINGs,
+            // or several kingTypes with no KING singleton to prefer (e.g.
+            // twokings2 remaps kings to commoners with extinctionPseudoRoyal
+            // instead).
+            const bool ambiguous = kingCount[c] > 1
+                                || (kingCount[c] == 0 && kingTypeCount[c] > 1);
+            const bool covered = v->extinctionValue.get(c) != VALUE_NONE || v->pseudoRoyalTypes;
+            if (ambiguous && !covered)
+            {
+                if (DoCheck)
+                    std::cerr << "startFen - Expected at most one royal per side without extinction or pseudo-royal coverage." << std::endl;
+                valid = false;
+            }
+        }
+    }
+
     if (v->hexBoard && wrapsTopology)
     {
         if (DoCheck)
@@ -2615,6 +2667,18 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "checking=onlyMate requires allowChecks=false: mate is defined by legal replies." << std::endl;
         valid = false;
     }
+    // Contradictory adjudication: pseudo-royal loss precedes extinction, so
+    // overlapping targets with different results are ambiguous.
+    if (v->pseudoRoyalValue != VALUE_NONE && v->pseudoRoyalTypes)
+        for (Color c : { WHITE, BLACK })
+            if (v->extinctionValue.get(c) != VALUE_NONE
+                && v->extinctionValue.get(c) != v->pseudoRoyalValue
+                && (v->extinctionPieceTypes.get(c) & v->pseudoRoyalTypes))
+            {
+                if (DoCheck)
+                    std::cerr << "extinctionPieceTypes overlaps pseudoRoyalTypes with a different result." << std::endl;
+                valid = false;
+            }
     if (DoCheck && v->checking == CheckingRule::FORBIDDEN && v->allowChecks)
         std::cerr << "checking=false with allowChecks=true is unusual: king safety is disabled, so the no-check rule will not constrain legality." << std::endl;
     if (DoCheck && v->progressiveMultimove && !v->multimoves.empty())
@@ -2655,7 +2719,32 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             if (DoCheck)
             std::cerr << "Castling destination is adjacent to castlingKingFile; some GUIs/protocols may not distinguish castling from a normal king move." << std::endl;
         }
+        // Upstream keys: diagnose board-impossible files without rejecting.
+        // Defaults are inherited (e.g. small boards keeping chess files
+        // with castling inert), so only explicitly configured values are
+        // diagnosed. Rook files additionally default to a FILE_MAX sentinel.
+        if (DoCheck)
+        {
+            if (config.find("castlingKingFile") != config.end()
+                && kingFile > int(v->maxFile))
+                std::cerr << "castlingKingFile is outside the board." << std::endl;
+            if (config.find("castlingKingsideFile") != config.end()
+                && kingSide > int(v->maxFile))
+                std::cerr << "castlingKingsideFile is outside the board." << std::endl;
+            if (config.find("castlingQueensideFile") != config.end()
+                && queenSide > int(v->maxFile))
+                std::cerr << "castlingQueensideFile is outside the board." << std::endl;
+            if (config.find("castlingRookKingsideFile") != config.end()
+                && int(v->castlingRookKingsideFile) > int(v->maxFile))
+                std::cerr << "castlingRookKingsideFile is outside the board." << std::endl;
+            if (config.find("castlingRookQueensideFile") != config.end()
+                && int(v->castlingRookQueensideFile) > int(v->maxFile))
+                std::cerr << "castlingRookQueensideFile is outside the board." << std::endl;
+        }
     }
+    // Upstream key: a promotion rank beyond the board is unreachable.
+    if (DoCheck && int(v->soldierPromotionRank) > int(v->maxRank))
+        std::cerr << "soldierPromotionRank is outside the board." << std::endl;
     if (v->connect3D && v->connect4D)
     {
         if (DoCheck)
@@ -2785,6 +2874,20 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "connectGroup must be -1, 0, or a positive group size." << std::endl;
         valid = false;
     }
+    // FSX-only key: a group larger than the board can never connect.
+    if (v->connectGroup > boardFiles * boardRanks)
+    {
+        if (DoCheck)
+            std::cerr << "connectGroup is larger than the board." << std::endl;
+        valid = false;
+    }
+    // FSX-only key: mirror the connectN line bound for removals.
+    if (v->removeConnectN > std::max(boardFiles, boardRanks))
+    {
+        if (DoCheck)
+            std::cerr << "removeConnectN is larger than the largest board dimension." << std::endl;
+        valid = false;
+    }
     if (v->pocketSize < 0)
     {
         if (DoCheck)
@@ -2803,6 +2906,9 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "collinearN must be non-negative." << std::endl;
         valid = false;
     }
+    // Upstream key: a line longer than the board can never be arranged.
+    if (DoCheck && v->collinearN > std::max(boardFiles, boardRanks))
+        std::cerr << "collinearN is larger than the largest board dimension." << std::endl;
     if (v->flagPieceCount < 0)
     {
         if (DoCheck)

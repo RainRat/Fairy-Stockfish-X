@@ -11827,6 +11827,11 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
                   continue;
               }
               sawEligibleType = true;
+              // Hand pieces still count (crazyhouse-style): captured pieces
+              // convert to the captor's color, so the victim's count still
+              // drops on every loss. Prisoners keep the victim's color, so
+              // counting them would let the captor hoard victims forever and
+              // make extinction unreachable: prison counts as gone.
               bool extinct = count_with_hand(c, pt) <= extinction_piece_count(c)
                           && count_with_hand(~c, pt) >= extinction_opponent_piece_count(c) + (extinction_claim() && c == sideToMove);
               anyTypeExtinct |= extinct;
