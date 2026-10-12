@@ -150,11 +150,16 @@ struct ScopedSpellContext {
   SpellContext ctx;
   bool active;
 
+  // Composing semantics: an inner scope keeps outer speculative state and
+  // adds its own, so nested legality probes never lose pending effects.
+  // Install discipline is unchanged (install only when this scope
+  // contributes new bits); restore is unchanged.
   ScopedSpellContext(Bitboard freezeExtra, Bitboard jumpRemoved)
       : prev(current_spell_context() ? *current_spell_context() : SpellContext()),
         prevActive(current_spell_context() && current_spell_context()->active()),
-        ctx(freezeExtra, jumpRemoved),
-        active(ctx.active()) {
+        ctx((prevActive ? prev.freezeExtra : Bitboard(0)) | freezeExtra,
+            (prevActive ? prev.jumpRemoved : Bitboard(0)) | jumpRemoved),
+        active(bool(freezeExtra | jumpRemoved)) {
     if (active)
       set_current_spell_context(&ctx);
   }
