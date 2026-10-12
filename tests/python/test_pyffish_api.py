@@ -189,7 +189,7 @@ class TestBindings(unittest.TestCase):
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe]"
             " w KQkq|11111111/11111111 - 0 1"
         )
-        self.assertEqual(sf.validate_fen(good, "seirawan", False), 1)
+        self.assertEqual(sf.validate_fen(good, "seirawan", False), sf.FEN_OK)
         for bad in (
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe]"
             " w KQkq|garbage - 0 1",
@@ -198,7 +198,7 @@ class TestBindings(unittest.TestCase):
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[HEhe]"
             " w KQkq|11111111 - 0 1",
         ):
-            self.assertEqual(sf.validate_fen(bad, "seirawan", False), -5)
+            self.assertEqual(sf.validate_fen(bad, "seirawan", False), sf.FEN_INVALID_CASTLING_INFO)
 
     def test_parser_whitespace_and_inheritance_contract(self):
         sf.load_variant_config(
@@ -230,7 +230,7 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
                 "api-counter-diagnostics",
                 False,
             ),
-            -2,
+            sf.FEN_INVALID_HALF_MOVE_COUNTER,
         )
         self.assertEqual(
             sf.validate_fen(
@@ -238,7 +238,7 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
                 "api-counter-diagnostics",
                 False,
             ),
-            -1,
+            sf.FEN_INVALID_MOVE_COUNTER,
         )
 
     def test_fen_bounds_and_side_to_move_validation(self):
@@ -248,11 +248,11 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
         chess_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"
         self.assertEqual(
             sf.validate_fen(f"{chess_fen} ww KQkq - 0 1", "chess", False),
-            -6,
+            sf.FEN_INVALID_SIDE_TO_MOVE,
         )
         self.assertEqual(
             sf.validate_fen(f"{chess_fen} w KQkq a9 0 1", "chess", False),
-            -4,
+            sf.FEN_INVALID_EN_PASSANT_SQ,
         )
         self.assertEqual(
             sf.validate_fen(
@@ -260,7 +260,7 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
                 "chess",
                 False,
             ),
-            -8,
+            sf.FEN_INVALID_BOARD_GEOMETRY,
         )
         self.assertEqual(
             sf.validate_fen(
@@ -268,7 +268,7 @@ startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
                 "crazyhouse",
                 False,
             ),
-            -7,
+            sf.FEN_INVALID_POCKET_INFO,
         )
 
     def test_promotion_origin_validation(self):
@@ -284,13 +284,13 @@ promotedPieceType = p:q n:q k:q
 
 assert pyffish.validate_fen(
     "4k3/8/8/8/8/8/8/Q~:N3K3[] w - - 0 1", "api-promotion-origin"
-) == 1
+) == pyffish.FEN_OK
 assert pyffish.validate_fen(
     "4k3/8/8/8/8/8/8/Q~:n3K3[] w - - 0 1", "api-promotion-origin"
-) != 1
+) != pyffish.FEN_OK
 assert pyffish.validate_fen(
     "4k3/8/8/8/8/8/8/Q~:K3K3[] w - - 0 1", "api-promotion-origin"
-) == 1
+) == pyffish.FEN_OK
 '''
         subprocess.run([sys.executable, "-c", code], check=True)
 

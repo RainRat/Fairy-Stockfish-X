@@ -757,9 +757,25 @@ PyMODINIT_FUNC PyInit_pyffish() {
     PyModule_AddObject(module, "NOTATION_THAI_LAN", PyLong_FromLong(NOTATION_THAI_LAN));
 
     // validation
+    PyModule_AddObject(module, "FEN_INVALID_VARIANT", PyLong_FromLong(FEN::FEN_INVALID_VARIANT));
     PyModule_AddObject(module, "FEN_INVALID_MOVE", PyLong_FromLong(FEN::FEN_INVALID_MOVE));
-    PyModule_AddObject(module, "FEN_OK", PyLong_FromLong(FEN::FEN_OK));
+    PyModule_AddObject(module, "FEN_INVALID_POINTS_INFO", PyLong_FromLong(FEN::FEN_INVALID_POINTS_INFO));
+    PyModule_AddObject(module, "FEN_INVALID_COUNTING_RULE", PyLong_FromLong(FEN::FEN_INVALID_COUNTING_RULE));
+    PyModule_AddObject(module, "FEN_INVALID_CHECK_COUNT", PyLong_FromLong(FEN::FEN_INVALID_CHECK_COUNT));
     PyModule_AddObject(module, "FEN_INVALID_PROMOTED_PIECE", PyLong_FromLong(FEN::FEN_INVALID_PROMOTED_PIECE));
+    PyModule_AddObject(module, "FEN_INVALID_NB_PARTS", PyLong_FromLong(FEN::FEN_INVALID_NB_PARTS));
+    PyModule_AddObject(module, "FEN_INVALID_CHAR", PyLong_FromLong(FEN::FEN_INVALID_CHAR));
+    PyModule_AddObject(module, "FEN_TOUCHING_KINGS", PyLong_FromLong(FEN::FEN_TOUCHING_KINGS));
+    PyModule_AddObject(module, "FEN_INVALID_BOARD_GEOMETRY", PyLong_FromLong(FEN::FEN_INVALID_BOARD_GEOMETRY));
+    PyModule_AddObject(module, "FEN_INVALID_POCKET_INFO", PyLong_FromLong(FEN::FEN_INVALID_POCKET_INFO));
+    PyModule_AddObject(module, "FEN_INVALID_SIDE_TO_MOVE", PyLong_FromLong(FEN::FEN_INVALID_SIDE_TO_MOVE));
+    PyModule_AddObject(module, "FEN_INVALID_CASTLING_INFO", PyLong_FromLong(FEN::FEN_INVALID_CASTLING_INFO));
+    PyModule_AddObject(module, "FEN_INVALID_EN_PASSANT_SQ", PyLong_FromLong(FEN::FEN_INVALID_EN_PASSANT_SQ));
+    PyModule_AddObject(module, "FEN_INVALID_NUMBER_OF_KINGS", PyLong_FromLong(FEN::FEN_INVALID_NUMBER_OF_KINGS));
+    PyModule_AddObject(module, "FEN_INVALID_HALF_MOVE_COUNTER", PyLong_FromLong(FEN::FEN_INVALID_HALF_MOVE_COUNTER));
+    PyModule_AddObject(module, "FEN_INVALID_MOVE_COUNTER", PyLong_FromLong(FEN::FEN_INVALID_MOVE_COUNTER));
+    PyModule_AddObject(module, "FEN_EMPTY", PyLong_FromLong(FEN::FEN_EMPTY));
+    PyModule_AddObject(module, "FEN_OK", PyLong_FromLong(FEN::FEN_OK));
 
     // initialize stockfish
     pieceMap.init();
