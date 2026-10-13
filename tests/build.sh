@@ -75,7 +75,7 @@ verify_build_board_family() {
     grep -q "var hex-16x16\\([ ,]\\|\$\\)" <<<"${catalog}" || has_hex16=0
     local fail=""
     case "${board}" in
-        512|very-large)
+        huge|very-large)
             (( has_shogi )) || fail="expected shogi in catalog"
             (( has_chu )) || fail="expected chu_shogi in catalog"
             (( has_hex16 )) || fail="expected hex-16x16 in catalog"
@@ -95,7 +95,7 @@ verify_build_board_family() {
         echo "FAILED: ${EXE} board-family mismatch (profile: ${BUILD_PROFILE}): ${fail}" >&2
         return 1
     fi
-    if [[ "$board" == 512 && "$catalog" != *" HB 512"* ]]; then
+    if [[ "$board" == huge && "$catalog" != *" HB 512"* ]]; then
         echo "FAILED: ${EXE} must identify its Huge boards (HB) capacity" >&2
         return 1
     fi

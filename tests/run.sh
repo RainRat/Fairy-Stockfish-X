@@ -70,7 +70,7 @@ check_named_engine_artifact() {
         "${ROOT_DIR}/src/stockfish-large") expected_board=large; expected_all="" ;;
         "${ROOT_DIR}/src/stockfish-allvars") expected_board=large; expected_all=yes ;;
         "${ROOT_DIR}/src/stockfish-vlb") expected_board=very-large; expected_all=yes ;;
-        "${ROOT_DIR}/src/stockfish-512"|"${ROOT_DIR}/src/stockfish-huge") expected_board=512; expected_all=yes ;;
+        "${ROOT_DIR}/src/stockfish-512"|"${ROOT_DIR}/src/stockfish-huge") expected_board=huge; expected_all=yes ;;
         *) return 0 ;;
     esac
     [[ -x "$engine" ]] || return 0
@@ -147,7 +147,7 @@ check_engine_role() {
     board="${profile#*board=}"; board="${board%%;*}"
     all="${profile#*all=}"; all="${all%%;*}"
     case "$role:$board:$all" in
-        large-allvars:large:yes|large-allvars:very-large:yes|large-allvars:512:yes|very-large-allvars:very-large:yes|very-large-allvars:512:yes|large:large:*|large:very-large:*|large:512:*|normal:normal:*) ;;
+        large-allvars:large:yes|large-allvars:very-large:yes|large-allvars:huge:yes|very-large-allvars:very-large:yes|very-large-allvars:huge:yes|large:large:*|large:very-large:*|large:huge:*|normal:normal:*) ;;
         *)
             echo "required engine role ${role} does not match ${engine} (recorded profile: ${profile:-unverified})." >&2
             case "$role" in

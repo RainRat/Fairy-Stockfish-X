@@ -40,7 +40,7 @@ check_profile \
 
 cp "${fixture}/src/stockfish-allvars" "${fixture}/src/stockfish-huge"
 fsx_build_write_signature "${fixture}" "${fixture}/src/stockfish-huge" fixture \
-  'arch=x86-64-modern;board=512;all=yes;nnue=no;debug=yes;optimize=no;compiler=g++;comp=native'
+  'arch=x86-64-modern;board=huge;all=yes;nnue=no;debug=yes;optimize=no;compiler=g++;comp=native'
 fsx_harness_init "${fixture}/src/stockfish-huge" "${fixture}"
 has_build_arg ARCH=x86-64-modern
 has_build_arg boardbits=512

@@ -59,15 +59,17 @@ bash tests/multiword-bitboard.sh
 
 The selector and `hugeboards=yes` alias also work with `src/Makefile_js` and
 `src/Makefile_dll`. The engine banner includes `HB 512`; recorded build profiles
-keep the numeric capacity. For the
+use `board=huge` (named like `normal`/`large`/`very-large`). For the
 Python extension, set `CFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"` and
 `CXXFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"`, then run
 `python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
 object files and bindings from different tiers are incompatible.
 
-The makefiles append required configuration flags even when `CXXFLAGS` is
-supplied on the command line. Use `optimize=no` to avoid the makefile's
-optimization flags when supplying your own. DLL objects are stored separately
+The makefiles follow upstream: supplying `CXXFLAGS` on the command line replaces
+the makefile's `CXXFLAGS`; use `EXTRACXXFLAGS` to add flags without replacing
+them. The capacity selector is the exception: `board-size.mk` always appends
+`-DBOARD_BITS` via `override`, so `boardbits`/`hugeboards` survive user `CXXFLAGS`.
+DLL objects are stored separately
 per capacity under `.local/build/dll`; compiler-flag and header changes rebuild
 them automatically. A link stamp also tracks the selected cached objects, so
 size switches relink the library and identical builds do no compiling or linking.
