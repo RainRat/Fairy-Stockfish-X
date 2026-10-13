@@ -7,7 +7,7 @@ while IFS= read -r file; do
     relative=${file#"$root/src/"}
     mkdir -p "$out/src/$(dirname "$relative")"
     cp -p "$file" "$out/src/$relative"
-done < <(rg --files "$root/src" -g '*.cpp' -g '*.h' -g '*.mk' -g Makefile)
+done < <(find "$root/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mk' -o -name Makefile \))
 source "$root/tests/lib/build-signature.sh"
 args=(ARCH=x86-64 boardbits=512 all=no nnue=no debug=yes optimize=no
       'sanitize=address undefined' 'CXXFLAGS=-O1 -fno-omit-frame-pointer'

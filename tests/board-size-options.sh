@@ -63,4 +63,20 @@ for makefile in Makefile Makefile_js Makefile_dll; do
 done
 [[ $(fsx_build_profile hugeboards=yes) == *';board=512;'* ]]
 [[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile boardbits=512)" ]]
+source <(sed -n '/^engine_family() {/,/^}/p' "$root/tests/run.sh")
+ROOT_DIR="$out/profile-fixture"
+unset FSX_ENGINE_FAMILY
+[[ $(engine_family stockfish-avx512) == normal ]]
+[[ $(engine_family stockfish-huge) == 512 ]]
+[[ $(engine_family stockfish-512-debug) == 512 ]]
+mkdir -p "$ROOT_DIR/src"
+printf '#!/bin/sh\nexit 0\n' > "$ROOT_DIR/src/stockfish-avx512"
+fsx_build_write_signature "$ROOT_DIR" "$ROOT_DIR/src/stockfish-avx512" fixture \
+    'board=large;all=yes'
+[[ $(engine_family "$ROOT_DIR/src/stockfish-avx512") == large ]]
+source <(sed -n '/^native() {/,/^}/p' "$root/tests/lib/suite.sh")
+if FSX_ALLOW_SMALL_BOARD=0 ENGINE=stockfish-avx512 native royal >"$out/native-avx512.log" 2>&1; then
+    echo 'native suite accepted an AVX-512 filename as a large-board build' >&2
+    exit 1
+fi
 echo 'Board selectors and Huge boards profiles passed'
