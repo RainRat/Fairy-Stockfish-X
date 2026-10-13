@@ -3,7 +3,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 out="$root/.local/build/dll-board-size"
 mkdir -p "$out"
-for width in 128 512 256 128; do
+for width in 64 128 512 256 128; do
     make -C "$root/src" -f Makefile_dll -j "${JOBS:-2}" boardbits="$width" \
         EXE="$out/libffish.so" 'CXXFLAGS=-O2 -DNDEBUG' >"$out/build-$width.log" 2>&1 || {
         cat "$out/build-$width.log" >&2

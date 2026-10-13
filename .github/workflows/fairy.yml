@@ -116,6 +116,10 @@ jobs:
           python3 ../tests/huge-board-placement.py ./stockfish-huge
           bash ../tests/board-size-options.sh
           bash ../tests/multiword-bitboard.sh
+
+      - name: Test Huge move generation under ASan and UBSan
+        if: ${{ matrix.config.run_expensive_tests }}
+        run: |
           bash ../tests/huge-movegen.sh
 
       - name: Test DLL board-size switches

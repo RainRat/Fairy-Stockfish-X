@@ -142,7 +142,18 @@ for name, extra in [("drops", "pieceDrops = true\ncapturesToHand = true\n"),
                      + "/".join(["N" * 22] * 22) + " w - - 0 1\n"),
                     ("promotion", "promotionRegionWhite = *22\npromotionRegionBlack = *1\n")]:
     configs.append(f"[{name}:board-22x22]\n{extra}")
+for width, height in [(8, 8), (12, 10), (16, 16), (22, 22)]:
+    for w, h in [(width + 1, height), (width, height + 1)]:
+        configs.append(f"[size-{w}x{h}:chess]\nmaxFile = {w}\nmaxRank = {h}\ncastling = false\n")
 INI.write_text("\n".join(configs))
+
+for engine, (width, height) in [(ENGINE, (22, 22))] + REFERENCES:
+    catalog = run("chess", "uci", engine=engine)
+    variants = re.findall(r"^option name UCI_Variant .*? var (.*)$", catalog, re.M)[-1].split(" var ")
+    assert f"board-{width}x{height}" in variants, (engine, variants)
+    for w, h in [(width + 1, height), (width, height + 1)]:
+        assert f"size-{w}x{h}" not in variants, (engine, w, h)
+    print(engine.name, "maximum geometry and file/rank capacity rejection passed", flush=True)
 
 for width, height in dimensions:
     name = f"board-{width}x{height}"

@@ -1170,26 +1170,36 @@ describe('two-leg route parsing', function () {
   });
 });
 
-describe('512-bit board coordinates', function () {
-  it('loads, moves and undoes above square 255', function () {
-    if (!ffish.info().includes(' 512 ')) {
-      if (process.env.FSX_REQUIRE_512 === '1' || process.env.FSX_REQUIRE_HUGE === '1')
-        throw new Error('Expected a Huge boards module');
-      this.skip();
-    }
-    const fen = '21k/20R1/' + '22/'.repeat(19) + 'K21 w - - 0 1';
-    ffish.loadVariantConfig('[js-board-512:chess]\nmaxFile = v\nmaxRank = 22\n'
+describe('compiled board capacity', function () {
+  it('checks the banner, maximum coordinates, move/undo and oversized rejection', function () {
+    const info = ffish.info();
+    const bits = info.includes(' HB 512 ') ? 512 : info.includes(' VLB ') ? 256
+      : info.includes(' LB ') ? 128 : 64;
+    if (process.env.FSX_TEST_BOARD_BITS)
+      chai.expect(bits).to.equal(Number(process.env.FSX_TEST_BOARD_BITS));
+    const [width, height] = {64: [8, 8], 128: [12, 10], 256: [16, 16], 512: [22, 22]}[bits];
+    const fen = `${width - 1}k/${width - 2}R1/` + `${width}/`.repeat(height - 3)
+      + `K${width - 1} w - - 0 1`;
+    ffish.loadVariantConfig(`[js-capacity:chess]\nmaxFile = ${width}\nmaxRank = ${height}\n`
       + 'castling = false\nallowChecks = true\nstartFen = ' + fen + '\n');
-    const board = new ffish.Board('js-board-512');
+    const board = new ffish.Board('js-capacity');
     try {
-      chai.expect(ffish.validateFen(fen, 'js-board-512', false)).to.equal(1);
-      chai.expect(board.legalMoves().split(' ')).to.include('u21u22');
-      chai.expect(board.push('u21u22')).to.equal(true);
-      chai.expect(board.fen()).to.equal('20Rk/' + '22/'.repeat(20) + 'K21 b - - 1 1');
+      chai.expect(ffish.validateFen(fen, 'js-capacity', false)).to.equal(1);
+      const file = String.fromCharCode(97 + width - 2);
+      const move = `${file}${height - 1}${file}${height}`;
+      chai.expect(board.legalMoves().split(' ')).to.include(move);
+      chai.expect(board.push(move)).to.equal(true);
+      chai.expect(board.fen()).to.equal(`${width - 2}Rk/` + `${width}/`.repeat(height - 2)
+        + `K${width - 1} b - - 1 1`);
       board.pop();
       chai.expect(board.fen()).to.equal(fen);
-      chai.expect(JSON.parse(ffish.variantInfo('js-board-512')).board.width).to.equal(22);
+      chai.expect(JSON.parse(ffish.variantInfo('js-capacity')).board.width).to.equal(width);
     } finally { board.delete(); }
+    for (const [w, h] of [[width + 1, height], [width, height + 1]]) {
+      ffish.loadVariantConfig(`[js-oversized:chess]\nmaxFile = ${w}\nmaxRank = ${h}\n`);
+      chai.expect(ffish.variants().split(' ')).not.to.include('js-oversized');
+      chai.expect(ffish.variantInfo('js-oversized')).to.equal('');
+    }
   });
 });
 
