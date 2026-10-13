@@ -16,6 +16,62 @@ fsx_build_hash_file() {
   fsx_build_hash_text <"$1"
 }
 
+fsx_build_makefile_signature() {
+  {
+    fsx_build_hash_file "$1/src/Makefile"
+    fsx_build_hash_file "$1/src/board-size.mk"
+  } | fsx_build_hash_text
+}
+
+fsx_board_family() {
+  case "$1" in
+    64|normal) echo normal ;;
+    128|large) echo large ;;
+    256|very-large) echo very-large ;;
+    512|huge) echo 512 ;;
+    *) echo "unknown board family: $1" >&2; return 1 ;;
+  esac
+}
+
+fsx_board_bits() {
+  case "$(fsx_board_family "$1")" in
+    normal) echo 64 ;; large) echo 128 ;; very-large) echo 256 ;; 512) echo 512 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Zero-based maximum file/rank indices.
+fsx_board_limits() {
+  case "$(fsx_board_bits "$1")" in
+    64) echo '7 7' ;; 128) echo '11 9' ;; 256) echo '15 15' ;; 512) echo '21 21' ;;
+    *) return 1 ;;
+  esac
+}
+
+fsx_profile_board_family() {
+  local board="${1#*board=}"
+  fsx_board_family "${board%%;*}"
+}
+
+fsx_engine_family() {
+  local root_dir="$1" engine="$2" profile
+  if [[ -n "${FSX_ENGINE_FAMILY:-}" ]]; then
+    fsx_board_family "$FSX_ENGINE_FAMILY"
+    return
+  fi
+  profile=$(fsx_build_recorded_profile "$root_dir" "$engine" 2>/dev/null) || profile=""
+  if [[ -n "$profile" ]]; then
+    fsx_profile_board_family "$profile"
+    return
+  fi
+  case "${engine##*/}" in
+    stockfish-512*|stockfish-huge*) echo 512 ;;
+    stockfish-vlb*) echo very-large ;;
+    stockfish-large*|stockfish-allvars*) echo large ;;
+    *) echo normal ;;
+  esac
+}
+
 fsx_build_output_path() {
   local root_dir="$1"
   local exe="$2"
@@ -29,6 +85,9 @@ fsx_build_signature_file() {
   local root_dir="$1"
   local output_file="$2"
   local output_key
+  if [[ "$output_file" != /* && -f "$output_file" ]]; then
+    output_file="$(cd "$(dirname "$output_file")" && pwd)/${output_file##*/}"
+  fi
   output_key=$(printf '%s' "$output_file" | fsx_build_hash_text)
   printf '%s/.local/build/signatures/%s.sig\n' "$root_dir" "$output_key"
 }
@@ -55,8 +114,7 @@ fsx_build_signature() {
     printf 'CXXFLAGS=%s\n' "${CXXFLAGS:-}"
     printf 'EXTRACXXFLAGS=%s\n' "${EXTRACXXFLAGS:-}"
     printf 'LDFLAGS=%s\n' "${LDFLAGS:-}"
-    printf 'makefile=%s\n' "$(fsx_build_hash_file "${root_dir}/src/Makefile")"
-    printf 'board-size=%s\n' "$(fsx_build_hash_file "${root_dir}/src/board-size.mk")"
+    printf 'makefiles=%s\n' "$(fsx_build_makefile_signature "$root_dir")"
     printf 'arguments:\n'
     printf '%s\n' "$@"
   } | fsx_build_hash_text
@@ -84,12 +142,13 @@ fsx_build_profile() {
   done
 
   if [[ "$boardbits" == 512 || ( -z "$boardbits" && "$hugeboards" == yes ) ]]; then
-    board=512
+    boardbits=512
   elif [[ "$boardbits" == 256 || ( -z "$boardbits" && "$verylargeboards" == yes ) ]]; then
-    board=very-large
+    boardbits=256
   elif [[ "$boardbits" == 128 || ( -z "$boardbits" && "$largeboards" == yes ) ]]; then
-    board=large
+    boardbits=128
   fi
+  board=$(fsx_board_family "${boardbits:-64}")
 
   printf 'arch=%s;board=%s;all=%s;nnue=%s;debug=%s;optimize=%s;compiler=%s;comp=%s\n' \
     "$arch" "$board" "$all" "$nnue" "$debug" "$optimize" "$compiler" "$compiler_kind"

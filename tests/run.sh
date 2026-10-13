@@ -116,34 +116,12 @@ normalize_engine() {
     echo "$engine"
 }
 
-engine_family() {
-    if [[ -n "${FSX_ENGINE_FAMILY:-}" ]]; then
-        echo "${FSX_ENGINE_FAMILY}"
-        return
-    fi
-    local base profile board
-    profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$1" 2>/dev/null) || profile=""
-    board="${profile#*board=}"; board="${board%%;*}"
-    case "$board" in normal|large|very-large|512) echo "$board"; return ;; esac
-    base=$(basename "$1")
-    case "$base" in
-        stockfish-512*|stockfish-huge*) echo 512 ;;
-        *vlb*) echo very-large ;;
-        *large*|*allvars*) echo large ;;
-        *) echo normal ;;
-    esac
-}
-
-family_rank() {
-    case "$1" in normal) echo 0 ;; large) echo 1 ;; very-large) echo 2 ;; 512|huge) echo 3 ;; esac
-}
-
 check_engine() {
     local suite="$1" engine="$2" expected actual
     [[ -x "$engine" ]] || { echo "missing executable: $engine" >&2; return 1; }
     expected=${SUITE_FAMILY[$suite]}
-    actual=$(engine_family "$engine")
-    if (( $(family_rank "$actual") < $(family_rank "$expected") )) && [[ "${FSX_ALLOW_SMALL_BOARD:-0}" != 1 ]]; then
+    actual=$(fsx_engine_family "$ROOT_DIR" "$engine")
+    if (( $(fsx_board_bits "$actual") < $(fsx_board_bits "$expected") )) && [[ "${FSX_ALLOW_SMALL_BOARD:-0}" != 1 ]]; then
         if [[ "$expected" == large ]]; then
             echo "${suite} requires a large-board all-variant engine; got ${engine} (${actual})." >&2
             echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
@@ -227,13 +205,8 @@ run_one() {
     check_engine "$suite" "$engine"
     check_engine_freshness "$engine"
     check_prerequisites "$suite"
-    local -x FSX_ENGINE_FAMILY="$(engine_family "$engine")"
-    case "${SUITE_FAMILY[$suite]}" in
-        normal) export FSX_EXPECTED_BOARD="7 7" ;;
-        large) export FSX_EXPECTED_BOARD="11 9" ;;
-        very-large) export FSX_EXPECTED_BOARD="15 15" ;;
-        512|huge) export FSX_EXPECTED_BOARD="21 21" ;;
-    esac
+    local -x FSX_ENGINE_FAMILY="$(fsx_engine_family "$ROOT_DIR" "$engine")"
+    export FSX_EXPECTED_BOARD="$(fsx_board_limits "${SUITE_FAMILY[$suite]}")"
     if [[ -n "$log_dir" ]]; then
         log="${log_dir}/${suite}.log"
         local status=0

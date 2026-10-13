@@ -3,6 +3,7 @@
 # Detect project root directory relative to this script
 UCI_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT_DIR=$(cd "${UCI_LIB_DIR}/../.." && pwd)
+source "${UCI_LIB_DIR}/build-signature.sh"
 
 fsx_error() {
   local test_name="$1"
@@ -361,32 +362,7 @@ fsx_variant_effective_limits() {
 }
 
 fsx_build_variant_limits() {
-  local engine="$1"
-  local engine_basen="${engine##*/}"
-
-  # Honor an explicit family override (run.sh and CI use this for
-  # custom-named binaries); otherwise infer from the binary name.
-  case "${FSX_ENGINE_FAMILY:-}" in
-    512|huge) echo "21 21"; return ;;
-    very-large) echo "15 15"; return ;;
-    large) echo "11 9"; return ;;
-    normal) echo "7 7"; return ;;
-  esac
-
-  case "$engine_basen" in
-    stockfish-512*|stockfish-huge*)
-      echo "21 21"
-      ;;
-    stockfish-large*|stockfish-allvars*)
-      echo "11 9"
-      ;;
-    stockfish-vlb*)
-      echo "15 15"
-      ;;
-    *)
-      echo "7 7"
-      ;;
-  esac
+  fsx_board_limits "$(fsx_engine_family "$ROOT_DIR" "$1")"
 }
 
 # Expected suite board as "<maxFileIdx> <maxRankIdx>". run.sh exports

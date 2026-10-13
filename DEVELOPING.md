@@ -38,6 +38,17 @@ do not overflow the ordinary 16-bit lanes.
 Keep the 256-bit tier for existing variants: the 512-bit executable has larger
 geometry and search-history tables even when it searches a smaller board.
 
+Swapped-order GCC 11.4 measurements against the pre-change 256-bit build found
+Chu Shogi +0.3%, Dai Shogi -2.2%, and 16x16 Hex -4.2% in nodes per second,
+with matching node totals. This PR retains the shared arithmetic at that
+measured cost; shift-unrolling and bit-clearing experiments slowed other games.
+Recovering that cost requires further measured optimization.
+
+Make builds select capacity through these options, rather than legacy `-D`
+flags in `CXXFLAGS`. Direct compiler builds still accept `-DLARGEBOARDS`
+or `-DVERY_LARGE_BOARDS` when `BOARD_BITS` is absent. Compatibility macros
+that require a larger board than an explicit `BOARD_BITS` fail at compile time.
+
 ```bash
 tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
 python3 tests/board-expansion.py src/stockfish-huge
@@ -68,6 +79,8 @@ arrow-wall tests against both move generation and move picking under ASan and
 UBSan. It includes cases above `MAX_MOVES` without increasing the existing
 overflow capacities. The Windows MSVC workflow checks both multiword widths,
 table and hardware popcount, and engine builds.
+CI runs the full ASan/UBSan stress build with GCC. Both GCC and Clang run the
+Huge debug engine checks and the independent UBSan arithmetic tests.
 
 A 512-bit build currently uses about 74 MiB for fixed geometry tables and
 roughly 673 MiB resident memory at native startup without embedded NNUE, with
@@ -84,7 +97,8 @@ The shipped huge-board placement variants are `gomoku-19x19`, `hex-19x19`,
 `hex-22x22`, `go19`, `capture-go19`, `nogo19`, and `suicide-go19`.
 Gomoku uses freestyle five-in-a-row rules. Hex inherits the existing
 `openingSwapDrop` surrogate. Ordinary and suicide Go retain the existing
-liberty/repetition rules and draw after two passes; territory/area scoring,
+liberty/repetition rules as experimental rule-testing setups and draw after
+two passes; territory/area scoring,
 dead-group adjudication, and komi require further work. Large shogi additions
 are deferred to a possible future PR.
 
