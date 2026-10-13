@@ -54,6 +54,19 @@ Python extension, set `CFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"` and
 `python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
 object files and bindings from different tiers are incompatible.
 
+The makefiles append required configuration flags even when `CXXFLAGS` is
+supplied on the command line. Use `optimize=no` to avoid the makefile's
+optimization flags when supplying your own. DLL objects are stored separately
+per capacity under `.local/build/dll`; compiler-flag and header changes rebuild
+them automatically. `bash tests/dll-board-size.sh` checks size switches without
+manual cleaning and changes to explicit compiler flags.
+
+`bash tests/huge-movegen.sh` runs independent combined-route, free-drop, and
+arrow-wall tests against both move generation and move picking under ASan and
+UBSan. It includes cases above `MAX_MOVES` without increasing the existing
+overflow capacities. The Windows MSVC workflow checks both multiword widths,
+table and hardware popcount, and engine builds.
+
 A 512-bit build currently uses about 74 MiB for fixed geometry tables and
 roughly 673 MiB resident memory at native startup without embedded NNUE, with
 one thread and a 16 MiB hash table. Most of the per-thread allocation is

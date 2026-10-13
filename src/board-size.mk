@@ -29,4 +29,4 @@ endif
 override largeboards = $(if $(filter 64,$(boardbits)),no,yes)
 override verylargeboards = $(if $(filter 256 512,$(boardbits)),yes,no)
 override hugeboards = $(if $(filter 512,$(boardbits)),yes,no)
-CXXFLAGS += -DBOARD_BITS=$(boardbits)
+override CXXFLAGS += -DBOARD_BITS=$(boardbits)

@@ -24,7 +24,7 @@ SRCS = ffishjs.cpp benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.c
 	nnue/features/half_ka_v2_variants.cpp
 
 CXX=emcc
-CXXFLAGS += --bind -DNNUE_EMBEDDING_OFF -DNO_THREADS -std=c++17 -Wall
+override CXXFLAGS += --bind -DNNUE_EMBEDDING_OFF -DNO_THREADS -std=c++17 -Wall
 
 largeboards = yes
 verylargeboards = no
@@ -34,14 +34,14 @@ debug = no
 
 ### Debugging
 ifeq ($(debug),no)
-	CXXFLAGS += -DNDEBUG -s ASSERTIONS=0 -s SAFE_HEAP=0
+	override CXXFLAGS += -DNDEBUG -s ASSERTIONS=0 -s SAFE_HEAP=0
 else
-	CXXFLAGS += -g -s ASSERTIONS=1 -s SAFE_HEAP=1
+	override CXXFLAGS += -g -s ASSERTIONS=1 -s SAFE_HEAP=1
 endif
 
 ### Optimization
 ifeq ($(optimize),yes)
-	CXXFLAGS += -O3
+	override CXXFLAGS += -O3
 endif
 
 # Compile version with support for large board variants
@@ -49,28 +49,28 @@ endif
 include board-size.mk
 ifneq ($(verylargeboards),no)
 	largeboards = yes
-	CXXFLAGS += -DVERY_LARGE_BOARDS
+	override CXXFLAGS += -DVERY_LARGE_BOARDS
 endif
 ifneq ($(largeboards),no)
-	CXXFLAGS += -DLARGEBOARDS
+	override CXXFLAGS += -DLARGEBOARDS
 	ifeq ($(verylargeboards),no)
-		CXXFLAGS += -DPRECOMPUTED_MAGICS
+		override CXXFLAGS += -DPRECOMPUTED_MAGICS
 	endif
 endif
-CXXFLAGS += -s INITIAL_MEMORY=$(if $(filter 512,$(boardbits)),128,32)MB -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1GB
+override CXXFLAGS += -s INITIAL_MEMORY=$(if $(filter 512,$(boardbits)),128,32)MB -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1GB
 ifeq ($(boardbits),512)
 	# SAN and rule probes keep Position/StateInfo copies on the stack.
-	CXXFLAGS += -s TOTAL_STACK=8MB -s STACK_OVERFLOW_CHECK=2
+	override CXXFLAGS += -s TOTAL_STACK=8MB -s STACK_OVERFLOW_CHECK=2
 endif
 
 # Enable all variants, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
-	CXXFLAGS += -DALLVARS
+	override CXXFLAGS += -DALLVARS
 endif
 
 ### Compile as ES6/ES2015 module
 ifeq ($(es6),yes)
-	CXXFLAGS += -s ENVIRONMENT='web,worker,node' -s EXPORT_ES6=1 -s MODULARIZE=1
+	override CXXFLAGS += -s ENVIRONMENT='web,worker,node' -s EXPORT_ES6=1 -s MODULARIZE=1
 endif
 
 .PHONY: help objclean clean build deps test serve
