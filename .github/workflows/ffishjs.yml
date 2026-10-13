@@ -48,7 +48,7 @@ jobs:
         run: npm test
       - name: Build 64-bit board module
         working-directory: src
-        run: make -f Makefile_js clean && make -f Makefile_js build boardbits=64
+        run: make -f Makefile_js clean && make -f Makefile_js build largeboards=no
       - name: Test 64-bit board capacity
         working-directory: tests/js
         env:

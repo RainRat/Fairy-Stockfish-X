@@ -126,7 +126,12 @@ fsx_harness_init() {
   [[ "$bits" != 128 ]] || FSX_HARNESS_CXX_DEFS+=(-DPRECOMPUTED_MAGICS)
   [[ "$all" != yes ]] || FSX_HARNESS_CXX_DEFS+=(-DALLVARS)
   if [[ "$FSX_HARNESS_KNOWN_ENGINE_CONFIG" == true ]]; then
-    FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" "boardbits=$bits" "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE")
+    case "$family" in
+      huge) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" hugeboards=yes "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+      very-large) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" verylargeboards=yes "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+      large) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" largeboards=yes "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+      *) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" largeboards=no "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+    esac
     [[ -z "$debug" ]] || FSX_HARNESS_BUILD_ARGS+=("debug=$debug")
     [[ -z "$optimize" ]] || FSX_HARNESS_BUILD_ARGS+=("optimize=$optimize")
   fi

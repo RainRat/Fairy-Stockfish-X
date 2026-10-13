@@ -27,10 +27,10 @@ For example:
 make -C src -j build ARCH=x86-64-modern largeboards=yes
 ```
 
-`boardbits=64|128|256|512` selects one compile-time capacity. The existing
-Boolean options still select 64, 128, or 256 bits when `boardbits` is omitted.
-`hugeboards=yes` selects 512 bits; `boardbits=512` remains supported.
-Explicit Boolean options must agree with the selected capacity. The 256- and
+One Boolean option selects each compile-time capacity: the default 64-bit
+build, `largeboards=yes` for 128 bits, `verylargeboards=yes` for 256 bits,
+and `hugeboards=yes` for 512 bits. Explicit Boolean options must agree with
+each other. The 256- and
 512-bit builds use the same multiword operations and generic rider geometry;
 their packed moves occupy 64 bits. Magic tables and PEXT are disabled for both.
 The 512-bit tier also uses 32-bit evaluation score lanes so dense positions
@@ -44,10 +44,11 @@ with matching node totals. This PR retains the shared arithmetic at that
 measured cost; shift-unrolling and bit-clearing experiments slowed other games.
 Recovering that cost requires further measured optimization.
 
-Make builds select capacity through these options, rather than legacy `-D`
-flags in `CXXFLAGS`. Direct compiler builds still accept `-DLARGEBOARDS`
-or `-DVERY_LARGE_BOARDS` when `BOARD_BITS` is absent. Compatibility macros
-that require a larger board than an explicit `BOARD_BITS` fail at compile time.
+Make builds select capacity through the Boolean options, rather than legacy `-D`
+flags in `CXXFLAGS`. Direct compiler builds still accept `-DLARGEBOARDS`,
+`-DVERY_LARGE_BOARDS`, or `-DHUGEBOARDS` when `BOARD_BITS` is absent.
+Compatibility macros that require a larger board than an explicit `BOARD_BITS`
+fail at compile time.
 
 ```bash
 tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
@@ -57,7 +58,7 @@ bash tests/board-size-options.sh
 bash tests/multiword-bitboard.sh
 ```
 
-The selector and `hugeboards=yes` alias also work with `src/Makefile_js` and
+The Boolean options also work with `src/Makefile_js` and
 `src/Makefile_dll`. The engine banner includes `HB 512`; recorded build profiles
 use `board=huge` (named like `normal`/`large`/`very-large`). For the
 Python extension, set `CFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"` and
@@ -65,11 +66,14 @@ Python extension, set `CFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"` and
 `python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
 object files and bindings from different tiers are incompatible.
 
-The makefiles follow upstream: supplying `CXXFLAGS` on the command line replaces
-the makefile's `CXXFLAGS`; use `EXTRACXXFLAGS` to add flags without replacing
-them. The capacity selector is the exception: `board-size.mk` always appends
-`-DBOARD_BITS` via `override`, so `boardbits`/`hugeboards` survive user `CXXFLAGS`.
-DLL objects are stored separately
+The makefiles use `override` for `CXXFLAGS` throughout, so required
+configuration flags are appended even when `CXXFLAGS` is supplied on the
+command line. This deliberately differs from upstream: GNU make silently
+ignores plain assignments after an `override`, so a partial override would
+drop flags without warning, and the capacity selector must survive user
+flags. Use `optimize=no` to avoid the makefile's optimization flags when
+supplying your own, or `EXTRACXXFLAGS` to add flags. DLL objects are stored
+separately
 per capacity under `.local/build/dll`; compiler-flag and header changes rebuild
 them automatically. A link stamp also tracks the selected cached objects, so
 size switches relink the library and identical builds do no compiling or linking.

@@ -45,7 +45,9 @@
 
 // Direct compiler users can still select the legacy board macros.
 #ifndef BOARD_BITS
-#  if defined(VERY_LARGE_BOARDS)
+#  if defined(HUGEBOARDS)
+#    define BOARD_BITS 512
+#  elif defined(VERY_LARGE_BOARDS)
 #    define BOARD_BITS 256
 #  elif defined(LARGEBOARDS)
 #    define BOARD_BITS 128
@@ -54,8 +56,11 @@
 #  endif
 #endif
 
-#if (defined(VERY_LARGE_BOARDS) && BOARD_BITS < 256) || (defined(LARGEBOARDS) && BOARD_BITS < 128)
-#  error "Legacy board macros conflict with BOARD_BITS; select capacity with boardbits in make builds"
+#if (defined(HUGEBOARDS) && BOARD_BITS < 512) || (defined(VERY_LARGE_BOARDS) && BOARD_BITS < 256) || (defined(LARGEBOARDS) && BOARD_BITS < 128)
+#  error "Legacy board macros conflict with BOARD_BITS; select capacity with hugeboards in make builds"
+#endif
+#if BOARD_BITS >= 512 && !defined(HUGEBOARDS)
+#  define HUGEBOARDS
 #endif
 #if BOARD_BITS >= 256 && !defined(VERY_LARGE_BOARDS)
 #  define VERY_LARGE_BOARDS
@@ -139,7 +144,7 @@ constexpr bool Is64Bit = true;
 constexpr bool Is64Bit = false;
 #endif
 
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
 constexpr int MaxBoardFiles = 22;
 constexpr int MaxBoardRanks = 22;
 constexpr int SquareBitMaskValue = 511;
@@ -895,7 +900,7 @@ enum : int {
 };
 
 enum Square : int {
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
   SQ_A1, SQ_B1, SQ_C1, SQ_D1, SQ_E1, SQ_F1, SQ_G1, SQ_H1, SQ_I1, SQ_J1, SQ_K1, SQ_L1, SQ_M1, SQ_N1, SQ_O1, SQ_P1, SQ_Q1, SQ_R1, SQ_S1, SQ_T1, SQ_U1, SQ_V1,
   SQ_A2, SQ_B2, SQ_C2, SQ_D2, SQ_E2, SQ_F2, SQ_G2, SQ_H2, SQ_I2, SQ_J2, SQ_K2, SQ_L2, SQ_M2, SQ_N2, SQ_O2, SQ_P2, SQ_Q2, SQ_R2, SQ_S2, SQ_T2, SQ_U2, SQ_V2,
   SQ_A3, SQ_B3, SQ_C3, SQ_D3, SQ_E3, SQ_F3, SQ_G3, SQ_H3, SQ_I3, SQ_J3, SQ_K3, SQ_L3, SQ_M3, SQ_N3, SQ_O3, SQ_P3, SQ_Q3, SQ_R3, SQ_S3, SQ_T3, SQ_U3, SQ_V3,
@@ -987,7 +992,7 @@ enum File : int {
 #if defined(VERY_LARGE_BOARDS)
   FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F, FILE_G, FILE_H,
   FILE_I, FILE_J, FILE_K, FILE_L, FILE_M, FILE_N, FILE_O, FILE_P,
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
   FILE_Q, FILE_R, FILE_S, FILE_T, FILE_U, FILE_V,
 #endif
 #elif defined(LARGEBOARDS)
@@ -1003,7 +1008,7 @@ enum Rank : int {
 #if defined(VERY_LARGE_BOARDS)
   RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8,
   RANK_9, RANK_10, RANK_11, RANK_12, RANK_13, RANK_14, RANK_15, RANK_16,
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
   RANK_17, RANK_18, RANK_19, RANK_20, RANK_21, RANK_22,
 #endif
 #elif defined(LARGEBOARDS)
@@ -1051,7 +1056,7 @@ struct DirtyPiece {
 /// Score packs signed middlegame and endgame lanes into one integer.
 /// Ordinary tiers use 16-bit lanes; the 512-bit tier uses 32-bit lanes.
 /// Packing shifts unsigned values to avoid undefined behavior.
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
 // Dense larger boards exceed the two signed 16-bit evaluation lanes.
 enum Score : int64_t { SCORE_ZERO };
 
@@ -1128,7 +1133,7 @@ ENABLE_INCR_OPERATORS_ON(File)
 ENABLE_INCR_OPERATORS_ON(Rank)
 ENABLE_INCR_OPERATORS_ON(CheckCount)
 
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
 constexpr Score operator+(Score a, Score b) { return Score(uint64_t(a) + uint64_t(b)); }
 constexpr Score operator-(Score a, Score b) { return Score(uint64_t(a) - uint64_t(b)); }
 constexpr Score operator+(Score a, int b) { return Score(uint64_t(a) + uint64_t(int64_t(b))); }
@@ -1239,7 +1244,7 @@ inline Score operator/(Score s, int i) {
 /// Multiplication of a Score by an integer. We check for overflow in debug mode.
 inline Score operator*(Score s, int i) {
 
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
   Score result = Score(uint64_t(s) * uint64_t(int64_t(i)));
 #else
   Score result = Score(int(s) * i);
@@ -1251,7 +1256,7 @@ inline Score operator*(Score s, int i) {
 
   return result;
 }
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
 inline Score operator*(int i, Score s) { return s * i; }
 #endif
 

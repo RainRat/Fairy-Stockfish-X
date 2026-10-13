@@ -9,7 +9,7 @@ show_usage() {
 Usage: tests/build.sh [MAKE_VARIABLE=value ...]
 
 Build an engine binary and record its build profile. Common variables include
-ARCH, COMP, EXE, boardbits, hugeboards, largeboards, verylargeboards, all, nnue, debug, and optimize.
+ARCH, COMP, EXE, hugeboards, largeboards, verylargeboards, all, nnue, debug, and optimize.
 
 Examples:
   tests/build.sh ARCH=x86-64-modern
