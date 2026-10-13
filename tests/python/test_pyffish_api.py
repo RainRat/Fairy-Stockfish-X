@@ -10,6 +10,36 @@ sys.path.insert(0, str(ROOT_DIR))
 import pyffish as sf
 
 class TestBindings(unittest.TestCase):
+    @unittest.skipUnless(" HB 512 " in sf.info(), "requires a Huge boards extension")
+    def test_huge_placement_definitions(self):
+        for variant, size, passes in [("gomoku-19x19", 19, False), ("hex-19x19", 19, False),
+                                     ("hex-22x22", 22, False), ("go19", 19, True),
+                                     ("capture-go19", 19, False), ("nogo19", 19, False),
+                                     ("suicide-go19", 19, True)]:
+            with self.subTest(variant=variant):
+                info = json.loads(sf.variant_info(variant))
+                self.assertEqual(info["board"]["width"], size)
+                start = info["board"]["startFen"]
+                self.assertEqual(sf.validate_fen(start, variant, False), sf.FEN_OK)
+                moves = sf.legal_moves(variant, start, [])
+                self.assertEqual(len(moves), size * size + passes)
+                move = f"P@{chr(96 + size)}{size}"
+                self.assertIn(move, moves)
+                self.assertNotEqual(sf.get_fen(variant, start, [move]), sf.get_fen(variant, start, []))
+
+    @unittest.skipUnless(" 512 " in sf.info(), "requires a 512-bit extension")
+    def test_board_512_coordinates(self):
+        fen = "21k/20R1/" + "22/" * 19 + "K21 w - - 0 1"
+        sf.load_variant_config(
+            "[api-board-512:chess]\nmaxFile = v\nmaxRank = 22\n"
+            "castling = false\nallowChecks = true\nstartFen = " + fen + "\n"
+        )
+        self.assertEqual(sf.validate_fen(fen, "api-board-512", False), sf.FEN_OK)
+        self.assertIn("u21u22", sf.legal_moves("api-board-512", fen, []))
+        moved = "20Rk/" + "22/" * 20 + "K21 b - - 1 1"
+        self.assertEqual(sf.get_fen("api-board-512", fen, ["u21u22"]), moved)
+        self.assertEqual(json.loads(sf.variant_info("api-board-512"))["board"]["width"], 22)
+
     @classmethod
     def setUpClass(cls):
         with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:

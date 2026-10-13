@@ -37,4 +37,15 @@ check_profile \
   'arch=x86-64-modern;board=large;all=yes;nnue=yes;debug=no;optimize=yes;compiler=g++;comp=native' \
   no yes
 
+cp "${fixture}/src/stockfish-allvars" "${fixture}/src/stockfish-huge"
+fsx_build_write_signature "${fixture}" "${fixture}/src/stockfish-huge" fixture \
+  'arch=x86-64-modern;board=512;all=yes;nnue=no;debug=yes;optimize=no;compiler=g++;comp=native'
+fsx_harness_init "${fixture}/src/stockfish-huge" "${fixture}"
+has_build_arg ARCH=x86-64-modern
+has_build_arg hugeboards=yes
+has_build_arg EXE=stockfish-huge
+has_build_arg debug=yes
+has_build_arg optimize=no
+[[ " ${FSX_HARNESS_CXX_DEFS[*]} " == *' -DBOARD_BITS=512 '* ]]
+
 echo 'harness build profile mapping passed'

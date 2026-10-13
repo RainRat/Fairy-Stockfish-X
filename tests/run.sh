@@ -70,11 +70,12 @@ check_named_engine_artifact() {
         "${ROOT_DIR}/src/stockfish-large") expected_board=large; expected_all="" ;;
         "${ROOT_DIR}/src/stockfish-allvars") expected_board=large; expected_all=yes ;;
         "${ROOT_DIR}/src/stockfish-vlb") expected_board=very-large; expected_all=yes ;;
+        "${ROOT_DIR}/src/stockfish-512"|"${ROOT_DIR}/src/stockfish-huge") expected_board=512; expected_all=yes ;;
         *) return 0 ;;
     esac
     [[ -x "$engine" ]] || return 0
     if ! fsx_build_artifact_is_current "$ROOT_DIR" "$engine" \
-        || find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+        || find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mk' -o -name 'Makefile' \) \
             -newer "$engine" -print -quit | grep -q .; then
         echo "stale or unverified engine: $engine; rebuild it with tests/build.sh" >&2
         return 1
@@ -123,6 +124,7 @@ engine_family() {
     local base
     base=$(basename "$1")
     case "$base" in
+        *512*|*huge*) echo 512 ;;
         *vlb*) echo very-large ;;
         *large*|*allvars*) echo large ;;
         *) echo normal ;;
@@ -130,7 +132,7 @@ engine_family() {
 }
 
 family_rank() {
-    case "$1" in normal) echo 0 ;; large) echo 1 ;; very-large) echo 2 ;; esac
+    case "$1" in normal) echo 0 ;; large) echo 1 ;; very-large) echo 2 ;; 512|huge) echo 3 ;; esac
 }
 
 check_engine() {
@@ -164,7 +166,7 @@ check_engine_role() {
     board="${profile#*board=}"; board="${board%%;*}"
     all="${profile#*all=}"; all="${all%%;*}"
     case "$role:$board:$all" in
-        large-allvars:large:yes|large-allvars:very-large:yes|very-large-allvars:very-large:yes|large:large:*|large:very-large:*|normal:normal:*) ;;
+        large-allvars:large:yes|large-allvars:very-large:yes|large-allvars:512:yes|very-large-allvars:very-large:yes|very-large-allvars:512:yes|large:large:*|large:very-large:*|large:512:*|normal:normal:*) ;;
         *)
             echo "required engine role ${role} does not match ${engine} (recorded profile: ${profile:-unverified})." >&2
             case "$role" in
@@ -226,6 +228,7 @@ run_one() {
         normal) export FSX_EXPECTED_BOARD="7 7" ;;
         large) export FSX_EXPECTED_BOARD="11 9" ;;
         very-large) export FSX_EXPECTED_BOARD="15 15" ;;
+        512|huge) export FSX_EXPECTED_BOARD="21 21" ;;
     esac
     if [[ -n "$log_dir" ]]; then
         log="${log_dir}/${suite}.log"

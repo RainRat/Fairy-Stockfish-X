@@ -84,6 +84,12 @@ fsx_harness_init() {
   FSX_HARNESS_KNOWN_ENGINE_CONFIG=false
 
   case "${FSX_HARNESS_ENGINE_BASENAME}" in
+    stockfish-512*|stockfish-huge*)
+      FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
+      FSX_HARNESS_CXX_DEFS+=(-DBOARD_BITS=512 -DALLVARS -DNNUE_EMBEDDING_OFF)
+      FSX_HARNESS_BUILD_EXE=${FSX_HARNESS_ENGINE_BASENAME%%-nnue*}
+      FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 hugeboards=yes all=yes EXE="${FSX_HARNESS_BUILD_EXE}")
+      ;;
     stockfish)
       FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
       FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 EXE=stockfish)
