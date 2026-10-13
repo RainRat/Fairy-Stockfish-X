@@ -302,12 +302,9 @@ override CXXFLAGS += -Wno-profile-instr-out-of-date
 # Use precomputed magics by default if pext is not available
 include board-size.mk
 ifneq ($(verylargeboards),no)
-	largeboards = yes
 	precomputedmagics = no
-	override CXXFLAGS += -DVERY_LARGE_BOARDS
 endif
 ifneq ($(largeboards),no)
-	override CXXFLAGS += -DLARGEBOARDS
 	ifeq ($(precomputedmagics),yes)
 		override CXXFLAGS += -DPRECOMPUTED_MAGICS
 	endif

@@ -12,8 +12,10 @@ for width in 128 512 256 128; do
     python3 "$root/tests/dll-board-size.py" "$out/libffish.so" "$width"
 done
 cat >"$out/probe.cpp" <<'CPP'
-extern "C" int config_value() { return FSX_CONFIG_TEST; }
+#include "probe.h"
+extern "C" int config_value() { return FSX_CONFIG_TEST + PROBE_HEADER_VALUE; }
 CPP
+printf '#define PROBE_HEADER_VALUE 0\n' >"$out/probe.h"
 for value in 1 2; do
     make -C "$root/src" -f Makefile_dll SRCS=probe.cpp VPATH="$out" \
         DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" boardbits=128 \
@@ -28,4 +30,32 @@ dll.config_value.restype = ctypes.c_int
 assert dll.config_value() == int(sys.argv[2])
 PY
 done
-echo 'DLL recompiles when explicit compiler flags change'
+before=$(python3 - "$out" <<'PY'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+print([p.stat().st_mtime_ns for p in (root / 'probe-objects/probe.o', root / 'probe.so')])
+PY
+)
+make -C "$root/src" -f Makefile_dll SRCS=probe.cpp VPATH="$out" \
+    DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" boardbits=128 \
+    'CXXFLAGS=-O2 -DFSX_CONFIG_TEST=2' >"$out/probe-unchanged.log" 2>&1
+after=$(python3 - "$out" <<'PY'
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+print([p.stat().st_mtime_ns for p in (root / 'probe-objects/probe.o', root / 'probe.so')])
+PY
+)
+[[ "$before" == "$after" ]] || { cat "$out/probe-unchanged.log" >&2; exit 1; }
+printf '#define PROBE_HEADER_VALUE 4\n' >"$out/probe.h"
+make -C "$root/src" -f Makefile_dll SRCS=probe.cpp VPATH="$out" \
+    DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" boardbits=128 \
+    'CXXFLAGS=-O2 -DFSX_CONFIG_TEST=2' >"$out/probe-header.log" 2>&1
+python3 - "$out/probe.so" <<'PY'
+import ctypes, sys
+dll = ctypes.CDLL(sys.argv[1])
+dll.config_value.restype = ctypes.c_int
+assert dll.config_value() == 6
+PY
+echo 'DLL rebuilds for compiler flags and headers, and unchanged builds do no compiling or linking'

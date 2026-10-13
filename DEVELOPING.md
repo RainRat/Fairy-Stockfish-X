@@ -58,8 +58,10 @@ The makefiles append required configuration flags even when `CXXFLAGS` is
 supplied on the command line. Use `optimize=no` to avoid the makefile's
 optimization flags when supplying your own. DLL objects are stored separately
 per capacity under `.local/build/dll`; compiler-flag and header changes rebuild
-them automatically. `bash tests/dll-board-size.sh` checks size switches without
-manual cleaning and changes to explicit compiler flags.
+them automatically. A link stamp also tracks the selected cached objects, so
+size switches relink the library and identical builds do no compiling or linking.
+`bash tests/dll-board-size.sh` checks size switches, compiler flags, header
+dependencies, and unchanged builds.
 
 `bash tests/huge-movegen.sh` runs independent combined-route, free-drop, and
 arrow-wall tests against both move generation and move picking under ASan and
@@ -70,7 +72,9 @@ table and hardware popcount, and engine builds.
 A 512-bit build currently uses about 74 MiB for fixed geometry tables and
 roughly 673 MiB resident memory at native startup without embedded NNUE, with
 one thread and a 16 MiB hash table. Most of the per-thread allocation is
-continuation history. Budget roughly 548 MiB per additional search thread for
+continuation history (about 458 MiB per thread). This allocation also applies
+when a huge-board executable plays a smaller variant; use a smaller tier for
+those games. Budget roughly 548 MiB per additional search thread for
 histories and pawn/material caches, plus search buffers and stack space.
 WebAssembly starts with 128 MiB and can grow to 1 GiB, with an 8 MiB stack for
 SAN and rule probes. Boards above

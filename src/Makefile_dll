@@ -48,6 +48,7 @@ endif
 DLL_BUILD_DIR ?= ../.local/build/dll/$(boardbits)
 OBJS := $(addprefix $(DLL_BUILD_DIR)/,$(SRCS:.cpp=.o))
 CONFIG := $(DLL_BUILD_DIR)/config
+LINK_CONFIG := $(EXE).link-config
 
 .PHONY: all clean FORCE
 all: $(EXE)
@@ -57,7 +58,13 @@ $(CONFIG): FORCE
 	@printf '%s\n' '$(CXX)' '$(CPPFLAGS)' '$(CXXFLAGS)' '$(LDFLAGS)' > $@.tmp
 	@cmp -s $@.tmp $@ && rm -f $@.tmp || mv -f $@.tmp $@
 
-$(EXE): $(OBJS) FORCE
+$(LINK_CONFIG): $(CONFIG) FORCE
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(OBJS)' > $@.tmp
+	@cat $(CONFIG) >> $@.tmp
+	@cmp -s $@.tmp $@ && rm -f $@.tmp || mv -f $@.tmp $@
+
+$(EXE): $(OBJS) $(LINK_CONFIG)
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS)
 
 $(DLL_BUILD_DIR)/%.o: %.cpp $(CONFIG)
@@ -67,4 +74,4 @@ $(DLL_BUILD_DIR)/%.o: %.cpp $(CONFIG)
 -include $(OBJS:.o=.d)
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) $(CONFIG) $(EXE) $(IMPLIB)
+	rm -f $(OBJS) $(OBJS:.o=.d) $(CONFIG) $(LINK_CONFIG) $(EXE) $(IMPLIB)

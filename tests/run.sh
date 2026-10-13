@@ -121,10 +121,13 @@ engine_family() {
         echo "${FSX_ENGINE_FAMILY}"
         return
     fi
-    local base
+    local base profile board
+    profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$1" 2>/dev/null) || profile=""
+    board="${profile#*board=}"; board="${board%%;*}"
+    case "$board" in normal|large|very-large|512) echo "$board"; return ;; esac
     base=$(basename "$1")
     case "$base" in
-        *512*|*huge*) echo 512 ;;
+        stockfish-512*|stockfish-huge*) echo 512 ;;
         *vlb*) echo very-large ;;
         *large*|*allvars*) echo large ;;
         *) echo normal ;;

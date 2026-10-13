@@ -132,7 +132,7 @@ small_board_optional_legacy() {
 native() {
     local group="$1"
     case "$(basename "${ENGINE}"):${FSX_ENGINE_FAMILY:-}" in
-        *large*:*|*allvars*:*|*vlb*:*|*512*:*|*huge*:*|*:*large|*:*very-large|*:*512|*:*huge) ;;
+        *large*:*|*allvars*:*|*vlb*:*|stockfish-512*:*|stockfish-huge*:*|*:*large|*:*very-large|*:*512|*:*huge) ;;
         *)
             case "${group}" in occupancy|state|royal)
                 if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
