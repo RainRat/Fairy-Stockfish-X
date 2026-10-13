@@ -56,6 +56,7 @@ fsx_build_signature() {
     printf 'EXTRACXXFLAGS=%s\n' "${EXTRACXXFLAGS:-}"
     printf 'LDFLAGS=%s\n' "${LDFLAGS:-}"
     printf 'makefile=%s\n' "$(fsx_build_hash_file "${root_dir}/src/Makefile")"
+    printf 'board-size=%s\n' "$(fsx_build_hash_file "${root_dir}/src/board-size.mk")"
     printf 'arguments:\n'
     printf '%s\n' "$@"
   } | fsx_build_hash_text
@@ -64,6 +65,7 @@ fsx_build_signature() {
 fsx_build_profile() {
   local arch=x86-64-modern board=normal largeboards=no verylargeboards=no
   local all=no nnue=no debug=no optimize=yes
+  local boardbits="" hugeboards="${hugeboards:-no}"
   local compiler="${CXX:-g++}" compiler_kind="${COMP:-native}" arg
 
   for arg in "$@"; do
@@ -71,6 +73,8 @@ fsx_build_profile() {
       ARCH=*) arch="${arg#ARCH=}" ;;
       largeboards=*) largeboards="${arg#largeboards=}" ;;
       verylargeboards=*) verylargeboards="${arg#verylargeboards=}" ;;
+      boardbits=*) boardbits="${arg#boardbits=}" ;;
+      hugeboards=*) hugeboards="${arg#hugeboards=}" ;;
       all=*) all="${arg#all=}" ;;
       nnue=*) nnue="${arg#nnue=}" ;;
       debug=*) debug="${arg#debug=}" ;;
@@ -79,9 +83,11 @@ fsx_build_profile() {
     esac
   done
 
-  if [[ "$verylargeboards" == yes ]]; then
+  if [[ "$boardbits" == 512 || ( -z "$boardbits" && "$hugeboards" == yes ) ]]; then
+    board=512
+  elif [[ "$boardbits" == 256 || ( -z "$boardbits" && "$verylargeboards" == yes ) ]]; then
     board=very-large
-  elif [[ "$largeboards" == yes ]]; then
+  elif [[ "$boardbits" == 128 || ( -z "$boardbits" && "$largeboards" == yes ) ]]; then
     board=large
   fi
 
@@ -174,6 +180,6 @@ fsx_build_artifact_is_current() {
   recorded_engine_hash=$(sed -n '2p' "$signature_file")
   [[ -n "$recorded_engine_hash" ]] || return 1
   [[ "$recorded_engine_hash" == "$(fsx_build_hash_file "$output_file")" ]] || return 1
-  ! find "${root_dir}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+  ! find "${root_dir}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mk' -o -name 'Makefile' \) \
     -newer "$signature_file" -print -quit | grep -q .
 }

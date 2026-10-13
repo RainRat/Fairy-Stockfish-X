@@ -132,7 +132,7 @@ small_board_optional_legacy() {
 native() {
     local group="$1"
     case "$(basename "${ENGINE}"):${FSX_ENGINE_FAMILY:-}" in
-        *large*:*|*allvars*:*|*vlb*:*|*:*large|*:*very-large) ;;
+        *large*:*|*allvars*:*|*vlb*:*|*512*:*|*huge*:*|*:*large|*:*very-large|*:*512|*:*huge) ;;
         *)
             case "${group}" in occupancy|state|royal)
                 if [[ "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
@@ -152,6 +152,7 @@ native() {
 }
 
 run_config() {
+    suite_case board-size-options 1m bash "${SUITE_ROOT}/tests/board-size-options.sh"
     suite_case harness-build-profile 1m bash "${SUITE_ROOT}/tests/lib/harness-build-profile.sh"
     suite_case python-api-tests 3m env PYTHONPATH="${SUITE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" python3 "${SUITE_ROOT}/tests/python/test_pyffish_api.py"
     suite_case dll-api-no-royal-result 5m bash "${SUITE_ROOT}/tests/native/ffishdll-result.sh" "${ENGINE}"
@@ -233,6 +234,7 @@ run_promotion_drops() {
 }
 
 run_state_transitions() {
+    suite_case multiword-bitboard 2m bash "${SUITE_ROOT}/tests/multiword-bitboard.sh"
     native occupancy
     native state
     native composable-rules
@@ -255,6 +257,7 @@ run_notation_protocol() {
 }
 
 run_variants_smoke() {
+    suite_case huge-board-placement 3m python3 "${SUITE_ROOT}/tests/huge-board-placement.py" "${ENGINE}" "${VARIANTS}"
     native board-games
     legacy variant-load-all.sh 15m "${ENGINE}" "${VARIANTS}"
     legacy variant-load-matrix.sh 30m "${ENGINE}" "${VARIANTS}"

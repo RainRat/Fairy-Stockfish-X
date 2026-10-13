@@ -18,6 +18,7 @@ Add these flags when needed:
 
 - `largeboards=yes` for boards up to 12x10 (e.g. Shogi, Xiangqi).
 - `verylargeboards=yes` for boards up to 16x16.
+- `hugeboards=yes` for Huge boards (HB), up to 22x22 (files A–V, ranks 1–22).
 - `all=yes` to include all remaining variants.
 
 For example:
@@ -25,6 +26,50 @@ For example:
 ```bash
 make -C src -j build ARCH=x86-64-modern largeboards=yes
 ```
+
+`boardbits=64|128|256|512` selects one compile-time capacity. The existing
+Boolean options still select 64, 128, or 256 bits when `boardbits` is omitted.
+`hugeboards=yes` selects 512 bits; `boardbits=512` remains supported.
+Explicit Boolean options must agree with the selected capacity. The 256- and
+512-bit builds use the same multiword operations and generic rider geometry;
+their packed moves occupy 64 bits. Magic tables and PEXT are disabled for both.
+The 512-bit tier also uses 32-bit evaluation score lanes so dense positions
+do not overflow the ordinary 16-bit lanes.
+Keep the 256-bit tier for existing variants: the 512-bit executable has larger
+geometry and search-history tables even when it searches a smaller board.
+
+```bash
+tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
+python3 tests/board-expansion.py src/stockfish-huge
+python3 tests/huge-board-placement.py src/stockfish-huge
+bash tests/board-size-options.sh
+bash tests/multiword-bitboard.sh
+```
+
+The selector and `hugeboards=yes` alias also work with `src/Makefile_js` and
+`src/Makefile_dll`. The engine banner includes `HB 512`; recorded build profiles
+keep the numeric capacity. For the
+Python extension, set `CFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"` and
+`CXXFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"`, then run
+`python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
+object files and bindings from different tiers are incompatible.
+
+A 512-bit build currently uses about 74 MiB for fixed geometry tables and
+roughly 673 MiB resident memory at native startup without embedded NNUE, with
+one thread and a 16 MiB hash table. Most of the per-thread allocation is
+continuation history. Budget roughly 548 MiB per additional search thread for
+histories and pawn/material caches, plus search buffers and stack space.
+WebAssembly starts with 128 MiB and can grow to 1 GiB, with an 8 MiB stack for
+SAN and rule probes. Boards above
+22x22 and complete rules for historical large shogi games require separate work.
+
+The shipped huge-board placement variants are `gomoku-19x19`, `hex-19x19`,
+`hex-22x22`, `go19`, `capture-go19`, `nogo19`, and `suicide-go19`.
+Gomoku uses freestyle five-in-a-row rules. Hex inherits the existing
+`openingSwapDrop` surrogate. Ordinary and suicide Go retain the existing
+liberty/repetition rules and draw after two passes; territory/area scoring,
+dead-group adjudication, and komi require further work. Large shogi additions
+are deferred to a possible future PR.
 
 ### Required Checks
 

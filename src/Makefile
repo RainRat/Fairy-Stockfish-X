@@ -300,6 +300,7 @@ CXXFLAGS += -Wno-profile-instr-out-of-date
 
 # Compile version with support for large board variants
 # Use precomputed magics by default if pext is not available
+include board-size.mk
 ifneq ($(verylargeboards),no)
 	largeboards = yes
 	precomputedmagics = no
@@ -727,6 +728,10 @@ else
 	@echo ""
 	@echo "make build ARCH=x86-64 COMP=gcc verylargeboards=yes"
 	@echo ""
+	@echo "Huge boards (HB), up to 22x22 (512 bits):"
+	@echo "make build ARCH=x86-64 COMP=gcc hugeboards=yes"
+	@echo "boardbits=512 selects the same capacity"
+	@echo ""
 	@echo "Include all variants (adds Game of the Amazons): "
 	@echo ""
 	@echo "make build ARCH=x86-64 largeboards=yes all=yes"
@@ -855,6 +860,8 @@ config-sanity: $(load_net)
 	@echo "neon: '$(neon)'"
 	@echo ""
 	@echo "Fairy-Stockfish specific:"
+	@echo "boardbits: '$(boardbits)'"
+	@echo "hugeboards: '$(hugeboards)'"
 	@echo "largeboards: '$(largeboards)'"
 	@echo "verylargeboards: '$(verylargeboards)'"
 	@echo "all: '$(all)'"

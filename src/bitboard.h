@@ -1051,14 +1051,11 @@ inline int popcount(Bitboard b) {
 #ifndef USE_POPCNT
 
 #ifdef VERY_LARGE_BOARDS
-  return  PopCnt16[(b.b64[0] >>  0) & 0xFFFF] + PopCnt16[(b.b64[0] >> 16) & 0xFFFF]
-        + PopCnt16[(b.b64[0] >> 32) & 0xFFFF] + PopCnt16[(b.b64[0] >> 48) & 0xFFFF]
-        + PopCnt16[(b.b64[1] >>  0) & 0xFFFF] + PopCnt16[(b.b64[1] >> 16) & 0xFFFF]
-        + PopCnt16[(b.b64[1] >> 32) & 0xFFFF] + PopCnt16[(b.b64[1] >> 48) & 0xFFFF]
-        + PopCnt16[(b.b64[2] >>  0) & 0xFFFF] + PopCnt16[(b.b64[2] >> 16) & 0xFFFF]
-        + PopCnt16[(b.b64[2] >> 32) & 0xFFFF] + PopCnt16[(b.b64[2] >> 48) & 0xFFFF]
-        + PopCnt16[(b.b64[3] >>  0) & 0xFFFF] + PopCnt16[(b.b64[3] >> 16) & 0xFFFF]
-        + PopCnt16[(b.b64[3] >> 32) & 0xFFFF] + PopCnt16[(b.b64[3] >> 48) & 0xFFFF];
+  int count = 0;
+  for (uint64_t word : b.b64)
+      for (int shift = 0; shift < 64; shift += 16)
+          count += PopCnt16[(word >> shift) & 0xFFFF];
+  return count;
 #elif defined(LARGEBOARDS)
   union { Bitboard bb; uint16_t u[8]; } v = { b };
   return  PopCnt16[v.u[0]] + PopCnt16[v.u[1]] + PopCnt16[v.u[2]] + PopCnt16[v.u[3]]
@@ -1071,8 +1068,9 @@ inline int popcount(Bitboard b) {
 #elif defined(_MSC_VER) || defined(__INTEL_COMPILER)
 
 #ifdef VERY_LARGE_BOARDS
-  return (int)_mm_popcnt_u64(b.b64[0]) + (int)_mm_popcnt_u64(b.b64[1])
-       + (int)_mm_popcnt_u64(b.b64[2]) + (int)_mm_popcnt_u64(b.b64[3]);
+  int count = 0;
+  for (uint64_t word : b.b64) count += (int)_mm_popcnt_u64(word);
+  return count;
 #elif defined(LARGEBOARDS)
   return (int)_mm_popcnt_u64(uint64_t(b >> 64)) + (int)_mm_popcnt_u64(uint64_t(b));
 #else
@@ -1082,8 +1080,9 @@ inline int popcount(Bitboard b) {
 #else // Assumed gcc or compatible compiler
 
 #ifdef VERY_LARGE_BOARDS
-  return __builtin_popcountll(b.b64[0]) + __builtin_popcountll(b.b64[1])
-       + __builtin_popcountll(b.b64[2]) + __builtin_popcountll(b.b64[3]);
+  int count = 0;
+  for (uint64_t word : b.b64) count += __builtin_popcountll(word);
+  return count;
 #elif defined(LARGEBOARDS)
   return __builtin_popcountll(b >> 64) + __builtin_popcountll(b);
 #else
@@ -1101,24 +1100,28 @@ inline int popcount(Bitboard b) {
 inline Square lsb(Bitboard b) {
   assert(b);
 #ifdef VERY_LARGE_BOARDS
-  if (b.b64[3]) return Square(__builtin_ctzll(b.b64[3]));
-  if (b.b64[2]) return Square(__builtin_ctzll(b.b64[2]) + 64);
-  if (b.b64[1]) return Square(__builtin_ctzll(b.b64[1]) + 128);
-  return Square(__builtin_ctzll(b.b64[0]) + 192);
+  for (int i = Bitboard::WordCount - 1; i >= 0; --i)
+      if (b.b64[i])
+      {
+          return Square((Bitboard::WordCount - 1 - i) * 64 + __builtin_ctzll(b.b64[i]));
+      }
+  std::abort();
 #elif defined(LARGEBOARDS)
   if (!(b << 64))
       return Square(__builtin_ctzll(b >> 64) + 64);
 #endif
-  return Square(__builtin_ctzll(b));
+  return Square(__builtin_ctzll(uint64_t(b)));
 }
 
 inline Square msb(Bitboard b) {
   assert(b);
 #ifdef VERY_LARGE_BOARDS
-  if (b.b64[0]) return Square(192 + (63 - __builtin_clzll(b.b64[0])));
-  if (b.b64[1]) return Square(128 + (63 - __builtin_clzll(b.b64[1])));
-  if (b.b64[2]) return Square(64 + (63 - __builtin_clzll(b.b64[2])));
-  return Square(63 - __builtin_clzll(b.b64[3]));
+  for (int i = 0; i < Bitboard::WordCount; ++i)
+      if (b.b64[i])
+      {
+          return Square((Bitboard::WordCount - 1 - i) * 64 + 63 - __builtin_clzll(b.b64[i]));
+      }
+  std::abort();
 #elif defined(LARGEBOARDS)
   if (b >> 64)
       return Square(int(SQUARE_BIT_MASK) ^ __builtin_clzll(b >> 64));
@@ -1136,26 +1139,13 @@ inline Square lsb(Bitboard b) {
   assert(b);
   unsigned long idx;
 #ifdef VERY_LARGE_BOARDS
-  if (b.b64[3])
-  {
-      _BitScanForward64(&idx, b.b64[3]);
-      return Square(idx);
-  }
-  else if (b.b64[2])
-  {
-      _BitScanForward64(&idx, b.b64[2]);
-      return Square(idx + 64);
-  }
-  else if (b.b64[1])
-  {
-      _BitScanForward64(&idx, b.b64[1]);
-      return Square(idx + 128);
-  }
-  else
-  {
-      _BitScanForward64(&idx, b.b64[0]);
-      return Square(idx + 192);
-  }
+  for (int i = Bitboard::WordCount - 1; i >= 0; --i)
+      if (b.b64[i])
+      {
+          _BitScanForward64(&idx, b.b64[i]);
+          return Square((Bitboard::WordCount - 1 - i) * 64 + idx);
+      }
+  std::abort();
 #elif defined(LARGEBOARDS)
   if (uint64_t(b))
   {
@@ -1177,26 +1167,13 @@ inline Square msb(Bitboard b) {
   assert(b);
   unsigned long idx;
 #ifdef VERY_LARGE_BOARDS
-  if (b.b64[0])
-  {
-      _BitScanReverse64(&idx, b.b64[0]);
-      return Square(idx + 192);
-  }
-  else if (b.b64[1])
-  {
-      _BitScanReverse64(&idx, b.b64[1]);
-      return Square(idx + 128);
-  }
-  else if (b.b64[2])
-  {
-      _BitScanReverse64(&idx, b.b64[2]);
-      return Square(idx + 64);
-  }
-  else
-  {
-      _BitScanReverse64(&idx, b.b64[3]);
-      return Square(idx);
-  }
+  for (int i = 0; i < Bitboard::WordCount; ++i)
+      if (b.b64[i])
+      {
+          _BitScanReverse64(&idx, b.b64[i]);
+          return Square((Bitboard::WordCount - 1 - i) * 64 + idx);
+      }
+  std::abort();
 #elif defined(LARGEBOARDS)
   if (b >> 64)
   {
@@ -1221,34 +1198,17 @@ inline Square lsb(Bitboard b) {
   unsigned long idx;
 
 #ifdef VERY_LARGE_BOARDS
-  if (b.b64[3]) {
-      if (uint32_t(b.b64[3])) {
-          _BitScanForward(&idx, uint32_t(b.b64[3]));
-          return Square(idx);
+  for (int i = Bitboard::WordCount - 1; i >= 0; --i)
+      if (b.b64[i])
+      {
+          if (uint32_t(b.b64[i])) {
+              _BitScanForward(&idx, uint32_t(b.b64[i]));
+              return Square((Bitboard::WordCount - 1 - i) * 64 + idx + 0);
+          }
+          _BitScanForward(&idx, uint32_t(b.b64[i] >> 32));
+          return Square((Bitboard::WordCount - 1 - i) * 64 + idx + 32);
       }
-      _BitScanForward(&idx, uint32_t(b.b64[3] >> 32));
-      return Square(idx + 32);
-  } else if (b.b64[2]) {
-      if (uint32_t(b.b64[2])) {
-          _BitScanForward(&idx, uint32_t(b.b64[2]));
-          return Square(idx + 64);
-      }
-      _BitScanForward(&idx, uint32_t(b.b64[2] >> 32));
-      return Square(idx + 96);
-  } else if (b.b64[1]) {
-      if (uint32_t(b.b64[1])) {
-          _BitScanForward(&idx, uint32_t(b.b64[1]));
-          return Square(idx + 128);
-      }
-      _BitScanForward(&idx, uint32_t(b.b64[1] >> 32));
-      return Square(idx + 160);
-  } else if (uint32_t(b.b64[0])) {
-      _BitScanForward(&idx, uint32_t(b.b64[0]));
-      return Square(idx + 192);
-  } else {
-      _BitScanForward(&idx, uint32_t(b.b64[0] >> 32));
-      return Square(idx + 224);
-  }
+  std::abort();
 #elif defined(LARGEBOARDS)
   if (b << 96) {
       _BitScanForward(&idx, uint32_t(b));
@@ -1279,31 +1239,17 @@ inline Square msb(Bitboard b) {
   unsigned long idx;
 
 #ifdef VERY_LARGE_BOARDS
-  if (b.b64[0] >> 32) {
-      _BitScanReverse(&idx, uint32_t(b.b64[0] >> 32));
-      return Square(idx + 224);
-  } else if (uint32_t(b.b64[0])) {
-      _BitScanReverse(&idx, uint32_t(b.b64[0]));
-      return Square(idx + 192);
-  } else if (b.b64[1] >> 32) {
-      _BitScanReverse(&idx, uint32_t(b.b64[1] >> 32));
-      return Square(idx + 160);
-  } else if (uint32_t(b.b64[1])) {
-      _BitScanReverse(&idx, uint32_t(b.b64[1]));
-      return Square(idx + 128);
-  } else if (b.b64[2] >> 32) {
-      _BitScanReverse(&idx, uint32_t(b.b64[2] >> 32));
-      return Square(idx + 96);
-  } else if (uint32_t(b.b64[2])) {
-      _BitScanReverse(&idx, uint32_t(b.b64[2]));
-      return Square(idx + 64);
-  } else if (b.b64[3] >> 32) {
-      _BitScanReverse(&idx, uint32_t(b.b64[3] >> 32));
-      return Square(idx + 32);
-  } else {
-      _BitScanReverse(&idx, uint32_t(b.b64[3]));
-      return Square(idx);
-  }
+  for (int i = 0; i < Bitboard::WordCount; ++i)
+      if (b.b64[i])
+      {
+          if (b.b64[i] >> 32) {
+              _BitScanReverse(&idx, uint32_t(b.b64[i] >> 32));
+              return Square((Bitboard::WordCount - 1 - i) * 64 + idx + 32);
+          }
+          _BitScanReverse(&idx, uint32_t(b.b64[i]));
+          return Square((Bitboard::WordCount - 1 - i) * 64 + idx + 0);
+      }
+  std::abort();
 #elif defined(LARGEBOARDS)
   if (b >> 96) {
       _BitScanReverse(&idx, uint32_t(b >> 96));

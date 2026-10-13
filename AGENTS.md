@@ -31,6 +31,7 @@ By default, compiling can be very verbose (especially under LTO). Prefer using t
 tests/build.sh ARCH=x86-64-modern
 tests/build.sh ARCH=x86-64-modern largeboards=yes
 tests/build.sh ARCH=x86-64-modern verylargeboards=yes
+tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
 tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
 tests/build.sh COMP=mingw
 ```
@@ -38,6 +39,16 @@ tests/build.sh COMP=mingw
 `tests/build.sh` verifies that native builds produce a runnable, non-empty executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
 
 Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. `tests/build.sh` tracks the build configuration and cleans objects automatically when flags change; `make clean` is only needed for direct `make -C src` builds.
+
+Use `hugeboards=yes` (Huge boards / HB) for boards above 16x16, up to 22x22.
+`boardbits=512` selects the same capacity. The single selector
+also accepts 64, 128, and 256; existing Boolean commands remain supported.
+Run `python3 tests/board-expansion.py src/stockfish-huge`,
+`python3 tests/huge-board-placement.py src/stockfish-huge`, and
+`bash tests/multiword-bitboard.sh` for expansion coverage. Keep the smaller
+tiers available: 512-bit search histories use substantially more memory.
+The placement case reports explicit geometry skips on smaller suite engines;
+run it directly against `src/stockfish-huge` to require all seven variants.
 
 For named binaries used by regression scripts:
 

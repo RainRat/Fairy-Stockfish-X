@@ -52,6 +52,14 @@ jobs:
         env:
           FSX_REQUIRE_VLB: '1'
         run: npm test
+      - name: Build Huge boards module
+        working-directory: src
+        run: make -f Makefile_js clean && make -f Makefile_js build hugeboards=yes
+      - name: Run Huge boards unit tests
+        working-directory: tests/js
+        env:
+          FSX_REQUIRE_HUGE: '1'
+        run: npm test
       - name: Build very-large-board ES6 module
         working-directory: src
         run: make -f Makefile_js clean && make -f Makefile_js build verylargeboards=yes es6=yes

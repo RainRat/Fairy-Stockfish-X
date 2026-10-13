@@ -367,12 +367,16 @@ fsx_build_variant_limits() {
   # Honor an explicit family override (run.sh and CI use this for
   # custom-named binaries); otherwise infer from the binary name.
   case "${FSX_ENGINE_FAMILY:-}" in
+    512|huge) echo "21 21"; return ;;
     very-large) echo "15 15"; return ;;
     large) echo "11 9"; return ;;
     normal) echo "7 7"; return ;;
   esac
 
   case "$engine_basen" in
+    stockfish-512*|stockfish-huge*)
+      echo "21 21"
+      ;;
     stockfish-large*|stockfish-allvars*)
       echo "11 9"
       ;;
