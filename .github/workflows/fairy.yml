@@ -116,3 +116,8 @@ jobs:
           python3 ../tests/huge-board-placement.py ./stockfish-huge
           bash ../tests/board-size-options.sh
           bash ../tests/multiword-bitboard.sh
+          bash ../tests/huge-movegen.sh
+
+      - name: Test DLL board-size switches
+        if: ${{ matrix.config.run_expensive_tests }}
+        run: JOBS=2 bash ../tests/dll-board-size.sh

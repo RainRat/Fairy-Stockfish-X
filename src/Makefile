@@ -291,12 +291,12 @@ endif
 ### ==========================================================================
 
 ### 3.1 Selecting compiler (default = gcc)
-CXXFLAGS += -Wall -Wcast-qual -fno-exceptions -std=c++17 $(EXTRACXXFLAGS)
+override CXXFLAGS += -Wall -Wcast-qual -fno-exceptions -std=c++17 $(EXTRACXXFLAGS)
 DEPENDFLAGS += -std=c++17
 LDFLAGS += $(EXTRALDFLAGS)
 
 # Ignore warning due to missing profile information from unused NNUE features
-CXXFLAGS += -Wno-profile-instr-out-of-date
+override CXXFLAGS += -Wno-profile-instr-out-of-date
 
 # Compile version with support for large board variants
 # Use precomputed magics by default if pext is not available
@@ -304,23 +304,23 @@ include board-size.mk
 ifneq ($(verylargeboards),no)
 	largeboards = yes
 	precomputedmagics = no
-	CXXFLAGS += -DVERY_LARGE_BOARDS
+	override CXXFLAGS += -DVERY_LARGE_BOARDS
 endif
 ifneq ($(largeboards),no)
-	CXXFLAGS += -DLARGEBOARDS
+	override CXXFLAGS += -DLARGEBOARDS
 	ifeq ($(precomputedmagics),yes)
-		CXXFLAGS += -DPRECOMPUTED_MAGICS
+		override CXXFLAGS += -DPRECOMPUTED_MAGICS
 	endif
 endif
 
 # Embed and enable NNUE
 ifeq ($(nnue),no)
-	CXXFLAGS += -DNNUE_EMBEDDING_OFF
+	override CXXFLAGS += -DNNUE_EMBEDDING_OFF
 endif
 
 # Enable all variants, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
-	CXXFLAGS += -DALLVARS
+	override CXXFLAGS += -DALLVARS
 endif
 
 ifeq ($(COMP),)
@@ -330,18 +330,18 @@ endif
 ifeq ($(COMP),gcc)
 	comp=gcc
 	CXX=g++
-	CXXFLAGS += -Wextra -Wshadow -fno-ipa-cp-clone
+	override CXXFLAGS += -Wextra -Wshadow -fno-ipa-cp-clone
 	ifeq ($(largeboards),no)
-		CXXFLAGS += -pedantic
+		override CXXFLAGS += -pedantic
 	endif
 
 	ifeq ($(arch),armv8)
 		ifeq ($(OS),Android)
-			CXXFLAGS += -m$(bits)
+			override CXXFLAGS += -m$(bits)
 			LDFLAGS += -m$(bits)
 		endif
 	else
-		CXXFLAGS += -m$(bits)
+		override CXXFLAGS += -m$(bits)
 		LDFLAGS += -m$(bits)
 	endif
 
@@ -363,20 +363,20 @@ ifeq ($(COMP),mingw)
 		CXX=g++
 	endif
 
-	CXXFLAGS += -Wextra -Wshadow
+	override CXXFLAGS += -Wextra -Wshadow
 	LDFLAGS += -static
 endif
 
 ifeq ($(COMP),icc)
 	comp=icc
 	CXX=icpc
-	CXXFLAGS += -diag-disable 1476,10120 -Wcheck -Wabi -Wdeprecated -strict-ansi
+	override CXXFLAGS += -diag-disable 1476,10120 -Wcheck -Wabi -Wdeprecated -strict-ansi
 endif
 
 ifeq ($(COMP),clang)
 	comp=clang
 	CXX=clang++
-	CXXFLAGS += -pedantic -Wextra -Wshadow
+	override CXXFLAGS += -pedantic -Wextra -Wshadow
 
 	ifneq ($(KERNEL),Darwin)
 	ifneq ($(KERNEL),OpenBSD)
@@ -388,17 +388,17 @@ ifeq ($(COMP),clang)
 
 	ifeq ($(arch),armv8)
 		ifeq ($(OS),Android)
-			CXXFLAGS += -m$(bits)
+			override CXXFLAGS += -m$(bits)
 			LDFLAGS += -m$(bits)
 		endif
 	else
-		CXXFLAGS += -m$(bits)
+		override CXXFLAGS += -m$(bits)
 		LDFLAGS += -m$(bits)
 	endif
 endif
 
 ifeq ($(KERNEL),Darwin)
-	CXXFLAGS += -arch $(arch) -mmacosx-version-min=10.14
+	override CXXFLAGS += -arch $(arch) -mmacosx-version-min=10.14
 	LDFLAGS += -arch $(arch) -mmacosx-version-min=10.14
 	XCRUN = xcrun
 endif
@@ -407,7 +407,7 @@ endif
 # In earlier NDK versions, you'll need to pass -fno-addrsig if using GNU binutils.
 # Currently we don't know how to make PGO builds with the NDK yet.
 ifeq ($(COMP),ndk)
-	CXXFLAGS += -stdlib=libc++ -fPIE
+	override CXXFLAGS += -stdlib=libc++ -fPIE
 	comp=clang
 	ifeq ($(arch),armv8)
 		CXX=aarch64-linux-android21-clang++
@@ -449,7 +449,7 @@ endif
 
 ### On mingw use Windows threads, otherwise POSIX
 ifneq ($(comp),mingw)
-	CXXFLAGS += -DUSE_PTHREADS
+	override CXXFLAGS += -DUSE_PTHREADS
 	# On Android Bionic's C library comes with its own pthread implementation bundled in
 	ifneq ($(OS),Android)
 		# Haiku has pthreads in its libroot, so only link it in on other platforms
@@ -463,129 +463,129 @@ endif
 
 ### 3.2.1 Debugging
 ifeq ($(debug),no)
-	CXXFLAGS += -DNDEBUG
+	override CXXFLAGS += -DNDEBUG
 else
-	CXXFLAGS += -g
+	override CXXFLAGS += -g
 endif
 
 ### 3.2.2 Debugging with undefined behavior sanitizers
 ifneq ($(sanitize),none)
-        CXXFLAGS += -g3 $(addprefix -fsanitize=,$(sanitize))
+        override CXXFLAGS += -g3 $(addprefix -fsanitize=,$(sanitize))
         LDFLAGS += $(addprefix -fsanitize=,$(sanitize))
 endif
 
 ### 3.3 Optimization
 ifeq ($(optimize),yes)
 
-	CXXFLAGS += -O3 -fno-strict-aliasing
+	override CXXFLAGS += -O3 -fno-strict-aliasing
 
 	ifeq ($(comp),gcc)
 		ifeq ($(OS), Android)
-			CXXFLAGS += -fno-gcse
+			override CXXFLAGS += -fno-gcse
 		endif
 	endif
 
 	ifeq ($(comp),$(filter $(comp),gcc clang icc))
 		ifeq ($(KERNEL),Darwin)
-			CXXFLAGS += -mdynamic-no-pic
+			override CXXFLAGS += -mdynamic-no-pic
 		endif
 	endif
 
 	ifeq ($(comp),clang)
 		clangmajorversion = $(shell $(CXX) -dumpversion 2>/dev/null | cut -f1 -d.)
 		ifeq ($(shell expr $(clangmajorversion) \< 16),1)
-			CXXFLAGS += -fexperimental-new-pass-manager
+			override CXXFLAGS += -fexperimental-new-pass-manager
 		endif
 	endif
 endif
 
 ### 3.4 Bits
 ifeq ($(bits),64)
-	CXXFLAGS += -DIS_64BIT
+	override CXXFLAGS += -DIS_64BIT
 endif
 
 ### 3.5 prefetch
 ifeq ($(prefetch),yes)
 	ifeq ($(sse),yes)
-		CXXFLAGS += -msse
+		override CXXFLAGS += -msse
 	endif
 else
-	CXXFLAGS += -DNO_PREFETCH
+	override CXXFLAGS += -DNO_PREFETCH
 endif
 
 ### 3.6 popcnt
 ifeq ($(popcnt),yes)
 	ifeq ($(arch),$(filter $(arch),ppc64 armv8 arm64))
-		CXXFLAGS += -DUSE_POPCNT
+		override CXXFLAGS += -DUSE_POPCNT
 	else ifeq ($(comp),icc)
-		CXXFLAGS += -msse3 -DUSE_POPCNT
+		override CXXFLAGS += -msse3 -DUSE_POPCNT
 	else
-		CXXFLAGS += -msse3 -mpopcnt -DUSE_POPCNT
+		override CXXFLAGS += -msse3 -mpopcnt -DUSE_POPCNT
 	endif
 endif
 
 ifeq ($(avx2),yes)
-	CXXFLAGS += -DUSE_AVX2
+	override CXXFLAGS += -DUSE_AVX2
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -mavx2 -mbmi
+		override CXXFLAGS += -mavx2 -mbmi
 	endif
 endif
 
 ifeq ($(avx512),yes)
-	CXXFLAGS += -DUSE_AVX512
+	override CXXFLAGS += -DUSE_AVX512
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -mavx512f -mavx512bw
+		override CXXFLAGS += -mavx512f -mavx512bw
 	endif
 endif
 
 ifeq ($(vnni256),yes)
-	CXXFLAGS += -DUSE_VNNI
+	override CXXFLAGS += -DUSE_VNNI
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -mavx512f -mavx512bw -mavx512vnni -mavx512dq -mavx512vl -mprefer-vector-width=256
+		override CXXFLAGS += -mavx512f -mavx512bw -mavx512vnni -mavx512dq -mavx512vl -mprefer-vector-width=256
 	endif
 endif
 
 ifeq ($(vnni512),yes)
-	CXXFLAGS += -DUSE_VNNI
+	override CXXFLAGS += -DUSE_VNNI
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -mavx512vnni -mavx512dq -mavx512vl
+		override CXXFLAGS += -mavx512vnni -mavx512dq -mavx512vl
 	endif
 endif
 
 ifeq ($(sse41),yes)
-	CXXFLAGS += -DUSE_SSE41
+	override CXXFLAGS += -DUSE_SSE41
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -msse4.1
+		override CXXFLAGS += -msse4.1
 	endif
 endif
 
 ifeq ($(ssse3),yes)
-	CXXFLAGS += -DUSE_SSSE3
+	override CXXFLAGS += -DUSE_SSSE3
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -mssse3
+		override CXXFLAGS += -mssse3
 	endif
 endif
 
 ifeq ($(sse2),yes)
-	CXXFLAGS += -DUSE_SSE2
+	override CXXFLAGS += -DUSE_SSE2
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -msse2
+		override CXXFLAGS += -msse2
 	endif
 endif
 
 ifeq ($(mmx),yes)
-	CXXFLAGS += -DUSE_MMX
+	override CXXFLAGS += -DUSE_MMX
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -mmmx
+		override CXXFLAGS += -mmmx
 	endif
 endif
 
 ifeq ($(neon),yes)
-	CXXFLAGS += -DUSE_NEON
+	override CXXFLAGS += -DUSE_NEON
 	ifeq ($(KERNEL),Linux)
 	ifneq ($(COMP),ndk)
 	ifneq ($(arch),armv8)
-		CXXFLAGS += -mfpu=neon
+		override CXXFLAGS += -mfpu=neon
 	endif
 	endif
 	endif
@@ -593,9 +593,9 @@ endif
 
 ### 3.7 pext
 ifeq ($(pext),yes)
-	CXXFLAGS += -DUSE_PEXT
+	override CXXFLAGS += -DUSE_PEXT
 	ifeq ($(comp),$(filter $(comp),gcc clang mingw))
-		CXXFLAGS += -mbmi2
+		override CXXFLAGS += -mbmi2
 	endif
 endif
 
@@ -605,11 +605,11 @@ endif
 ifeq ($(optimize),yes)
 ifeq ($(debug), no)
 	ifeq ($(comp),clang)
-		CXXFLAGS += -flto
+		override CXXFLAGS += -flto
 		ifneq ($(findstring MINGW,$(KERNEL)),)
-			CXXFLAGS += -fuse-ld=lld
+			override CXXFLAGS += -fuse-ld=lld
 		else ifneq ($(findstring MSYS,$(KERNEL)),)
-			CXXFLAGS += -fuse-ld=lld
+			override CXXFLAGS += -fuse-ld=lld
 		endif
 		LDFLAGS += $(CXXFLAGS)
 
@@ -617,7 +617,7 @@ ifeq ($(debug), no)
 # GCC on some systems.
 	else ifeq ($(comp),gcc)
 	ifeq ($(gccisclang),)
-		CXXFLAGS += -flto
+		override CXXFLAGS += -flto
 		LDFLAGS += $(CXXFLAGS) -flto=jobserver
 		ifneq ($(findstring MINGW,$(KERNEL)),)
 			LDFLAGS += -save-temps
@@ -625,7 +625,7 @@ ifeq ($(debug), no)
 			LDFLAGS += -save-temps
 		endif
 	else
-		CXXFLAGS += -flto
+		override CXXFLAGS += -flto
 		LDFLAGS += $(CXXFLAGS)
 	endif
 
@@ -635,7 +635,7 @@ ifeq ($(debug), no)
 	else ifeq ($(comp),mingw)
 	ifeq ($(KERNEL),Linux)
 	ifneq ($(arch),i386)
-		CXXFLAGS += -flto
+		override CXXFLAGS += -flto
 		LDFLAGS += $(CXXFLAGS) -flto=jobserver
 	endif
 	endif
@@ -646,7 +646,7 @@ endif
 ### 3.9 Android 5 can only run position independent executables. Note that this
 ### breaks Android 4.0 and earlier.
 ifeq ($(OS), Android)
-	CXXFLAGS += -fPIE
+	override CXXFLAGS += -fPIE
 	LDFLAGS += -fPIE -pie
 endif
 

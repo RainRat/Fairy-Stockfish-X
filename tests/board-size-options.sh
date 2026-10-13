@@ -8,6 +8,8 @@ cat >"$out/print.mk" <<'MAKE'
 .PHONY: print-board-size
 print-board-size:
 	@echo $(boardbits) $(largeboards) $(verylargeboards) $(hugeboards)
+print-flags:
+	@echo $(CXXFLAGS)
 MAKE
 for makefile in Makefile Makefile_js Makefile_dll; do
     check() {
@@ -45,6 +47,19 @@ for makefile in Makefile Makefile_js Makefile_dll; do
     reject hugeboards=yes verylargeboards=no
     reject hugeboards=maybe
     reject 'boardbits=256 512'
+    for width in 64 128 256 512; do
+        flags=$(make --no-print-directory -s -C "$root/src" -f "$makefile" \
+            -f "$out/print.mk" print-flags ARCH=x86-64 boardbits="$width" \
+            'CXXFLAGS=-O2 -DFSX_USER_FLAGS')
+        [[ " $flags " == *" -DBOARD_BITS=$width "* && " $flags " == *' -DFSX_USER_FLAGS '* ]]
+        [[ " $flags " == *' -std=c++17 '* && " $flags " == *' -DNNUE_EMBEDDING_OFF '* ]]
+        if [[ "$makefile" == Makefile_js ]]; then
+            [[ " $flags " == *' --bind '* && " $flags " == *' -DNO_THREADS '* ]]
+        elif [[ "$makefile" == Makefile_dll ]]; then
+            [[ " $flags " == *' -DALLVARS '* ]]
+            case $(uname -s) in Linux|Darwin) [[ " $flags " == *' -fPIC '* ]] ;; esac
+        fi
+    done
 done
 [[ $(fsx_build_profile hugeboards=yes) == *';board=512;'* ]]
 [[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile boardbits=512)" ]]
