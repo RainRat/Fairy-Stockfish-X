@@ -184,7 +184,7 @@ string engine_info(bool to_uci, bool to_xboard) {
       ss << setw(2) << day << setw(2) << monthNumber << year.substr(2);
   }
 
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
   ss << " HB 512";
 #elif defined(VERY_LARGE_BOARDS)
   ss << " VLB";

@@ -43,7 +43,7 @@ fsx_build_write_signature "${fixture}" "${fixture}/src/stockfish-huge" fixture \
   'arch=x86-64-modern;board=huge;all=yes;nnue=no;debug=yes;optimize=no;compiler=g++;comp=native'
 fsx_harness_init "${fixture}/src/stockfish-huge" "${fixture}"
 has_build_arg ARCH=x86-64-modern
-has_build_arg boardbits=512
+has_build_arg hugeboards=yes
 has_build_arg EXE=stockfish-huge
 has_build_arg debug=yes
 has_build_arg optimize=no
@@ -54,7 +54,12 @@ for bits in 64 128 256 512; do
   fsx_build_write_signature "$fixture" "$fixture/custom-avx512" fixture \
     "arch=x86-64-modern;board=$(fsx_board_family "$bits");all=yes;nnue=no;debug=yes;optimize=no"
   fsx_harness_init "$fixture/custom-avx512" "$fixture"
-  has_build_arg "boardbits=$bits"
+  case "$bits" in
+    512) has_build_arg hugeboards=yes ;;
+    256) has_build_arg verylargeboards=yes ;;
+    128) has_build_arg largeboards=yes ;;
+    *) has_build_arg largeboards=no ;;
+  esac
   has_build_arg EXE=custom-avx512
   has_build_arg ARCH=x86-64-modern
   [[ " ${FSX_HARNESS_CXX_DEFS[*]} " == *" -DBOARD_BITS=$bits "* ]]

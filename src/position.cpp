@@ -1288,7 +1288,7 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
 // https://marcelk.net/2013-04-06/paper/upcoming-rep-v2.pdf
 
 // First and second hash functions for indexing the cuckoo tables
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
 inline int H1(Key h) { return h & 0x7ffff; }
 inline int H2(Key h) { return (h >> 19) & 0x7ffff; }
 #elif defined(VERY_LARGE_BOARDS)
@@ -1304,7 +1304,7 @@ inline int H2(Key h) { return (h >> 16) & 0x1fff; }
 #endif
 
 // Cuckoo tables with Zobrist hashes of valid reversible moves, and the moves themselves
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
 Key cuckoo[524288];
 Move cuckooMove[524288];
 #elif defined(VERY_LARGE_BOARDS)

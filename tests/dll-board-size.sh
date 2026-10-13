@@ -4,7 +4,13 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 out="$root/.local/build/dll-board-size"
 mkdir -p "$out"
 for width in 64 128 512 256 128; do
-    make -C "$root/src" -f Makefile_dll -j "${JOBS:-2}" boardbits="$width" \
+    case "$width" in
+        512) capacity=hugeboards=yes ;;
+        256) capacity=verylargeboards=yes ;;
+        128) capacity=largeboards=yes ;;
+        *) capacity=largeboards=no ;;
+    esac
+    make -C "$root/src" -f Makefile_dll -j "${JOBS:-2}" "$capacity" \
         EXE="$out/libffish.so" 'CXXFLAGS=-O2 -DNDEBUG' >"$out/build-$width.log" 2>&1 || {
         cat "$out/build-$width.log" >&2
         exit 1
@@ -18,7 +24,7 @@ CPP
 printf '#define PROBE_HEADER_VALUE 0\n' >"$out/probe.h"
 for value in 1 2; do
     make -C "$root/src" -f Makefile_dll SRCS=probe.cpp VPATH="$out" \
-        DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" boardbits=128 \
+        DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" largeboards=yes \
         "CXXFLAGS=-O2 -DFSX_CONFIG_TEST=$value" >"$out/probe.log" 2>&1 || {
         cat "$out/probe.log" >&2
         exit 1
@@ -38,7 +44,7 @@ print([p.stat().st_mtime_ns for p in (root / 'probe-objects/probe.o', root / 'pr
 PY
 )
 make -C "$root/src" -f Makefile_dll SRCS=probe.cpp VPATH="$out" \
-    DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" boardbits=128 \
+    DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" largeboards=yes \
     'CXXFLAGS=-O2 -DFSX_CONFIG_TEST=2' >"$out/probe-unchanged.log" 2>&1
 after=$(python3 - "$out" <<'PY'
 from pathlib import Path
@@ -50,7 +56,7 @@ PY
 [[ "$before" == "$after" ]] || { cat "$out/probe-unchanged.log" >&2; exit 1; }
 printf '#define PROBE_HEADER_VALUE 4\n' >"$out/probe.h"
 make -C "$root/src" -f Makefile_dll SRCS=probe.cpp VPATH="$out" \
-    DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" boardbits=128 \
+    DLL_BUILD_DIR="$out/probe-objects" EXE="$out/probe.so" largeboards=yes \
     'CXXFLAGS=-O2 -DFSX_CONFIG_TEST=2' >"$out/probe-header.log" 2>&1
 python3 - "$out/probe.so" <<'PY'
 import ctypes, sys

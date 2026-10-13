@@ -123,7 +123,7 @@ fsx_build_signature() {
 fsx_build_profile() {
   local arch=x86-64-modern board=normal largeboards=no verylargeboards=no
   local all=no nnue=no debug=no optimize=yes
-  local boardbits="" hugeboards=no
+  local hugeboards=no
   local compiler="${CXX:-g++}" compiler_kind="${COMP:-native}" arg
 
   for arg in "$@"; do
@@ -131,7 +131,6 @@ fsx_build_profile() {
       ARCH=*) arch="${arg#ARCH=}" ;;
       largeboards=*) largeboards="${arg#largeboards=}" ;;
       verylargeboards=*) verylargeboards="${arg#verylargeboards=}" ;;
-      boardbits=*) boardbits="${arg#boardbits=}" ;;
       hugeboards=*) hugeboards="${arg#hugeboards=}" ;;
       all=*) all="${arg#all=}" ;;
       nnue=*) nnue="${arg#nnue=}" ;;
@@ -141,14 +140,13 @@ fsx_build_profile() {
     esac
   done
 
-  if [[ "$boardbits" == 512 || ( -z "$boardbits" && "$hugeboards" == yes ) ]]; then
-    boardbits=512
-  elif [[ "$boardbits" == 256 || ( -z "$boardbits" && "$verylargeboards" == yes ) ]]; then
-    boardbits=256
-  elif [[ "$boardbits" == 128 || ( -z "$boardbits" && "$largeboards" == yes ) ]]; then
-    boardbits=128
+  if [[ "$hugeboards" == yes ]]; then
+    board=huge
+  elif [[ "$verylargeboards" == yes ]]; then
+    board=very-large
+  elif [[ "$largeboards" == yes ]]; then
+    board=large
   fi
-  board=$(fsx_board_family "${boardbits:-64}")
 
   printf 'arch=%s;board=%s;all=%s;nnue=%s;debug=%s;optimize=%s;compiler=%s;comp=%s\n' \
     "$arch" "$board" "$all" "$nnue" "$debug" "$optimize" "$compiler" "$compiler_kind"

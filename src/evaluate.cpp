@@ -1984,7 +1984,7 @@ namespace {
     }
 
     // Interpolate between the middlegame and (scaled by 'sf') endgame score
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
     v = int((int64_t(mg) * int(me->game_phase())
            + int64_t(eg) * int(PHASE_MIDGAME - me->game_phase()) * ScaleFactor(sf) / SCALE_FACTOR_NORMAL)
             / PHASE_MIDGAME);
@@ -2072,7 +2072,7 @@ namespace {
 
         Value mg = mg_value(score);
         Value eg = eg_value(score);
-#if BOARD_BITS == 512
+#ifdef HUGEBOARDS
         Value v = Value((int64_t(mg) * int(me->game_phase())
                        + int64_t(eg) * int(PHASE_MIDGAME - me->game_phase())) / PHASE_MIDGAME);
 #else

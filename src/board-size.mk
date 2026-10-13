@@ -1,29 +1,20 @@
-# One capacity selector; legacy Boolean options retain their defaults.
+# Capacity from Boolean options; boardbits is internal only.
 hugeboards ?= no
 ifeq (,$(filter $(hugeboards),yes no))
   $(error hugeboards must be yes or no)
 endif
-boardbits ?= $(if $(filter yes,$(hugeboards)),512,$(if $(filter yes,$(verylargeboards)),256,$(if $(filter yes,$(largeboards)),128,64)))
-boardbits := $(boardbits)
-ifneq ($(words $(boardbits)),1)
-  $(error boardbits must be 64, 128, 256, or 512)
+ifneq ($(filter command line environment override,$(origin boardbits)),)
+  $(error boardbits is removed; select capacity with hugeboards=yes, verylargeboards=yes, or largeboards=yes)
 endif
-ifeq (,$(filter $(boardbits),64 128 256 512))
-  $(error boardbits must be 64, 128, 256, or 512)
-endif
-ifneq ($(filter command line environment override,$(origin hugeboards)),)
-  ifneq ($(hugeboards),$(if $(filter 512,$(boardbits)),yes,no))
-    $(error hugeboards=$(hugeboards) conflicts with boardbits=$(boardbits))
-  endif
-endif
+boardbits := $(if $(filter yes,$(hugeboards)),512,$(if $(filter yes,$(verylargeboards)),256,$(if $(filter yes,$(largeboards)),128,64)))
 ifneq ($(filter command line environment override,$(origin largeboards)),)
   ifneq ($(largeboards),$(if $(filter 64,$(boardbits)),no,yes))
-    $(error largeboards=$(largeboards) conflicts with boardbits=$(boardbits))
+    $(error largeboards=no conflicts with verylargeboards=yes or hugeboards=yes)
   endif
 endif
 ifneq ($(filter command line environment override,$(origin verylargeboards)),)
   ifneq ($(verylargeboards),$(if $(filter 256 512,$(boardbits)),yes,no))
-    $(error verylargeboards=$(verylargeboards) conflicts with boardbits=$(boardbits))
+    $(error verylargeboards=no conflicts with hugeboards=yes)
   endif
 endif
 largeboards = $(if $(filter 64,$(boardbits)),no,yes)

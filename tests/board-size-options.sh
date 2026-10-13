@@ -38,27 +38,35 @@ for makefile in Makefile Makefile_js Makefile_dll; do
     check '128 yes no no' largeboards=yes
     check '256 yes yes no' verylargeboards=yes
     check '512 yes yes yes' hugeboards=yes
-    check '512 yes yes yes' boardbits=512
-    check '512 yes yes yes' hugeboards=yes boardbits=512 largeboards=yes verylargeboards=yes
+    check '512 yes yes yes' hugeboards=yes largeboards=yes verylargeboards=yes
     check '256 yes yes no' hugeboards=no verylargeboards=yes
-    reject hugeboards=yes boardbits=256
-    reject hugeboards=no boardbits=512
+    reject boardbits=512
+    reject boardbits=256
     reject hugeboards=yes largeboards=no
     reject hugeboards=yes verylargeboards=no
     reject hugeboards=maybe
-    reject 'boardbits=256 512'
     for width in 64 128 256 512; do
+        case "$width" in
+            512) capacity=hugeboards=yes ;;
+            256) capacity=verylargeboards=yes ;;
+            128) capacity=largeboards=yes ;;
+            *) capacity=largeboards=no ;;
+        esac
         flags=$(make --no-print-directory -s -C "$root/src" -f "$makefile" \
-            -f "$out/print.mk" print-flags ARCH=x86-64 boardbits="$width" \
+            -f "$out/print.mk" print-flags ARCH=x86-64 "$capacity" \
             'CXXFLAGS=-O2 -DFSX_USER_FLAGS')
-        # Upstream behavior: user CXXFLAGS replace makefile flags, except the
-        # capacity selector which always survives via override.
         [[ " $flags " == *" -DBOARD_BITS=$width "* && " $flags " == *' -DFSX_USER_FLAGS '* ]]
-        [[ " $flags " == *' -O2 '* ]]
+        [[ " $flags " == *' -std=c++17 '* && " $flags " == *' -DNNUE_EMBEDDING_OFF '* ]]
+        if [[ "$makefile" == Makefile_js ]]; then
+            [[ " $flags " == *' --bind '* && " $flags " == *' -DNO_THREADS '* ]]
+        elif [[ "$makefile" == Makefile_dll ]]; then
+            [[ " $flags " == *' -DALLVARS '* ]]
+            case $(uname -s) in Linux|Darwin) [[ " $flags " == *' -fPIC '* ]] ;; esac
+        fi
     done
 done
 [[ $(fsx_build_profile hugeboards=yes) == *';board=huge;'* ]]
-[[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile boardbits=512)" ]]
+[[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile hugeboards=yes largeboards=yes verylargeboards=yes)" ]]
 ROOT_DIR="$out/profile-fixture"
 unset FSX_ENGINE_FAMILY
 [[ $(fsx_engine_family "$ROOT_DIR" stockfish-avx512) == normal ]]
@@ -88,10 +96,11 @@ compile() {
 for bits in 64 128 256 512; do compile "-DBOARD_BITS=$bits"; done
 compile -DLARGEBOARDS
 compile -DVERY_LARGE_BOARDS
+compile -DHUGEBOARDS
 compile -DBOARD_BITS=256 -DLARGEBOARDS -DVERY_LARGE_BOARDS
-compile -DBOARD_BITS=512 -DLARGEBOARDS -DVERY_LARGE_BOARDS
+compile -DBOARD_BITS=512 -DHUGEBOARDS -DLARGEBOARDS -DVERY_LARGE_BOARDS
 for flags in '-DBOARD_BITS=64 -DLARGEBOARDS' '-DBOARD_BITS=64 -DVERY_LARGE_BOARDS' \
-             '-DBOARD_BITS=128 -DVERY_LARGE_BOARDS'; do
+             '-DBOARD_BITS=128 -DVERY_LARGE_BOARDS' '-DBOARD_BITS=256 -DHUGEBOARDS'; do
     read -r -a args <<<"$flags"
     if compile "${args[@]}" >"$out/conflicting-macros.log" 2>&1; then
         echo "compiler accepted conflicting macros: $flags" >&2
