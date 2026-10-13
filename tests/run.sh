@@ -227,6 +227,7 @@ run_one() {
     check_engine "$suite" "$engine"
     check_engine_freshness "$engine"
     check_prerequisites "$suite"
+    local -x FSX_ENGINE_FAMILY="$(engine_family "$engine")"
     case "${SUITE_FAMILY[$suite]}" in
         normal) export FSX_EXPECTED_BOARD="7 7" ;;
         large) export FSX_EXPECTED_BOARD="11 9" ;;
