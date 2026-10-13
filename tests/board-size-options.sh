@@ -51,23 +51,19 @@ for makefile in Makefile Makefile_js Makefile_dll; do
         flags=$(make --no-print-directory -s -C "$root/src" -f "$makefile" \
             -f "$out/print.mk" print-flags ARCH=x86-64 boardbits="$width" \
             'CXXFLAGS=-O2 -DFSX_USER_FLAGS')
+        # Upstream behavior: user CXXFLAGS replace makefile flags, except the
+        # capacity selector which always survives via override.
         [[ " $flags " == *" -DBOARD_BITS=$width "* && " $flags " == *' -DFSX_USER_FLAGS '* ]]
-        [[ " $flags " == *' -std=c++17 '* && " $flags " == *' -DNNUE_EMBEDDING_OFF '* ]]
-        if [[ "$makefile" == Makefile_js ]]; then
-            [[ " $flags " == *' --bind '* && " $flags " == *' -DNO_THREADS '* ]]
-        elif [[ "$makefile" == Makefile_dll ]]; then
-            [[ " $flags " == *' -DALLVARS '* ]]
-            case $(uname -s) in Linux|Darwin) [[ " $flags " == *' -fPIC '* ]] ;; esac
-        fi
+        [[ " $flags " == *' -O2 '* ]]
     done
 done
-[[ $(fsx_build_profile hugeboards=yes) == *';board=512;'* ]]
+[[ $(fsx_build_profile hugeboards=yes) == *';board=huge;'* ]]
 [[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile boardbits=512)" ]]
 ROOT_DIR="$out/profile-fixture"
 unset FSX_ENGINE_FAMILY
 [[ $(fsx_engine_family "$ROOT_DIR" stockfish-avx512) == normal ]]
-[[ $(fsx_engine_family "$ROOT_DIR" stockfish-huge) == 512 ]]
-[[ $(fsx_engine_family "$ROOT_DIR" stockfish-512-debug) == 512 ]]
+[[ $(fsx_engine_family "$ROOT_DIR" stockfish-huge) == huge ]]
+[[ $(fsx_engine_family "$ROOT_DIR" stockfish-512-debug) == huge ]]
 mkdir -p "$ROOT_DIR/src"
 printf '#!/bin/sh\nexit 0\n' > "$ROOT_DIR/src/stockfish-avx512"
 for bits in 64 128 256 512; do

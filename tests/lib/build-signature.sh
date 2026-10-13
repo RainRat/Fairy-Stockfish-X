@@ -28,14 +28,14 @@ fsx_board_family() {
     64|normal) echo normal ;;
     128|large) echo large ;;
     256|very-large) echo very-large ;;
-    512|huge) echo 512 ;;
+    512|huge) echo huge ;;
     *) echo "unknown board family: $1" >&2; return 1 ;;
   esac
 }
 
 fsx_board_bits() {
   case "$(fsx_board_family "$1")" in
-    normal) echo 64 ;; large) echo 128 ;; very-large) echo 256 ;; 512) echo 512 ;;
+    normal) echo 64 ;; large) echo 128 ;; very-large) echo 256 ;; huge) echo 512 ;;
     *) return 1 ;;
   esac
 }
@@ -65,7 +65,7 @@ fsx_engine_family() {
     return
   fi
   case "${engine##*/}" in
-    stockfish-512*|stockfish-huge*) echo 512 ;;
+    stockfish-512*|stockfish-huge*) echo huge ;;
     stockfish-vlb*) echo very-large ;;
     stockfish-large*|stockfish-allvars*) echo large ;;
     *) echo normal ;;
@@ -123,7 +123,7 @@ fsx_build_signature() {
 fsx_build_profile() {
   local arch=x86-64-modern board=normal largeboards=no verylargeboards=no
   local all=no nnue=no debug=no optimize=yes
-  local boardbits="" hugeboards="${hugeboards:-no}"
+  local boardbits="" hugeboards=no
   local compiler="${CXX:-g++}" compiler_kind="${COMP:-native}" arg
 
   for arg in "$@"; do

@@ -26,7 +26,9 @@ ifneq ($(filter command line environment override,$(origin verylargeboards)),)
     $(error verylargeboards=$(verylargeboards) conflicts with boardbits=$(boardbits))
   endif
 endif
-override largeboards = $(if $(filter 64,$(boardbits)),no,yes)
-override verylargeboards = $(if $(filter 256 512,$(boardbits)),yes,no)
-override hugeboards = $(if $(filter 512,$(boardbits)),yes,no)
+largeboards = $(if $(filter 64,$(boardbits)),no,yes)
+verylargeboards = $(if $(filter 256 512,$(boardbits)),yes,no)
+hugeboards = $(if $(filter 512,$(boardbits)),yes,no)
+# Capacity must survive user-supplied CXXFLAGS (which replace makefile flags
+# upstream); other flags follow upstream replacement behavior.
 override CXXFLAGS += -DBOARD_BITS=$(boardbits)
