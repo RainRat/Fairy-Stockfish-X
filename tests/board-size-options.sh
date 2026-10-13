@@ -63,20 +63,44 @@ for makefile in Makefile Makefile_js Makefile_dll; do
 done
 [[ $(fsx_build_profile hugeboards=yes) == *';board=512;'* ]]
 [[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile boardbits=512)" ]]
-source <(sed -n '/^engine_family() {/,/^}/p' "$root/tests/run.sh")
 ROOT_DIR="$out/profile-fixture"
 unset FSX_ENGINE_FAMILY
-[[ $(engine_family stockfish-avx512) == normal ]]
-[[ $(engine_family stockfish-huge) == 512 ]]
-[[ $(engine_family stockfish-512-debug) == 512 ]]
+[[ $(fsx_engine_family "$ROOT_DIR" stockfish-avx512) == normal ]]
+[[ $(fsx_engine_family "$ROOT_DIR" stockfish-huge) == 512 ]]
+[[ $(fsx_engine_family "$ROOT_DIR" stockfish-512-debug) == 512 ]]
 mkdir -p "$ROOT_DIR/src"
 printf '#!/bin/sh\nexit 0\n' > "$ROOT_DIR/src/stockfish-avx512"
-fsx_build_write_signature "$ROOT_DIR" "$ROOT_DIR/src/stockfish-avx512" fixture \
-    'board=large;all=yes'
-[[ $(engine_family "$ROOT_DIR/src/stockfish-avx512") == large ]]
-source <(sed -n '/^native() {/,/^}/p' "$root/tests/lib/suite.sh")
-if FSX_ALLOW_SMALL_BOARD=0 ENGINE=stockfish-avx512 native royal >"$out/native-avx512.log" 2>&1; then
+for bits in 64 128 256 512; do
+    family=$(fsx_board_family "$bits")
+    fsx_build_write_signature "$ROOT_DIR" "$ROOT_DIR/src/stockfish-avx512" fixture \
+        "board=$family;all=yes"
+    [[ $(fsx_engine_family "$ROOT_DIR" "$ROOT_DIR/src/stockfish-avx512") == "$family" ]]
+    [[ $(fsx_board_bits "$family") == "$bits" ]]
+done
+# Exercise the public suite interface instead of importing private functions.
+if FSX_CASE_FILTER=native-royal FSX_ALLOW_SMALL_BOARD=0 \
+    bash "$root/tests/suites/royal-legality.sh" stockfish-avx512 >"$out/native-avx512.log" 2>&1; then
     echo 'native suite accepted an AVX-512 filename as a large-board build' >&2
     exit 1
 fi
-echo 'Board selectors and Huge boards profiles passed'
+grep -q 'requires a large-board engine' "$out/native-avx512.log"
+
+compile() {
+    printf '#include "types.h"\n' | "${CXX:-g++}" -std=c++17 -fsyntax-only -x c++ \
+        -I"$root/src" "$@" -
+}
+for bits in 64 128 256 512; do compile "-DBOARD_BITS=$bits"; done
+compile -DLARGEBOARDS
+compile -DVERY_LARGE_BOARDS
+compile -DBOARD_BITS=256 -DLARGEBOARDS -DVERY_LARGE_BOARDS
+compile -DBOARD_BITS=512 -DLARGEBOARDS -DVERY_LARGE_BOARDS
+for flags in '-DBOARD_BITS=64 -DLARGEBOARDS' '-DBOARD_BITS=64 -DVERY_LARGE_BOARDS' \
+             '-DBOARD_BITS=128 -DVERY_LARGE_BOARDS'; do
+    read -r -a args <<<"$flags"
+    if compile "${args[@]}" >"$out/conflicting-macros.log" 2>&1; then
+        echo "compiler accepted conflicting macros: $flags" >&2
+        exit 1
+    fi
+    grep -q 'Legacy board macros conflict with BOARD_BITS' "$out/conflicting-macros.log"
+done
+echo 'Board selectors, profiles, legacy compiler flags and conflict rejection passed'

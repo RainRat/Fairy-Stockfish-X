@@ -58,14 +58,8 @@ BUILD_PROFILE=$(fsx_build_profile "$@")
 # silent wrong-family link (stale shared src/*.o under a new EXE name) into
 # a loud build error at the point of occurrence.
 verify_build_board_family() {
-    local board=normal
-    if [[ "${BUILD_PROFILE}" == *"board=512"* ]]; then
-        board=512
-    elif [[ "${BUILD_PROFILE}" == *"board=very-large"* ]]; then
-        board=very-large
-    elif [[ "${BUILD_PROFILE}" == *"board=large"* ]]; then
-        board=large
-    fi
+    local board
+    board=$(fsx_profile_board_family "$BUILD_PROFILE")
 
     local catalog
     if ! catalog=$(printf 'uci\nsetoption name VariantPath value %s\nuci\nquit\n' \

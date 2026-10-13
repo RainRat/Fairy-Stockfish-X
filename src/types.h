@@ -44,12 +44,6 @@
 #include <utility>
 
 // Direct compiler users can still select the legacy board macros.
-#if BOARD_BITS >= 256 && !defined(VERY_LARGE_BOARDS)
-#  define VERY_LARGE_BOARDS
-#endif
-#if (BOARD_BITS >= 128 || defined(VERY_LARGE_BOARDS)) && !defined(LARGEBOARDS)
-#  define LARGEBOARDS
-#endif
 #ifndef BOARD_BITS
 #  if defined(VERY_LARGE_BOARDS)
 #    define BOARD_BITS 256
@@ -58,6 +52,16 @@
 #  else
 #    define BOARD_BITS 64
 #  endif
+#endif
+
+#if (defined(VERY_LARGE_BOARDS) && BOARD_BITS < 256) || (defined(LARGEBOARDS) && BOARD_BITS < 128)
+#  error "Legacy board macros conflict with BOARD_BITS; select capacity with boardbits in make builds"
+#endif
+#if BOARD_BITS >= 256 && !defined(VERY_LARGE_BOARDS)
+#  define VERY_LARGE_BOARDS
+#endif
+#if BOARD_BITS >= 128 && !defined(LARGEBOARDS)
+#  define LARGEBOARDS
 #endif
 
 #if defined(_MSC_VER)
