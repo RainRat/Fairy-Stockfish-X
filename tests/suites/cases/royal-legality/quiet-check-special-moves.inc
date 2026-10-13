@@ -62,6 +62,19 @@ symmetricDropTypes = r
 checking = false
 allowChecks = false
 
+[allowed-check-drop:fairy]
+pieceDrops = true
+allowChecks = true
+castling = false
+
+[allowed-check-wrap:allowed-check-drop]
+cylindrical = true
+
+[allowed-check-kingless:allowed-check-drop]
+king = -
+pieceToCharTable = -
+startFen = 8/8/8/8/8/8/8/8[R] w - - 0 1
+
 [pull-basic:fairy]
 maxFile = e
 maxRank = 5
@@ -173,6 +186,28 @@ static FSX_NOINLINE void test_probe_nodes() {
     assert(thread.nodes.load() == before);
     assert(MoveList<LEGAL>(pos).contains(m));
     assert(thread.nodes.load() == before);
+}
+
+static FSX_NOINLINE void test_allowed_check_predictions() {
+    for (const char* name : {"allowed-check-drop", "allowed-check-wrap", "allowed-check-kingless"})
+    {
+        StateInfo st{}, next{};
+        Position pos;
+        const bool kingless = !std::strcmp(name, "allowed-check-kingless");
+        assert(variants.has(name));
+        pos.set(variants.get(name), kingless ? "8/8/8/8/8/8/8/8[R] w - - 0 1"
+                                            : "4k3/8/8/8/8/8/8/4K3[R] w - - 0 1",
+                false, &st, nullptr);
+        const Move m = make_drop(SQ_E4, ROOK, ROOK);
+        assert(MoveList<LEGAL>(pos).contains(m));
+        // Ordinary drops predict physical attacks; wrapped moves use the
+        // committed evasion map, which is empty when checks are allowed.
+        assert(pos.gives_check(m) == !std::strcmp(name, "allowed-check-drop"));
+        pos.do_move(m, next);
+        assert(!pos.evasion_checkers());
+        assert(kingless || pos.attackers_to(SQ_E8, pos.pieces(), WHITE));
+        pos.undo_move(m);
+    }
 }
 
 static FSX_NOINLINE void test_pull_basic() {
@@ -383,6 +418,8 @@ int main(int argc, char** argv) {
             test_two_leg_discovered_quiet_check();
         if (!which || !std::strcmp(which, "pairdrop"))
             test_pairdrop();
+        if (!which || !std::strcmp(which, "allowed-checks"))
+            test_allowed_check_predictions();
         if (!which || !std::strcmp(which, "probe-nodes"))
             test_probe_nodes();
         if (!which || !std::strcmp(which, "swap"))
@@ -493,6 +530,7 @@ VAR
 }
 
 run_case pairdrop
+run_case allowed-checks
 run_case swap
 run_case pull
 run_case wrapped
