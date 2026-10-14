@@ -6622,6 +6622,7 @@ bool Position::legal(Move m) const {
           Square castlingRto;
           castling_destinations(us, from, to, kto, castlingRto);
           rfrom = to;
+          rto = castlingRto;
           occupied ^= to | castlingRto;
       }
       if (!rifleShot)
