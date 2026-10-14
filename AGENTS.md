@@ -41,6 +41,11 @@ tests/build.sh COMP=mingw
 Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. `tests/build.sh` tracks the build configuration and cleans objects automatically when flags change; `make clean` is only needed for direct `make -C src` builds.
 
 Use `hugeboards=yes` (Huge boards / HB) for boards above 16x16, up to 22x22.
+The example above adds `all=yes` because huge boards need the larger move
+buffer (65536 vs 16384 entries on very-large-board builds) for dense positions
+and drop-heavy placement games. It names `EXE=stockfish-huge` so the huge
+binary sits alongside the other tier binaries instead of overwriting
+`src/stockfish`; both expansion scripts default to that path.
 Run `python3 tests/board-expansion.py src/stockfish-huge`,
 `python3 tests/huge-board-placement.py src/stockfish-huge`, and
 `bash tests/multiword-bitboard.sh` for expansion coverage. Keep the smaller
