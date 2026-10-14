@@ -24,7 +24,7 @@ SRCS = ffishjs.cpp benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.c
 	nnue/features/half_ka_v2_variants.cpp
 
 CXX=emcc
-override CXXFLAGS += --bind -DNNUE_EMBEDDING_OFF -DNO_THREADS -std=c++17 -Wall
+CXXFLAGS += --bind -DNNUE_EMBEDDING_OFF -DNO_THREADS -std=c++17 -Wall $(EXTRACXXFLAGS)
 
 largeboards = yes
 verylargeboards = no
@@ -34,14 +34,14 @@ debug = no
 
 ### Debugging
 ifeq ($(debug),no)
-	override CXXFLAGS += -DNDEBUG -s ASSERTIONS=0 -s SAFE_HEAP=0
+	CXXFLAGS += -DNDEBUG -s ASSERTIONS=0 -s SAFE_HEAP=0
 else
-	override CXXFLAGS += -g -s ASSERTIONS=1 -s SAFE_HEAP=1
+	CXXFLAGS += -g -s ASSERTIONS=1 -s SAFE_HEAP=1
 endif
 
 ### Optimization
 ifeq ($(optimize),yes)
-	override CXXFLAGS += -O3
+	CXXFLAGS += -O3
 endif
 
 # Compile version with support for large board variants
@@ -49,23 +49,23 @@ endif
 include board-size.mk
 ifneq ($(largeboards),no)
 	ifeq ($(verylargeboards),no)
-		override CXXFLAGS += -DPRECOMPUTED_MAGICS
+		CXXFLAGS += -DPRECOMPUTED_MAGICS
 	endif
-	override CXXFLAGS += -s INITIAL_MEMORY=$(if $(filter 512,$(boardbits)),128,32)MB -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1GB
+	CXXFLAGS += -s INITIAL_MEMORY=$(if $(filter 512,$(boardbits)),128,32)MB -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1GB
 endif
 ifeq ($(boardbits),512)
 	# SAN and rule probes keep Position/StateInfo copies on the stack.
-	override CXXFLAGS += -s TOTAL_STACK=8MB -s STACK_OVERFLOW_CHECK=2
+	CXXFLAGS += -s TOTAL_STACK=8MB -s STACK_OVERFLOW_CHECK=2
 endif
 
 # Enable all variants, even heavyweight ones like duck and amazons
 ifneq ($(all),no)
-	override CXXFLAGS += -DALLVARS
+	CXXFLAGS += -DALLVARS
 endif
 
 ### Compile as ES6/ES2015 module
 ifeq ($(es6),yes)
-	override CXXFLAGS += -s ENVIRONMENT='web,worker,node' -s EXPORT_ES6=1 -s MODULARIZE=1
+	CXXFLAGS += -s ENVIRONMENT='web,worker,node' -s EXPORT_ES6=1 -s MODULARIZE=1
 endif
 
 .PHONY: help objclean clean build deps test serve

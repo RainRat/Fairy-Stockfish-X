@@ -26,23 +26,23 @@ verylargeboards ?= no
 largeboards ?= yes
 
 CXXFLAGS ?= -O3 -DNDEBUG
-override CXXFLAGS += -std=c++17 -Wall -Wextra -DALLVARS -DNNUE_EMBEDDING_OFF
+CXXFLAGS += -std=c++17 -Wall -Wextra -DALLVARS -DNNUE_EMBEDDING_OFF $(EXTRACXXFLAGS)
 include board-size.mk
 ifeq ($(verylargeboards),no)
   ifneq ($(largeboards),no)
-    override CXXFLAGS += -DPRECOMPUTED_MAGICS
+    CXXFLAGS += -DPRECOMPUTED_MAGICS
   endif
 endif
 LDFLAGS ?= -shared
 ifneq (,$(filter $(OS_NAME),Linux Darwin))
-  override CXXFLAGS += -fPIC -pthread
+  CXXFLAGS += -fPIC -pthread
 endif
 ifneq ($(IMPLIB),)
   LDFLAGS += -Wl,--out-implib,$(IMPLIB)
 endif
 # Match the compiler target, including flags such as -m32.
 ifneq (,$(shell printf '' | $(CXX) $(CPPFLAGS) $(CXXFLAGS) -dM -E -x c++ - | sed -n '/^\#define __SIZEOF_POINTER__ 8$$/p'))
-  override CXXFLAGS += -DIS_64BIT
+  CXXFLAGS += -DIS_64BIT
 endif
 
 DLL_BUILD_DIR ?= ../.local/build/dll/$(boardbits)
