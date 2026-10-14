@@ -508,7 +508,7 @@ private:
 #define USE_HEAP_INSTEAD_OF_STACK_FOR_MOVE_LIST
 #endif
 
-#if defined(ALLVARS)
+#if defined(ALLVARS) || defined(HUGEBOARDS)
 #if defined(VERY_LARGE_BOARDS)
 constexpr int MAX_MOVES = 65536;
 #else
@@ -528,7 +528,7 @@ constexpr int MAX_MOVES = 4096;
 #endif
 constexpr int MAX_PLY = 246;
 #endif
-/// endif ALLVARS
+/// endif ALLVARS || HUGEBOARDS
 
 /// A move needs 16 bits to be stored
 ///
