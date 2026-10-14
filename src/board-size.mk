@@ -20,6 +20,4 @@ endif
 largeboards = $(if $(filter 64,$(boardbits)),no,yes)
 verylargeboards = $(if $(filter 256 512,$(boardbits)),yes,no)
 hugeboards = $(if $(filter 512,$(boardbits)),yes,no)
-# Capacity must survive user-supplied CXXFLAGS (which replace makefile flags
-# upstream); other flags follow upstream replacement behavior.
-override CXXFLAGS += -DBOARD_BITS=$(boardbits)
+CXXFLAGS += -DBOARD_BITS=$(boardbits)

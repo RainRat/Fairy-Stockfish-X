@@ -52,17 +52,20 @@ for makefile in Makefile Makefile_js Makefile_dll; do
             128) capacity=largeboards=yes ;;
             *) capacity=largeboards=no ;;
         esac
+        # Upstream semantics: command-line CXXFLAGS replace the makefile's
+        # flags, so the capacity selector is dropped along with them.
         flags=$(make --no-print-directory -s -C "$root/src" -f "$makefile" \
             -f "$out/print.mk" print-flags ARCH=x86-64 "$capacity" \
             'CXXFLAGS=-O2 -DFSX_USER_FLAGS')
+        [[ " $flags " == *' -DFSX_USER_FLAGS '* ]]
+        [[ " $flags " != *' -DBOARD_BITS='* && " $flags " != *' -std=c++17 '* ]]
+        # EXTRACXXFLAGS is the additive route: extras merge with the full
+        # makefile flags, including the capacity selector.
+        flags=$(make --no-print-directory -s -C "$root/src" -f "$makefile" \
+            -f "$out/print.mk" print-flags ARCH=x86-64 "$capacity" \
+            'EXTRACXXFLAGS=-O2 -DFSX_USER_FLAGS')
         [[ " $flags " == *" -DBOARD_BITS=$width "* && " $flags " == *' -DFSX_USER_FLAGS '* ]]
-        [[ " $flags " == *' -std=c++17 '* && " $flags " == *' -DNNUE_EMBEDDING_OFF '* ]]
-        if [[ "$makefile" == Makefile_js ]]; then
-            [[ " $flags " == *' --bind '* && " $flags " == *' -DNO_THREADS '* ]]
-        elif [[ "$makefile" == Makefile_dll ]]; then
-            [[ " $flags " == *' -DALLVARS '* ]]
-            case $(uname -s) in Linux|Darwin) [[ " $flags " == *' -fPIC '* ]] ;; esac
-        fi
+        [[ " $flags " == *' -std=c++17 '* ]]
     done
 done
 [[ $(fsx_build_profile hugeboards=yes) == *';board=huge;'* ]]

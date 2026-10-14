@@ -66,14 +66,11 @@ Python extension, set `CFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"` and
 `python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
 object files and bindings from different tiers are incompatible.
 
-The makefiles use `override` for `CXXFLAGS` throughout, so required
-configuration flags are appended even when `CXXFLAGS` is supplied on the
-command line. This deliberately differs from upstream: GNU make silently
-ignores plain assignments after an `override`, so a partial override would
-drop flags without warning, and the capacity selector must survive user
-flags. Use `optimize=no` to avoid the makefile's optimization flags when
-supplying your own, or `EXTRACXXFLAGS` to add flags. DLL objects are stored
-separately
+As upstream, supplying `CXXFLAGS` on the command line replaces the makefile's
+`CXXFLAGS` (including the capacity selector), so a direct `make ...
+CXXFLAGS=...` build can silently select the wrong capacity; `tests/build.sh`
+fails such builds loudly at its board-family probe. Use `EXTRACXXFLAGS` to add
+flags without replacing the makefile's. DLL objects are stored separately
 per capacity under `.local/build/dll`; compiler-flag and header changes rebuild
 them automatically. A link stamp also tracks the selected cached objects, so
 size switches relink the library and identical builds do no compiling or linking.

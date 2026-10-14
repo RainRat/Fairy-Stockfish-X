@@ -10,7 +10,7 @@ while IFS= read -r file; do
 done < <(find "$root/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mk' -o -name Makefile \))
 source "$root/tests/lib/build-signature.sh"
 args=(ARCH=x86-64 hugeboards=yes all=no nnue=no debug=yes optimize=no
-      'sanitize=address undefined' 'CXXFLAGS=-O1 -fno-omit-frame-pointer'
+      'sanitize=address undefined' 'EXTRACXXFLAGS=-O1 -fno-omit-frame-pointer'
       "CXX=${CXX:-g++}" "COMP=${COMP:-gcc}")
 if ! fsx_build_object_config_matches "$out" "${args[@]}"; then
     make -C "$out/src" objclean >"$out/build.log" 2>&1
