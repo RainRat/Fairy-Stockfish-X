@@ -70,7 +70,7 @@ check_named_engine_artifact() {
         "${ROOT_DIR}/src/stockfish-large") expected_board=large; expected_all="" ;;
         "${ROOT_DIR}/src/stockfish-allvars") expected_board=large; expected_all=yes ;;
         "${ROOT_DIR}/src/stockfish-vlb") expected_board=very-large; expected_all=yes ;;
-        "${ROOT_DIR}/src/stockfish-512"|"${ROOT_DIR}/src/stockfish-huge") expected_board=huge; expected_all=yes ;;
+        "${ROOT_DIR}/src/stockfish-512"|"${ROOT_DIR}/src/stockfish-huge") expected_board=huge; expected_all="" ;;
         *) return 0 ;;
     esac
     [[ -x "$engine" ]] || return 0
