@@ -34,9 +34,10 @@ each other. The 256- and
 512-bit builds use the same multiword operations and generic rider geometry;
 their packed moves occupy 64 bits. Magic tables and PEXT are disabled for both.
 The 512-bit tier also uses 32-bit evaluation score lanes so dense positions
-do not overflow the ordinary 16-bit lanes. Huge builds always use the
-65536-entry move buffer, independent of `all=yes`, so dense 22x22 positions
-cannot overflow the move lists.
+do not overflow the ordinary 16-bit lanes. Composed movegen on 22x22 can need
+tens of thousands of move entries, so the huge test build uses `all=yes` for
+the larger move lists; the base huge buffer already covers drop variants at
+that size.
 Keep the 256-bit tier for existing variants: the 512-bit executable has larger
 geometry and search-history tables even when it searches a smaller board.
 
@@ -53,7 +54,7 @@ Compatibility macros that require a larger board than an explicit `BOARD_BITS`
 fail at compile time.
 
 ```bash
-tests/build.sh ARCH=x86-64-modern hugeboards=yes EXE=stockfish-huge
+tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
 python3 tests/board-expansion.py src/stockfish-huge
 python3 tests/huge-board-placement.py src/stockfish-huge
 bash tests/board-size-options.sh
