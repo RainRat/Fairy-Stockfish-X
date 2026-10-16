@@ -1286,8 +1286,13 @@ namespace {
                         return false;
                     if (!routeSensitive)
                     {
+                        // Bound is exact: at most 64 two-step direction pairs
+                        // plus one hook key per destination (hooks never capture
+                        // the bend). The guard keeps release builds safe anyway:
+                        // overflow only emits duplicates, which legal() filters.
                         assert(seenCount < int(seenPairs.size()));
-                        seenPairs[seenCount++] = {kindIdx * (SQUARE_NB + 1) + captureVia, toIdx};
+                        if (seenCount < int(seenPairs.size()))
+                            seenPairs[seenCount++] = {kindIdx * (SQUARE_NB + 1) + captureVia, toIdx};
                     }
                     moveList = emit_two_leg_candidate<Us, Type>(pos, moveList, pt, path.kind, from,
                                                                  path.via, path.to, capVia, capTo,

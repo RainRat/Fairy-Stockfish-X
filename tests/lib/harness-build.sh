@@ -98,8 +98,8 @@ fsx_harness_init() {
       arch=*) arch=${field#arch=} ;;
       debug=yes|debug=no) debug=${field#debug=} ;;
       optimize=yes|optimize=no) optimize=${field#optimize=} ;;
-      all=yes|all=no) [[ -n "$FSX_HARNESS_BUILD_EXE" ]] || all=${field#all=} ;;
-      nnue=yes|nnue=no) [[ -n "$FSX_HARNESS_BUILD_EXE" ]] || nnue=${field#nnue=} ;;
+      all=yes|all=no) all=${field#all=} ;;
+      nnue=yes|nnue=no) nnue=${field#nnue=} ;;
     esac
   done
 
