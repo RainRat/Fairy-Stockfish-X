@@ -7546,16 +7546,23 @@ bool Position::gives_check(Move m) const {
                          || type_of(m) == DROP2
                          || type_of(m) == INSERT;
 
-      // gives_check_impl intentionally suppresses the physical-king attack
-      // introduced by a capture morph in this no-check anti-royal case.
-      const bool crossCheckCompatible = !(capture_morph() && capture(m)
-                                          && anti_royal_types() && !checking_permitted());
+      const bool usingPhysicalKingTarget = count<KING>(~sideToMove) == 1;
+      // With allowChecks, physical-king predictions can differ from the
+      // evasion map. Royal-less moves and committed-state probes agree.
+      const bool crossCheckCompatible = (!allow_checks()
+                                        || (!usingPhysicalKingTarget && royal_square(~sideToMove) == SQ_NONE)
+                                        || is_clone_move(m) || is_pass(m)
+                                        || gravity() != NO_GRAVITY || topology_wraps() || laser_game()
+                                        || has_pushing() || has_adjacent_swapping() || is_swap_move(m)
+                                        || type_of(m) == PULL || type_of(m) == DROP2 || type_of(m) == INSERT
+                                        || (must_drop() && count_in_hand(KING)))
+                                       && !(capture_morph() && capture(m)
+                                            && anti_royal_types() && !checking_permitted());
 
       if (isComplex && crossCheckCompatible)
       {
           in_gives_check_cross_check = true;
 
-          const bool usingPhysicalKingTarget = count<KING>(~sideToMove) == 1;
           Square royalSq = usingPhysicalKingTarget ? square<KING>(~sideToMove)
                                                    : royal_square(~sideToMove);
           if (royalSq == SQ_NONE && count<KING>(~sideToMove) != 1)
