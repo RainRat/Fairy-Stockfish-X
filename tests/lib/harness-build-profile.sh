@@ -49,6 +49,15 @@ has_build_arg debug=yes
 has_build_arg optimize=no
 [[ " ${FSX_HARNESS_CXX_DEFS[*]} " == *' -DBOARD_BITS=512 '* ]]
 
+# A recorded all=no profile must stay all=no: harness objects have to match
+# the tested executable, not the filename default.
+fsx_build_write_signature "${fixture}" "${fixture}/src/stockfish-huge" fixture \
+  'arch=x86-64-modern;board=huge;all=no;nnue=no;debug=yes;optimize=no;compiler=g++;comp=native'
+fsx_harness_init "${fixture}/src/stockfish-huge" "${fixture}"
+has_build_arg all=no
+has_build_arg nnue=no
+[[ " ${FSX_HARNESS_CXX_DEFS[*]} " != *' -DALLVARS '* ]]
+
 cp "${fixture}/src/stockfish-allvars" "${fixture}/custom-avx512"
 for bits in 64 128 256 512; do
   fsx_build_write_signature "$fixture" "$fixture/custom-avx512" fixture \
