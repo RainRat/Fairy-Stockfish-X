@@ -9,7 +9,7 @@ show_usage() {
 Usage: tests/build.sh [MAKE_VARIABLE=value ...]
 
 Build an engine binary and record its build profile. Common variables include
-ARCH, COMP, EXE, largeboards, verylargeboards, all, nnue, debug, and optimize.
+ARCH, COMP, EXE, hugeboards, largeboards, verylargeboards, all, nnue, debug, and optimize.
 
 Examples:
   tests/build.sh ARCH=x86-64-modern
@@ -58,12 +58,8 @@ BUILD_PROFILE=$(fsx_build_profile "$@")
 # silent wrong-family link (stale shared src/*.o under a new EXE name) into
 # a loud build error at the point of occurrence.
 verify_build_board_family() {
-    local board=normal
-    if [[ "${BUILD_PROFILE}" == *"board=very-large"* ]]; then
-        board=very-large
-    elif [[ "${BUILD_PROFILE}" == *"board=large"* ]]; then
-        board=large
-    fi
+    local board
+    board=$(fsx_profile_board_family "$BUILD_PROFILE")
 
     local catalog
     if ! catalog=$(printf 'uci\nsetoption name VariantPath value %s\nuci\nquit\n' \
@@ -79,7 +75,7 @@ verify_build_board_family() {
     grep -q "var hex-16x16\\([ ,]\\|\$\\)" <<<"${catalog}" || has_hex16=0
     local fail=""
     case "${board}" in
-        very-large)
+        huge|very-large)
             (( has_shogi )) || fail="expected shogi in catalog"
             (( has_chu )) || fail="expected chu_shogi in catalog"
             (( has_hex16 )) || fail="expected hex-16x16 in catalog"
@@ -97,6 +93,10 @@ verify_build_board_family() {
     esac
     if [[ -n "${fail}" ]]; then
         echo "FAILED: ${EXE} board-family mismatch (profile: ${BUILD_PROFILE}): ${fail}" >&2
+        return 1
+    fi
+    if [[ "$board" == huge && "$catalog" != *" HB 512"* ]]; then
+        echo "FAILED: ${EXE} must identify its Huge boards (HB) capacity" >&2
         return 1
     fi
 }

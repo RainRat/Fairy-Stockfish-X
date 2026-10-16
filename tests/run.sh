@@ -70,11 +70,12 @@ check_named_engine_artifact() {
         "${ROOT_DIR}/src/stockfish-large") expected_board=large; expected_all="" ;;
         "${ROOT_DIR}/src/stockfish-allvars") expected_board=large; expected_all=yes ;;
         "${ROOT_DIR}/src/stockfish-vlb") expected_board=very-large; expected_all=yes ;;
+        "${ROOT_DIR}/src/stockfish-512"|"${ROOT_DIR}/src/stockfish-huge") expected_board=huge; expected_all="" ;;
         *) return 0 ;;
     esac
     [[ -x "$engine" ]] || return 0
     if ! fsx_build_artifact_is_current "$ROOT_DIR" "$engine" \
-        || find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+        || find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mk' -o -name 'Makefile' \) \
             -newer "$engine" -print -quit | grep -q .; then
         echo "stale or unverified engine: $engine; rebuild it with tests/build.sh" >&2
         return 1
@@ -115,30 +116,12 @@ normalize_engine() {
     echo "$engine"
 }
 
-engine_family() {
-    if [[ -n "${FSX_ENGINE_FAMILY:-}" ]]; then
-        echo "${FSX_ENGINE_FAMILY}"
-        return
-    fi
-    local base
-    base=$(basename "$1")
-    case "$base" in
-        *vlb*) echo very-large ;;
-        *large*|*allvars*) echo large ;;
-        *) echo normal ;;
-    esac
-}
-
-family_rank() {
-    case "$1" in normal) echo 0 ;; large) echo 1 ;; very-large) echo 2 ;; esac
-}
-
 check_engine() {
     local suite="$1" engine="$2" expected actual
     [[ -x "$engine" ]] || { echo "missing executable: $engine" >&2; return 1; }
     expected=${SUITE_FAMILY[$suite]}
-    actual=$(engine_family "$engine")
-    if (( $(family_rank "$actual") < $(family_rank "$expected") )) && [[ "${FSX_ALLOW_SMALL_BOARD:-0}" != 1 ]]; then
+    actual=$(fsx_engine_family "$ROOT_DIR" "$engine")
+    if (( $(fsx_board_bits "$actual") < $(fsx_board_bits "$expected") )) && [[ "${FSX_ALLOW_SMALL_BOARD:-0}" != 1 ]]; then
         if [[ "$expected" == large ]]; then
             echo "${suite} requires a large-board all-variant engine; got ${engine} (${actual})." >&2
             echo "build with: tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars" >&2
@@ -164,7 +147,7 @@ check_engine_role() {
     board="${profile#*board=}"; board="${board%%;*}"
     all="${profile#*all=}"; all="${all%%;*}"
     case "$role:$board:$all" in
-        large-allvars:large:yes|large-allvars:very-large:yes|very-large-allvars:very-large:yes|large:large:*|large:very-large:*|normal:normal:*) ;;
+        large-allvars:large:yes|large-allvars:very-large:yes|large-allvars:huge:yes|very-large-allvars:very-large:yes|very-large-allvars:huge:yes|large:large:*|large:very-large:*|large:huge:*|normal:normal:*) ;;
         *)
             echo "required engine role ${role} does not match ${engine} (recorded profile: ${profile:-unverified})." >&2
             case "$role" in
@@ -222,11 +205,8 @@ run_one() {
     check_engine "$suite" "$engine"
     check_engine_freshness "$engine"
     check_prerequisites "$suite"
-    case "${SUITE_FAMILY[$suite]}" in
-        normal) export FSX_EXPECTED_BOARD="7 7" ;;
-        large) export FSX_EXPECTED_BOARD="11 9" ;;
-        very-large) export FSX_EXPECTED_BOARD="15 15" ;;
-    esac
+    local -x FSX_ENGINE_FAMILY="$(fsx_engine_family "$ROOT_DIR" "$engine")"
+    export FSX_EXPECTED_BOARD="$(fsx_board_limits "${SUITE_FAMILY[$suite]}")"
     if [[ -n "$log_dir" ]]; then
         log="${log_dir}/${suite}.log"
         local status=0

@@ -1288,7 +1288,10 @@ std::ostream& operator<<(std::ostream& os, const Position& pos) {
 // https://marcelk.net/2013-04-06/paper/upcoming-rep-v2.pdf
 
 // First and second hash functions for indexing the cuckoo tables
-#if defined(VERY_LARGE_BOARDS)
+#ifdef HUGEBOARDS
+inline int H1(Key h) { return h & 0x7ffff; }
+inline int H2(Key h) { return (h >> 19) & 0x7ffff; }
+#elif defined(VERY_LARGE_BOARDS)
 // Leave room for the larger reversible-move set on 16x16 boards.
 inline int H1(Key h) { return h & 0x1ffff; }
 inline int H2(Key h) { return (h >> 17) & 0x1ffff; }
@@ -1301,7 +1304,10 @@ inline int H2(Key h) { return (h >> 16) & 0x1fff; }
 #endif
 
 // Cuckoo tables with Zobrist hashes of valid reversible moves, and the moves themselves
-#if defined(VERY_LARGE_BOARDS)
+#ifdef HUGEBOARDS
+Key cuckoo[524288];
+Move cuckooMove[524288];
+#elif defined(VERY_LARGE_BOARDS)
 // The 17-bit hashes above need a correspondingly larger table.
 Key cuckoo[131072];
 Move cuckooMove[131072];
@@ -6616,6 +6622,7 @@ bool Position::legal(Move m) const {
           Square castlingRto;
           castling_destinations(us, from, to, kto, castlingRto);
           rfrom = to;
+          rto = castlingRto;
           occupied ^= to | castlingRto;
       }
       if (!rifleShot)
@@ -7546,16 +7553,23 @@ bool Position::gives_check(Move m) const {
                          || type_of(m) == DROP2
                          || type_of(m) == INSERT;
 
-      // gives_check_impl intentionally suppresses the physical-king attack
-      // introduced by a capture morph in this no-check anti-royal case.
-      const bool crossCheckCompatible = !(capture_morph() && capture(m)
-                                          && anti_royal_types() && !checking_permitted());
+      const bool usingPhysicalKingTarget = count<KING>(~sideToMove) == 1;
+      // With allowChecks, physical-king predictions can differ from the
+      // evasion map. Royal-less moves and committed-state probes agree.
+      const bool crossCheckCompatible = (!allow_checks()
+                                        || (!usingPhysicalKingTarget && royal_square(~sideToMove) == SQ_NONE)
+                                        || is_clone_move(m) || is_pass(m)
+                                        || gravity() != NO_GRAVITY || topology_wraps() || laser_game()
+                                        || has_pushing() || has_adjacent_swapping() || is_swap_move(m)
+                                        || type_of(m) == PULL || type_of(m) == DROP2 || type_of(m) == INSERT
+                                        || (must_drop() && count_in_hand(KING)))
+                                       && !(capture_morph() && capture(m)
+                                            && anti_royal_types() && !checking_permitted());
 
       if (isComplex && crossCheckCompatible)
       {
           in_gives_check_cross_check = true;
 
-          const bool usingPhysicalKingTarget = count<KING>(~sideToMove) == 1;
           Square royalSq = usingPhysicalKingTarget ? square<KING>(~sideToMove)
                                                    : royal_square(~sideToMove);
           if (royalSq == SQ_NONE && count<KING>(~sideToMove) != 1)
@@ -8909,27 +8923,25 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
-  const int moveRightsMask = rifleShot ? castlingRightsMask[to]
-                                       : castlingRightsMask[from] | castlingRightsMask[to];
-  const int twoLegRightsMask = twoLeg && st->extraCaptured ? castlingRightsMask[st->extraCaptured.square] : 0;
-  if (!dropMove && !passMove && !pureWallMove && st->castlingRights
-      && (moveRightsMask
-          | twoLegRightsMask
-          | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
-          | pushRightsMask | pullRightsMask))
+  if (!dropMove && !passMove && !pureWallMove && st->castlingRights)
   {
-      k ^= Zobrist::castling[st->castlingRights];
-      st->castlingRights &= ~(moveRightsMask
-                              | twoLegRightsMask
-                              | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
-                              | pushRightsMask | pullRightsMask);
-
-      // Remove castling rights from opponent on the same side if oppositeCastling
-      if ((var->oppositeCastling) && (type_of(m) == CASTLING))
+      const int rightsMask = (rifleShot ? castlingRightsMask[to]
+                                       : castlingRightsMask[from] | castlingRightsMask[to])
+                          | (twoLeg && st->extraCaptured ? castlingRightsMask[st->extraCaptured.square] : 0)
+                          | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
+                          | pushRightsMask | pullRightsMask;
+      if (rightsMask)
       {
-        st->castlingRights &= ~(~us & (castlingKingSide ? KING_SIDE : QUEEN_SIDE));
+          k ^= Zobrist::castling[st->castlingRights];
+          st->castlingRights &= ~rightsMask;
+
+          // Remove castling rights from opponent on the same side if oppositeCastling
+          if ((var->oppositeCastling) && (type_of(m) == CASTLING))
+          {
+            st->castlingRights &= ~(~us & (castlingKingSide ? KING_SIDE : QUEEN_SIDE));
+          }
+          k ^= Zobrist::castling[st->castlingRights];
       }
-      k ^= Zobrist::castling[st->castlingRights];
   }
 
   // Flip enclosed pieces

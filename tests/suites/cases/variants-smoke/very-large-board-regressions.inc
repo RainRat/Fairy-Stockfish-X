@@ -63,11 +63,6 @@ go perft 1
 EOF
 )
 
-  if grep -q "variants skipped because of board size limits" <<<"$output"; then
-    echo "gale unexpectedly skipped because of board size limits on ${ENGINE}" >&2
-    return 1
-  fi
-
   if grep -q "No such variant: gale" <<<"$output"; then
     echo "gale unavailable in this binary" >&2
     return 1

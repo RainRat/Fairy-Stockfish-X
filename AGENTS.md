@@ -31,6 +31,7 @@ By default, compiling can be very verbose (especially under LTO). Prefer using t
 tests/build.sh ARCH=x86-64-modern
 tests/build.sh ARCH=x86-64-modern largeboards=yes
 tests/build.sh ARCH=x86-64-modern verylargeboards=yes
+tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
 tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
 tests/build.sh COMP=mingw
 ```
@@ -38,6 +39,20 @@ tests/build.sh COMP=mingw
 `tests/build.sh` verifies that native builds produce a runnable, non-empty executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
 
 Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. `tests/build.sh` tracks the build configuration and cleans objects automatically when flags change; `make clean` is only needed for direct `make -C src` builds.
+
+Use `hugeboards=yes` (Huge boards / HB) for boards above 16x16, up to 22x22.
+The example adds `all=yes` because the expansion coverage stresses composed
+movegen (compound/hook stress reaching tens of thousands of moves on 22x22),
+which needs the all-tier move lists and features; the base huge buffer already
+covers drop variants at that size. It names `EXE=stockfish-huge` so the huge
+binary sits alongside the other tier binaries instead of overwriting
+`src/stockfish`; both expansion scripts default to that path.
+Run `python3 tests/board-expansion.py src/stockfish-huge`,
+`python3 tests/huge-board-placement.py src/stockfish-huge`, and
+`bash tests/multiword-bitboard.sh` for expansion coverage. Keep the smaller
+tiers available: 512-bit search histories use substantially more memory.
+The placement case reports explicit geometry skips on smaller suite engines;
+run it directly against `src/stockfish-huge` to require all seven variants.
 
 For named binaries used by regression scripts:
 

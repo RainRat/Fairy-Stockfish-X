@@ -60,7 +60,15 @@ namespace {
 
 #ifndef NDEBUG
   bool verify_material(const Position& pos, Color c, Value npm, int pawnsCnt) {
-    return   pos.non_pawn_material(c) == npm
+    // Board geometry scales PieceValue; the endgame signature uses base values.
+    Value baseNpm = VALUE_ZERO, variantNpm = VALUE_ZERO;
+    for (PieceType pt = KNIGHT; pt < KING; ++pt)
+    {
+        baseNpm += pos.count(c, pt) * BasePieceValue[MG][pt];
+        variantNpm += pos.count(c, pt) * PieceValue[MG][pt];
+    }
+    return   baseNpm == npm
+          && pos.non_pawn_material(c) == variantNpm
           && pos.count<PAWN>(c) == pawnsCnt;
   }
 #endif

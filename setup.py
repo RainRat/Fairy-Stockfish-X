@@ -15,8 +15,9 @@ else:
     # LTO internal compiler error (compute_live_loop_exits) in the link-time
     # optimizer. VLB pyffish is a developer/test configuration (no CI wheels),
     # so build it without LTO. Native make builds are unaffected.
-    very_large = "VERY_LARGE_BOARDS" in (os.environ.get("CXXFLAGS", "")
-                                         + os.environ.get("CFLAGS", ""))
+    build_flags = os.environ.get("CXXFLAGS", "") + os.environ.get("CFLAGS", "")
+    very_large = ("VERY_LARGE_BOARDS" in build_flags or "HUGEBOARDS" in build_flags
+                  or "BOARD_BITS=256" in build_flags or "BOARD_BITS=512" in build_flags)
     if "clang" not in os.environ.get("CXX", "").lower() and not very_large:
         args.append("-flto")
 

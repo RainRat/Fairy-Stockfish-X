@@ -1169,3 +1169,144 @@ describe('two-leg route parsing', function () {
     } finally { board.delete(); }
   });
 });
+
+describe('compiled board capacity', function () {
+  it('checks the banner, maximum coordinates, move/undo and oversized rejection', function () {
+    const info = ffish.info();
+    const bits = info.includes(' HB 512 ') ? 512 : info.includes(' VLB ') ? 256
+      : info.includes(' LB ') ? 128 : 64;
+    if (process.env.FSX_TEST_BOARD_BITS)
+      chai.expect(bits).to.equal(Number(process.env.FSX_TEST_BOARD_BITS));
+    const [width, height] = {64: [8, 8], 128: [12, 10], 256: [16, 16], 512: [22, 22]}[bits];
+    const fen = `${width - 1}k/${width - 2}R1/` + `${width}/`.repeat(height - 3)
+      + `K${width - 1} w - - 0 1`;
+    ffish.loadVariantConfig(`[js-capacity:chess]\nmaxFile = ${width}\nmaxRank = ${height}\n`
+      + 'castling = false\nallowChecks = true\nstartFen = ' + fen + '\n');
+    const board = new ffish.Board('js-capacity');
+    try {
+      chai.expect(ffish.validateFen(fen, 'js-capacity', false)).to.equal(1);
+      const file = String.fromCharCode(97 + width - 2);
+      const move = `${file}${height - 1}${file}${height}`;
+      chai.expect(board.legalMoves().split(' ')).to.include(move);
+      chai.expect(board.push(move)).to.equal(true);
+      chai.expect(board.fen()).to.equal(`${width - 2}Rk/` + `${width}/`.repeat(height - 2)
+        + `K${width - 1} b - - 1 1`);
+      board.pop();
+      chai.expect(board.fen()).to.equal(fen);
+      chai.expect(JSON.parse(ffish.variantInfo('js-capacity')).board.width).to.equal(width);
+    } finally { board.delete(); }
+    for (const [w, h] of [[width + 1, height], [width, height + 1]]) {
+      ffish.loadVariantConfig(`[js-oversized:chess]\nmaxFile = ${w}\nmaxRank = ${h}\n`);
+      chai.expect(ffish.variants().split(' ')).not.to.include('js-oversized');
+      chai.expect(ffish.variantInfo('js-oversized')).to.equal('');
+    }
+  });
+});
+
+describe('Huge-board placement variants', function () {
+  before(function () {
+    if (!ffish.info().includes(' HB 512 ')) {
+      if (process.env.FSX_REQUIRE_HUGE === '1') throw new Error('Expected a Huge boards module');
+      this.skip();
+    }
+  });
+
+  function fen(pieces, turn = 'w', points = '', size = 19) {
+    const rows = [];
+    for (let y = size - 1; y >= 0; --y) {
+      let row = '', empty = 0;
+      for (let x = 0; x < size; ++x) {
+        const piece = pieces[`${x},${y}`];
+        if (piece) { row += (empty || '') + piece; empty = 0; }
+        else ++empty;
+      }
+      rows.push(row + (empty || ''));
+    }
+    return rows.join('/') + ` ${turn} - - 0 1` + points;
+  }
+
+  it('loads all seven definitions and restores boundary drops', function () {
+    for (const [variant, size, passes] of [['gomoku-19x19', 19, false], ['hex-19x19', 19, false],
+      ['hex-22x22', 22, false], ['go19', 19, true], ['capture-go19', 19, false],
+      ['nogo19', 19, false], ['suicide-go19', 19, true]]) {
+      const info = JSON.parse(ffish.variantInfo(variant));
+      chai.expect(info.board.width, variant).to.equal(size);
+      chai.expect(info.board.height, variant).to.equal(size);
+      chai.expect(ffish.validateFen(info.board.startFen, variant, false), variant).to.equal(1);
+      const board = new ffish.Board(variant);
+      try {
+        const start = board.fen();
+        chai.expect(board.legalMoves().split(' ').length, variant).to.equal(size * size + Number(passes));
+        const move = `P@${String.fromCharCode(96 + size)}${size}`;
+        chai.expect(board.push(move), variant).to.equal(true);
+        chai.expect(board.fen(), variant).not.to.equal(start);
+        board.pop();
+        chai.expect(board.fen(), variant).to.equal(start);
+      } finally { board.delete(); }
+    }
+  });
+
+  it('adjudicates high-rank Gomoku and Hex connections', function () {
+    for (const [variant, first, size, turn] of [['gomoku-19x19', 14, 19, 'w'],
+      ['hex-19x19', 0, 19, 'w'], ['hex-19x19', 0, 19, 'b'],
+      ['hex-22x22', 0, 22, 'w'], ['hex-22x22', 0, 22, 'b']]) {
+      const pieces = {};
+      for (let i = first; i < size - 1; ++i)
+        pieces[turn === 'w' ? `${i},${size - 1}` : `${size - 1},${i}`] = turn === 'w' ? 'P' : 'p';
+      const board = new ffish.Board(variant, fen(pieces, turn, '', size));
+      try {
+        chai.expect(board.result()).to.equal('*');
+        chai.expect(board.push(`P@${String.fromCharCode(96 + size)}${size}`)).to.equal(true);
+        chai.expect(board.result()).to.equal(turn === 'w' ? '1-0' : '0-1');
+        board.pop();
+        chai.expect(board.result()).to.equal('*');
+      } finally { board.delete(); }
+    }
+  });
+
+  it('applies high-corner captures and suicide policies', function () {
+    const corner = {'18,18': 'p', '17,18': 'P'};
+    const capture = new ffish.Board('capture-go19', fen(corner, 'w', ' {0 0}'));
+    const nogo = new ffish.Board('nogo19', fen(corner));
+    const surround = {'17,18': 'p', '18,17': 'p'};
+    const go = new ffish.Board('go19', fen(surround));
+    const suicide = new ffish.Board('suicide-go19', fen(surround));
+    try {
+      const initial = capture.fen();
+      chai.expect(capture.push('P@s18')).to.equal(true);
+      chai.expect(capture.result()).to.equal('1-0');
+      capture.pop();
+      chai.expect(capture.fen()).to.equal(initial);
+      chai.expect(capture.result()).to.equal('*');
+      chai.expect(nogo.legalMoves().split(' ')).not.to.include('P@s18');
+      chai.expect(go.legalMoves().split(' ')).not.to.include('P@s19');
+      const before = suicide.fen();
+      chai.expect(suicide.push('P@s19')).to.equal(true);
+      chai.expect(suicide.fen().split(' ')[0]).to.equal(before.split(' ')[0]);
+      suicide.pop();
+      chai.expect(suicide.fen()).to.equal(before);
+    } finally { capture.delete(); nogo.delete(); go.delete(); suicide.delete(); }
+  });
+
+  it('retains the documented Go two-pass draw', function () {
+    const board = new ffish.Board('go19');
+    try {
+      chai.expect(board.result()).to.equal('*');
+      chai.expect(board.push('0000')).to.equal(true);
+      chai.expect(board.result()).to.equal('*');
+      chai.expect(board.push('0000')).to.equal(true);
+      chai.expect(board.result()).to.equal('1/2-1/2');
+      board.pop();
+      chai.expect(board.result()).to.equal('*');
+    } finally { board.delete(); }
+    const almostFull = {};
+    for (let x = 0; x < 19; ++x)
+      for (let y = 0; y < 19; ++y)
+        if (x !== 18 || y !== 18) almostFull[`${x},${y}`] = 'P';
+    const nogo = new ffish.Board('nogo19', fen(almostFull, 'b'));
+    try {
+      chai.expect(nogo.legalMoves()).to.equal('');
+      chai.expect(nogo.result()).to.equal('1-0');
+    } finally { nogo.delete(); }
+  });
+});

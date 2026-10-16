@@ -12,10 +12,9 @@
 #   stockfish-large large board, all variants (objects)
 #   stockfish-allvars large board, all variants, NNUE-enabled objects
 #   stockfish-vlb   very-large board, all variants, NNUE-enabled objects
-# Known binaries also carry their recorded ARCH/debug/optimize flags into the
-# harness objects. Custom engine names leave the object's profile to the caller.
-# Unknown engine names reuse the existing position.o board-family probe and
-# require their object family to have been prepared by the caller.
+# Recorded profiles also support custom engine names and carry their
+# ARCH/debug/optimize flags into the harness objects. Unrecorded custom names
+# reuse the existing position.o probe; their objects are owned by the caller.
 
 _HARNESS_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "${_HARNESS_LIB_DIR}/build-signature.sh"
@@ -43,7 +42,7 @@ fsx_harness_hash_file() {
 }
 
 fsx_harness_makefile_hash() {
-  fsx_harness_hash_file "${FSX_HARNESS_ROOT_DIR}/src/Makefile"
+  fsx_build_makefile_signature "${FSX_HARNESS_ROOT_DIR}"
 }
 
 fsx_harness_compiler_signature() {
@@ -69,89 +68,72 @@ fsx_harness_source_tree_signature() {
 }
 
 fsx_harness_init() {
-  local engine="$1"
-  local root_dir="$2"
-  local position_object
-  local position_symbols
+  local engine="$1" root_dir="$2" family bits
+  local recorded_profile field arch=x86-64 all=no nnue=no
+  local debug="" optimize="" position_symbols
 
-  FSX_HARNESS_ROOT_DIR="${root_dir}"
-  FSX_HARNESS_ENGINE="${engine}"
-  FSX_HARNESS_ENGINE_BASENAME=$(basename "${engine}")
+  FSX_HARNESS_ROOT_DIR="$root_dir"
+  FSX_HARNESS_ENGINE="$engine"
+  FSX_HARNESS_ENGINE_BASENAME=${engine##*/}
   FSX_HARNESS_CXX="${CXX:-g++}"
-  FSX_HARNESS_CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS)
+  FSX_HARNESS_CXX_DEFS=(-DIS_64BIT -DUSE_PTHREADS -DNNUE_EMBEDDING_OFF)
   FSX_HARNESS_BUILD_ARGS=()
   FSX_HARNESS_BUILD_EXE=""
   FSX_HARNESS_KNOWN_ENGINE_CONFIG=false
 
-  case "${FSX_HARNESS_ENGINE_BASENAME}" in
-    stockfish)
-      FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
-      FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 EXE=stockfish)
-      FSX_HARNESS_BUILD_EXE=stockfish
-      ;;
-    stockfish-allvars*)
-      FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
-      FSX_HARNESS_CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-      FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 largeboards=yes all=yes nnue=yes EXE=stockfish-allvars)
-      FSX_HARNESS_BUILD_EXE=stockfish-allvars
-      ;;
-    stockfish-large*)
-      FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
-      FSX_HARNESS_CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
-      FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 largeboards=yes all=yes EXE=stockfish-large)
-      FSX_HARNESS_BUILD_EXE=stockfish-large
-      ;;
-    stockfish-vlb*)
-      FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
-      FSX_HARNESS_CXX_DEFS+=(-DLARGEBOARDS -DVERY_LARGE_BOARDS -DALLVARS -DNNUE_EMBEDDING_OFF)
-      FSX_HARNESS_BUILD_ARGS=(ARCH=x86-64 largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb)
-      FSX_HARNESS_BUILD_EXE=stockfish-vlb
-      ;;
+  # Named harness roles exercise all variants and NNUE paths where required.
+  case "$FSX_HARNESS_ENGINE_BASENAME" in
+    stockfish) FSX_HARNESS_BUILD_EXE=stockfish ;;
+    stockfish-allvars*) FSX_HARNESS_BUILD_EXE=stockfish-allvars; all=yes; nnue=yes ;;
+    stockfish-large*) FSX_HARNESS_BUILD_EXE=stockfish-large; all=yes ;;
+    stockfish-vlb*) FSX_HARNESS_BUILD_EXE=stockfish-vlb; all=yes; nnue=yes ;;
+    stockfish-512*|stockfish-huge*) FSX_HARNESS_BUILD_EXE=${FSX_HARNESS_ENGINE_BASENAME%%-nnue*}; all=yes ;;
   esac
 
-  # Match the tested engine's own architecture when it was built via
-  # tests/build.sh (recorded profile). Rebuilding the in-tree objects with a
-  # different profile would silently replace the binary under test, so prefer
-  # its architecture and debug/optimization flags; keep defaults as fallback.
-  if [[ "${FSX_HARNESS_KNOWN_ENGINE_CONFIG}" == true ]]; then
-    local recorded_profile="" recorded_arch="" recorded_debug="" recorded_optimize=""
-    local profile_field
-    recorded_profile=$(fsx_build_recorded_profile "${root_dir}" "${engine}" 2>/dev/null || true)
-    local -a recorded_fields=()
-    IFS=';' read -r -a recorded_fields <<<"${recorded_profile}"
-    for profile_field in "${recorded_fields[@]}"; do
-      case "${profile_field}" in
-        arch=*) recorded_arch="${profile_field#arch=}" ;;
-        debug=yes|debug=no) recorded_debug="${profile_field#debug=}" ;;
-        optimize=yes|optimize=no) recorded_optimize="${profile_field#optimize=}" ;;
-      esac
-    done
-    if [[ -n "${recorded_arch}" ]]; then
-      local build_arg_idx
-      for build_arg_idx in "${!FSX_HARNESS_BUILD_ARGS[@]}"; do
-        if [[ "${FSX_HARNESS_BUILD_ARGS[${build_arg_idx}]}" == ARCH=* ]]; then
-          FSX_HARNESS_BUILD_ARGS[${build_arg_idx}]="ARCH=${recorded_arch}"
-        fi
-      done
-    fi
-    [[ -z "${recorded_debug}" ]] \
-      || FSX_HARNESS_BUILD_ARGS+=("debug=${recorded_debug}")
-    [[ -z "${recorded_optimize}" ]] \
-      || FSX_HARNESS_BUILD_ARGS+=("optimize=${recorded_optimize}")
-  fi
+  recorded_profile=$(fsx_build_recorded_profile "$root_dir" "$engine" 2>/dev/null || true)
+  local -a fields=()
+  IFS=';' read -r -a fields <<<"$recorded_profile"
+  for field in "${fields[@]}"; do
+    case "$field" in
+      arch=*) arch=${field#arch=} ;;
+      debug=yes|debug=no) debug=${field#debug=} ;;
+      optimize=yes|optimize=no) optimize=${field#optimize=} ;;
+      all=yes|all=no) all=${field#all=} ;;
+      nnue=yes|nnue=no) nnue=${field#nnue=} ;;
+    esac
+  done
 
-  # Preserve support for custom engine names used by local harnesses. The
-  # position object is the authority for the board macro family when no named
-  # build target is available; VLB callers should use the named binary above.
-  if [[ "${FSX_HARNESS_KNOWN_ENGINE_CONFIG}" == false ]]; then
-    position_object="${FSX_HARNESS_ROOT_DIR}/src/position.o"
-    if [[ -f "${position_object}" ]]; then
-      position_symbols=$(nm -C "${position_object}" 2>/dev/null || true)
-      if ! grep -F 'Position::fen(bool, bool, int, ' <<<"${position_symbols}" \
+  if [[ -n "$recorded_profile" || -n "$FSX_HARNESS_BUILD_EXE" ]]; then
+    # Object ABI follows the actual build, irrespective of suite family hints.
+    family=$(FSX_ENGINE_FAMILY= fsx_engine_family "$root_dir" "$engine")
+    FSX_HARNESS_KNOWN_ENGINE_CONFIG=true
+    [[ -n "$FSX_HARNESS_BUILD_EXE" ]] || FSX_HARNESS_BUILD_EXE="$FSX_HARNESS_ENGINE_BASENAME"
+  else
+    family=$(fsx_engine_family "$root_dir" "$engine")
+    # Preserve the legacy 64/128-bit object probe for unrecorded custom builds.
+    if [[ -z "${FSX_ENGINE_FAMILY:-}" && -f "$root_dir/src/position.o" ]]; then
+      position_symbols=$(nm -C "$root_dir/src/position.o" 2>/dev/null || true)
+      if ! grep -F 'Position::fen(bool, bool, int, ' <<<"$position_symbols" \
           | grep -F 'unsigned long) const' >/dev/null; then
-        FSX_HARNESS_CXX_DEFS+=(-DLARGEBOARDS -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF)
+        family=large
+        all=yes
       fi
     fi
+    [[ "$family" == normal ]] || all=yes
+  fi
+  bits=$(fsx_board_bits "$family")
+  FSX_HARNESS_CXX_DEFS+=("-DBOARD_BITS=$bits")
+  [[ "$bits" != 128 ]] || FSX_HARNESS_CXX_DEFS+=(-DPRECOMPUTED_MAGICS)
+  [[ "$all" != yes ]] || FSX_HARNESS_CXX_DEFS+=(-DALLVARS)
+  if [[ "$FSX_HARNESS_KNOWN_ENGINE_CONFIG" == true ]]; then
+    case "$family" in
+      huge) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" hugeboards=yes "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+      very-large) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" verylargeboards=yes "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+      large) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" largeboards=yes "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+      *) FSX_HARNESS_BUILD_ARGS=("ARCH=$arch" largeboards=no "all=$all" "nnue=$nnue" "EXE=$FSX_HARNESS_BUILD_EXE") ;;
+    esac
+    [[ -z "$debug" ]] || FSX_HARNESS_BUILD_ARGS+=("debug=$debug")
+    [[ -z "$optimize" ]] || FSX_HARNESS_BUILD_ARGS+=("optimize=$optimize")
   fi
 }
 
@@ -178,8 +160,8 @@ fsx_harness_prepare_objects_cached() {
   local jobs="${3:-${JOBS:-$(nproc 2>/dev/null || echo 2)}}"
   local desired_signature object_signature
 
-  # Custom engine names have no reliable Makefile configuration mapping, and
-  # explicit reuse means the caller owns the object family. Do not certify
+  # Unrecorded custom engines and explicit reuse leave objects to the caller.
+  # Do not certify
   # either set of objects as if this helper had prepared it.
   if [[ "${FSX_REUSE_OBJECTS:-0}" == 1 || -z "${FSX_HARNESS_BUILD_EXE}" ]]; then
     return 0
@@ -201,7 +183,7 @@ fsx_harness_prepare_objects_cached() {
   if [[ -f "${cache_dir}/desired.sig" && -f "${cache_dir}/objects.sig" ]] \
       && [[ "$(<"${cache_dir}/desired.sig")" == "${desired_signature}" ]] \
       && [[ "$(<"${cache_dir}/objects.sig")" == "${object_signature}" ]] \
-      && [[ -x "${FSX_HARNESS_ROOT_DIR}/src/${FSX_HARNESS_BUILD_EXE}" ]]; then
+      && [[ -x "${FSX_HARNESS_ENGINE}" ]]; then
     echo "ok: ${label} (cached)"
     return 0
   fi

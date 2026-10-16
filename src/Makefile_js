@@ -24,7 +24,7 @@ SRCS = ffishjs.cpp benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.c
 	nnue/features/half_ka_v2_variants.cpp
 
 CXX=emcc
-CXXFLAGS += --bind -DNNUE_EMBEDDING_OFF -DNO_THREADS -std=c++17 -Wall
+CXXFLAGS += --bind -DNNUE_EMBEDDING_OFF -DNO_THREADS -std=c++17 -Wall $(EXTRACXXFLAGS)
 
 largeboards = yes
 verylargeboards = no
@@ -46,12 +46,16 @@ endif
 
 # Compile version with support for large board variants
 # Use precomputed magics by default
-ifneq ($(verylargeboards),no)
-	largeboards = yes
-	CXXFLAGS += -DVERY_LARGE_BOARDS
-endif
+include board-size.mk
 ifneq ($(largeboards),no)
-	CXXFLAGS += -DLARGEBOARDS -DPRECOMPUTED_MAGICS -s TOTAL_MEMORY=32MB -s ALLOW_MEMORY_GROWTH=1 -s WASM_MEM_MAX=1GB
+	ifeq ($(verylargeboards),no)
+		CXXFLAGS += -DPRECOMPUTED_MAGICS
+	endif
+	CXXFLAGS += -s INITIAL_MEMORY=$(if $(filter 512,$(boardbits)),128,32)MB -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1GB
+endif
+ifeq ($(boardbits),512)
+	# SAN and rule probes keep Position/StateInfo copies on the stack.
+	CXXFLAGS += -s TOTAL_STACK=8MB -s STACK_OVERFLOW_CHECK=2
 endif
 
 # Enable all variants, even heavyweight ones like duck and amazons

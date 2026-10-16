@@ -22,16 +22,16 @@ SRCS = ffishdll.cpp benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.
 	partner.cpp parser.cpp piece.cpp variant.cpp apiutil.cpp xboard.cpp \
 	nnue/features/half_ka_v2_variants.cpp
 
-OBJS := $(SRCS:.cpp=.o)
-
 verylargeboards ?= no
 largeboards ?= yes
 
-CXXFLAGS ?= -std=c++17 -O3 -Wall -Wextra -DNDEBUG -DPRECOMPUTED_MAGICS -DALLVARS -DNNUE_EMBEDDING_OFF
-ifneq ($(verylargeboards),no)
-  CXXFLAGS += -DVERY_LARGE_BOARDS
-else ifneq ($(largeboards),no)
-  CXXFLAGS += -DLARGEBOARDS
+CXXFLAGS ?= -O3 -DNDEBUG
+CXXFLAGS += -std=c++17 -Wall -Wextra -DALLVARS -DNNUE_EMBEDDING_OFF $(EXTRACXXFLAGS)
+include board-size.mk
+ifeq ($(verylargeboards),no)
+  ifneq ($(largeboards),no)
+    CXXFLAGS += -DPRECOMPUTED_MAGICS
+  endif
 endif
 LDFLAGS ?= -shared
 ifneq (,$(filter $(OS_NAME),Linux Darwin))
@@ -40,14 +40,38 @@ endif
 ifneq ($(IMPLIB),)
   LDFLAGS += -Wl,--out-implib,$(IMPLIB)
 endif
+# Match the compiler target, including flags such as -m32.
+ifneq (,$(shell printf '' | $(CXX) $(CPPFLAGS) $(CXXFLAGS) -dM -E -x c++ - | sed -n '/^\#define __SIZEOF_POINTER__ 8$$/p'))
+  CXXFLAGS += -DIS_64BIT
+endif
 
+DLL_BUILD_DIR ?= ../.local/build/dll/$(boardbits)
+OBJS := $(addprefix $(DLL_BUILD_DIR)/,$(SRCS:.cpp=.o))
+CONFIG := $(DLL_BUILD_DIR)/config
+LINK_CONFIG := $(EXE).link-config
+
+.PHONY: all clean FORCE
 all: $(EXE)
 
-$(EXE): $(OBJS)
+$(CONFIG): FORCE
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(CXX)' '$(CPPFLAGS)' '$(CXXFLAGS)' '$(LDFLAGS)' > $@.tmp
+	@cmp -s $@.tmp $@ && rm -f $@.tmp || mv -f $@.tmp $@
+
+$(LINK_CONFIG): $(CONFIG) FORCE
+	@mkdir -p $(@D)
+	@printf '%s\n' '$(OBJS)' > $@.tmp
+	@cat $(CONFIG) >> $@.tmp
+	@cmp -s $@.tmp $@ && rm -f $@.tmp || mv -f $@.tmp $@
+
+$(EXE): $(OBJS) $(LINK_CONFIG)
 	$(CXX) $(LDFLAGS) -o $@ $(OBJS)
 
-%.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+$(DLL_BUILD_DIR)/%.o: %.cpp $(CONFIG)
+	@mkdir -p $(@D)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -MMD -MP -c $< -o $@
+
+-include $(OBJS:.o=.d)
 
 clean:
-	rm -f $(OBJS) $(EXE) $(IMPLIB)
+	rm -f $(OBJS) $(OBJS:.o=.d) $(CONFIG) $(LINK_CONFIG) $(EXE) $(IMPLIB)
