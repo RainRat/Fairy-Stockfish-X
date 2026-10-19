@@ -1346,6 +1346,27 @@ namespace {
         }
     }
 
+    Square autoSquare = pos.auto_move_square();
+    if (autoSquare != SQ_NONE)
+    {
+        Piece autoPiece = pos.piece_on(autoSquare);
+        if (autoPiece != NO_PIECE)
+        {
+            if (color_of(autoPiece) != Us)
+            {
+                // Opponent must pass while the auto-mover's owner takes its step.
+                if (Type != QUIET_CHECKS && pos.pass(Us))
+                    moveList = emit_pass_move(pos, moveList, Us);
+                return moveList;
+            }
+            // The owner's only move is the deterministic automatic step.
+            Move forcedAuto = pos.forced_auto_move();
+            if (forcedAuto != MOVE_NONE)
+                *moveList++ = forcedAuto;
+            return moveList;
+        }
+    }
+
 #ifndef NDEBUG
     const PieceInfo* pawnInfo = pieceMap.get(PAWN);
     const bool pawnHasCustomNonStepMovement = pawnInfo->has_nonstandard_pawn_movement();

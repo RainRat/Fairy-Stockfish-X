@@ -2409,6 +2409,7 @@ Variant* Variant::conclude() {
                   && !multimoveOffset
                   && multimoves.empty()
                   && !progressiveMultimove
+                  && !autoMoveTypes
                   && libertyCapture == LibertyAction::NONE
                   && libertySelfCapture == LibertyAction::NONE
                   && !potions

@@ -1078,6 +1078,7 @@ namespace {
         && !excludedMove
         &&  pos.non_pawn_material(us)
         && !pos.has_forced_jump_followup()
+        && !pos.auto_move_active()
         &&  pos.count<ALL_PIECES>(~us) != pos.count<PAWN>(~us)
         && !pos.flip_enclosed_pieces()
         && (ss->ply >= thisThread->nmpMinPly || us != thisThread->nmpColor))
@@ -1312,6 +1313,10 @@ moves_loop: // When in check, search starts from here
           if (forcedPiece != NO_PIECE && color_of(forcedPiece) != us)
               ++newDepth;
       }
+      // The opponent's pass that hands the turn to an auto-mover is likewise
+      // bookkeeping and should not consume a search ply.
+      if (is_pass(move) && pos.has_auto_move() && pos.auto_move_active())
+          ++newDepth;
 
       // Step 13. Pruning at shallow depth (~200 Elo)
       if (  !rootNode

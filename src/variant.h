@@ -307,6 +307,13 @@ struct Variant {
   ColorSetting<bool> edgeInsertFromRight = ColorSetting<bool>(false);
   ColorSetting<bool> selfCapture = ColorSetting<bool>(false);
   ColorSetting<PieceSet> selfCaptureTypes = ColorSetting<PieceSet>(NO_PIECE_SET);
+  // Automatic movement ("immortal snail"): each type in autoMoveTypes moves
+  // itself one step toward the nearest autoMoveTarget of the enemy every
+  // autoMoveN of its owner's turns, in addition to that turn's normal move.
+  // autoMoveN <= 0 disables the rule.
+  PieceType autoMoveTarget[PIECE_TYPE_NB] = {};
+  PieceSet autoMoveTypes = NO_PIECE_SET;
+  int autoMoveN = 0;
   bool blastOnSameTypeCapture = false;
   bool blastOrthogonals = true;
   ColorSetting<bool> mustDrop = ColorSetting<bool>(false);

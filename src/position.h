@@ -331,6 +331,8 @@ struct StateInfoCopied {
   int    countingLimit;
   int    pointsCount[COLOR_NB];
   CheckCount checksRemaining[COLOR_NB];
+  // Number of completed real turns per color, used by autoMove.
+  int    autoMoveCount[COLOR_NB] = {0, 0};
   Bitboard epSquares;
   Bitboard promotionDeferred = Bitboard(0);
   // Squares on which the immediately preceding non-Lion move captured an
@@ -374,6 +376,10 @@ struct StateInfoDerived {
   bool       bikjang;
   Move       move = MOVE_NONE;
   bool       pendingClaimPass = false;
+  // Auto-move bookkeeping: when set, the piece on this square must make its
+  // forced automatic move on its owner's turn, and the opponent must pass in
+  // between (mirrors the forced-jump continuation pass).
+  Square     autoMoveSquare = SQ_NONE;
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
@@ -879,6 +885,10 @@ public:
   bool multimove_pass(int ply) const;
   bool has_forced_jump_followup() const;
   Square forced_jump_square() const;
+  bool has_auto_move() const;
+  bool auto_move_active() const;
+  Square auto_move_square() const;
+  Move forced_auto_move() const;
   Bitboard promoted_soldiers(Color c) const;
   bool makpong() const;
   EnclosingRule flip_enclosed_pieces() const;
@@ -2514,6 +2524,19 @@ inline Square Position::forced_jump_square() const {
   return st->forcedJumpSquare;
 }
 
+inline bool Position::has_auto_move() const {
+  assert(var != nullptr);
+  return bool(var->autoMoveTypes);
+}
+
+inline bool Position::auto_move_active() const {
+  return has_auto_move() && st->autoMoveSquare != SQ_NONE;
+}
+
+inline Square Position::auto_move_square() const {
+  return st->autoMoveSquare;
+}
+
 inline bool Position::captures_to_hand() const {
   assert(var != nullptr);
   return var->captureType != MOVE_OUT;
@@ -3069,6 +3092,12 @@ inline bool Position::pass(Color c) const {
   assert(var != nullptr);
   if (st->pendingClaimPass && c == sideToMove)
       return true;
+  if (has_auto_move() && st->autoMoveSquare != SQ_NONE)
+  {
+      Piece ap = piece_on(st->autoMoveSquare);
+      if (ap != NO_PIECE && color_of(ap) != c)
+          return true;
+  }
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
   {
       Piece fp = piece_on(st->forcedJumpSquare);

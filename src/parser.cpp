@@ -1833,6 +1833,23 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
+    // Automatic movement ("immortal snail"): autoMoveTarget maps an
+    // auto-moving piece type to the enemy type it chases, autoMoveN sets the
+    // number of the owner's turns between automatic moves.
+    parse_attribute("autoMoveN", v->autoMoveN);
+    auto it_auto_move_pt = config.find("autoMoveTarget");
+    if (it_auto_move_pt != config.end())
+    {
+        if (!parse_piece_type_map(it_auto_move_pt->second, v, v->autoMoveTarget))
+        {
+            if (DoCheck)
+                std::cerr << "autoMoveTarget - Invalid syntax." << std::endl;
+            return false;
+        }
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            if (v->autoMoveTarget[pt] != NO_PIECE_TYPE)
+                v->autoMoveTypes |= piece_set(pt);
+    }
     auto it_capture_demoted_pt = config.find("captureDemotedPieceType");
     if (it_capture_demoted_pt != config.end())
     {
@@ -2665,6 +2682,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "checking=onlyMate requires allowChecks=false: mate is defined by legal replies." << std::endl;
+        valid = false;
+    }
+    if ((v->autoMoveN != 0) != bool(v->autoMoveTypes) || v->autoMoveN < 0)
+    {
+        if (DoCheck)
+            std::cerr << "autoMoveTarget and a positive autoMoveN must be specified together." << std::endl;
         valid = false;
     }
     // Contradictory adjudication: pseudo-royal loss precedes extinction, so

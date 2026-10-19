@@ -2717,6 +2717,9 @@ void Position::set_state(StateInfo* si) const {
   si->transforms.clear();
   si->claimedSquares = 0;
   si->pendingClaimPass = false;
+  si->autoMoveSquare = SQ_NONE;
+  si->autoMoveCount[WHITE] = 0;
+  si->autoMoveCount[BLACK] = 0;
   si->dropHandColor = COLOR_NB;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
@@ -4032,6 +4035,74 @@ bool Position::has_legal_jump_continuation() const {
           return true;
   return false;
 }
+
+// Deterministic automatic move: step the auto-moving piece one move toward the
+// nearest enemy piece of its configured target type, preferring the first
+// lowest-indexed destination among ties. Returns MOVE_NONE when no auto move
+// is pending or it cannot be resolved.
+Move Position::forced_auto_move() const {
+
+  if (!has_auto_move() || st->autoMoveSquare == SQ_NONE)
+      return MOVE_NONE;
+
+  const Square from = st->autoMoveSquare;
+  const Piece pc = piece_on(from);
+  if (pc == NO_PIECE)
+      return MOVE_NONE;
+
+  const Color us = color_of(pc);
+  const PieceType pt = type_of(pc);
+  PieceType targetPt = var->autoMoveTarget[pt];
+  if (targetPt == NO_PIECE_TYPE)
+      return MOVE_NONE;
+
+  Bitboard targets = pieces(~us, targetPt);
+  if (!targets && targetPt == KING && king_type() != KING)
+      targets = pieces(~us, king_type());
+  if (!targets)
+      return MOVE_NONE;
+
+  Bitboard reach = (attacks_from(us, pt, from) | moves_from(us, pt, from)) & board_bb();
+  reach &= ~pieces(us);
+  // Capturing own pieces "in the way" is the point of selfCapture; the forced
+  // step may land on a friendly non-royal piece. The engine still excludes the
+  // own royal from self-capture, so do the same here.
+  if (self_capture(pt))
+      reach |= pieces(us) & attacks_bb<KING>(from) & board_bb();
+  const Square ownRoyal = royal_square(us);
+  if (ownRoyal != SQ_NONE)
+      reach &= ~square_bb(ownRoyal);
+  // Drop destinations whose occupant this piece is forbidden to capture.
+  for (Bitboard cand = reach; cand;)
+  {
+      const Square to = pop_lsb(cand);
+      const Piece victim = piece_on(to);
+      if (victim != NO_PIECE && (var->captureForbiddenByColor[us][pt] & type_of(victim)))
+          reach &= ~square_bb(to);
+  }
+
+  int bestDist = 1000;
+  Square best = SQ_NONE;
+  for (Bitboard candidates = reach; candidates;)
+  {
+      const Square to = pop_lsb(candidates);
+      int dist = 1000;
+      for (Bitboard ts = targets; ts;)
+      {
+          const Square target = pop_lsb(ts);
+          dist = std::min(dist, std::max(std::abs(file_of(to) - file_of(target)),
+                                         std::abs(rank_of(to) - rank_of(target))));
+      }
+      if (dist < bestDist)
+      {
+          bestDist = dist;
+          best = to;
+      }
+  }
+
+  return best == SQ_NONE ? MOVE_NONE : make_move(from, best);
+}
+
 
 /// Position::checked_pseudo_royals computes a bitboard of
 /// all pseudo-royal pieces of a particular color that are in check
@@ -5859,6 +5930,26 @@ bool Position::legal(Move m) const {
   if (passMove && !pass(us))
       return false;
 
+  if (has_auto_move() && st->autoMoveSquare != SQ_NONE)
+  {
+      const Piece autoPiece = piece_on(st->autoMoveSquare);
+      if (autoPiece != NO_PIECE)
+      {
+          // The auto-mover's owner must play exactly its deterministic step;
+          // the opponent may only pass to hand the turn back.
+          if (color_of(autoPiece) != us)
+              return passMove;
+          return !passMove && from == st->autoMoveSquare && m == forced_auto_move();
+      }
+  }
+  else if (has_auto_move() && !passMove && !dropMove)
+  {
+      // Auto-movers are autonomous: they only ever move via the automatic step.
+      const Piece p = piece_on(from);
+      if (p != NO_PIECE && (var->autoMoveTypes & piece_set(type_of(p))))
+          return false;
+  }
+
   if (is_two_leg(m))
   {
       PromotionStatus promo = move_promotion_status(moved_piece(m), from, to, isCapture);
@@ -7123,6 +7214,29 @@ bool Position::pseudo_legal(const Move m) const {
               && forced_jump_step(*this, from, to) != st->forcedJumpStep)
               return false;
       }
+  }
+
+  if (has_auto_move() && st->autoMoveSquare != SQ_NONE)
+  {
+      Piece autoPiece = piece_on(st->autoMoveSquare);
+      if (autoPiece != NO_PIECE)
+      {
+          if (color_of(autoPiece) != us)
+          {
+              Piece passPiece = moved_piece(m);
+              return passMove && passPiece != NO_PIECE && color_of(passPiece) == us;
+          }
+          if (passMove)
+              return false;
+          if (from != st->autoMoveSquare || m != forced_auto_move())
+              return false;
+      }
+  }
+  else if (has_auto_move() && !passMove && !dropMove)
+  {
+      const Piece p = piece_on(from);
+      if (p != NO_PIECE && (var->autoMoveTypes & piece_set(type_of(p))))
+          return false;
   }
 
   if (is_laser_fire(m))
@@ -10407,6 +10521,37 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->forcedJumpHasFollowup = false;
   }
 
+  // Auto-move bookkeeping. The owner must complete exactly one automatic step
+  // and the opponent must pass in between; both are exempt from counting as a
+  // completed turn. Once autoMoveN turns elapse, arm the next step.
+  if (has_auto_move())
+  {
+      const Color mover = ~sideToMove;
+      if (st->previous->autoMoveSquare != SQ_NONE)
+          st->autoMoveSquare = passMove ? st->previous->autoMoveSquare : SQ_NONE;
+      else if (!passMove && !st->pendingClaimPass && !forced_jump_continuation())
+      {
+          if (++st->autoMoveCount[mover] % var->autoMoveN == 0)
+          {
+              Square sq = SQ_NONE;
+              for (PieceSet ps = var->autoMoveTypes; ps;)
+              {
+                  PieceType apt = pop_lsb(ps);
+                  if (Bitboard b = pieces(mover, apt))
+                  {
+                      sq = lsb(b);
+                      break;
+                  }
+              }
+              st->autoMoveSquare = sq;
+              if (sq != SQ_NONE && forced_auto_move() == MOVE_NONE)
+                  st->autoMoveSquare = SQ_NONE;
+          }
+      }
+  }
+  else
+      st->autoMoveSquare = SQ_NONE;
+
 #ifndef NDEBUG
   if (Eval::useNNUE)
   {
@@ -10969,6 +11114,7 @@ void Position::do_null_move(StateInfo& newSt) {
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
   st->key = st->previous->key;
   st->pendingClaimPass = false;
+  st->autoMoveSquare = SQ_NONE;
 
   if (potions_enabled())
   {
