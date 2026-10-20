@@ -1256,6 +1256,15 @@ automove_missing_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains "${automove_missing_output}" "autoMoveTarget and a positive autoMoveN must be specified together."
 
 cat > "$FSX_TMP_INI" <<'INI'
+[test-automove-royal:chess]
+customPiece1 = s:K
+autoMoveTarget = s:k
+autoMoveN = 1
+INI
+automove_royal_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_contains "${automove_royal_output}" "autoMove with royal kings requires allowChecks=true"
+
+cat > "$FSX_TMP_INI" <<'INI'
 [test-automove:chess]
 customPiece1 = s:K
 pieceToCharTable = -

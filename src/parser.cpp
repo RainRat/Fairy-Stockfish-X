@@ -2690,6 +2690,15 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "autoMoveTarget and a positive autoMoveN must be specified together." << std::endl;
         valid = false;
     }
+    // A forced automatic turn replaces the whole turn, so it cannot satisfy
+    // royal check-evasion obligations: automove games with royal kings must
+    // be king-capture games.
+    if (v->autoMoveTypes && v->kingType != NO_PIECE_TYPE && !v->allowChecks)
+    {
+        if (DoCheck)
+            std::cerr << "autoMove with royal kings requires allowChecks=true: forced turns cannot satisfy check-evasion obligations." << std::endl;
+        valid = false;
+    }
     // Contradictory adjudication: pseudo-royal loss precedes extinction, so
     // overlapping targets with different results are ambiguous.
     if (v->pseudoRoyalValue != VALUE_NONE && v->pseudoRoyalTypes)
