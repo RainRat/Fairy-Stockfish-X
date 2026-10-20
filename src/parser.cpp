@@ -2690,6 +2690,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "autoMoveTarget and a positive autoMoveN must be specified together." << std::endl;
         valid = false;
     }
+    // Movement phases range over [0, autoMoveN] with an exact Zobrist key each.
+    if (v->autoMoveN > 511)
+    {
+        if (DoCheck)
+            std::cerr << "autoMoveN must not exceed 511." << std::endl;
+        valid = false;
+    }
     // A forced automatic turn replaces the whole turn, so it cannot satisfy
     // royal check-evasion obligations: automove games with royal kings must
     // be king-capture games.

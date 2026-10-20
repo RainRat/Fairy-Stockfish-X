@@ -1278,6 +1278,16 @@ automove_jump_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains "${automove_jump_output}" "autoMove cannot be combined with forcedJumpContinuation"
 
 cat > "$FSX_TMP_INI" <<'INI'
+[test-automove-big-n:chess]
+customPiece1 = s:K
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 512
+INI
+automove_bign_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_contains "${automove_bign_output}" "autoMoveN must not exceed 511"
+
+cat > "$FSX_TMP_INI" <<'INI'
 [test-automove:chess]
 customPiece1 = s:K
 pieceToCharTable = -
@@ -1413,5 +1423,23 @@ go perft 1
 UCI
 )
 assert_contains "${automove_cycle16_output}" "a6a5: 1"
+
+# The movement phase is legality-relevant state: the same board and side to
+# move hash differently when reached with different turn counts than when
+# loaded fresh from FEN (which resets the cycle).
+automove_key_played=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
+position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 g8f6
+d
+UCI
+)
+automove_key_fen=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
+position fen r1bqkb1r/sppp1ppp/2n2n2/4p3/2B1P3/5N2/SPPP1PPP/RNBQK2R w KQkq - 4 4
+d
+UCI
+)
+automove_key_played=$(grep -oE '^Key: [0-9A-F]+' <<<"${automove_key_played}")
+automove_key_fen=$(grep -oE '^Key: [0-9A-F]+' <<<"${automove_key_fen}")
+[[ -n "${automove_key_played}" && -n "${automove_key_fen}" ]]
+[[ "${automove_key_played}" != "${automove_key_fen}" ]]
 
 echo "parser regression tests passed"

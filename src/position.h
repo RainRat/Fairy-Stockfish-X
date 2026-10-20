@@ -884,7 +884,6 @@ public:
   bool has_auto_move() const;
   bool auto_move_turn(Color us) const;
   bool auto_move_active() const;
-  Square auto_move_piece_square(Color us) const;
   Move forced_auto_move() const;
   Bitboard promoted_soldiers(Color c) const;
   bool makpong() const;
@@ -1225,6 +1224,7 @@ private:
   // result type; the walker implementation itself lives in two_leg_impl.h and
   // is only included by position.cpp/movegen.cpp.
   detail::TwoLegPath resolve_two_leg_move(Move m) const;
+  Square auto_move_piece_square(Color us) const;
   bool sole_pseudo_royal_mated() const;
   bool lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo, bool isCapture) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;

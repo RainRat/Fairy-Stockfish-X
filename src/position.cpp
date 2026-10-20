@@ -891,6 +891,9 @@ Bitboard Position::hopper_immobility_potential(Color c, PieceType pt, Square sq)
 namespace Zobrist {
 
   constexpr int MAX_ZOBRIST_POINTS = 512;
+  // Automatic-movement phases range over [0, autoMoveN]; the parser caps
+  // autoMoveN so every phase has an exact key (no bucket clamping).
+  constexpr int MAX_ZOBRIST_AUTOMOVE_PHASE = 512;
   Key psq[PIECE_NB][SQUARE_NB];
   Key enpassant[SQUARE_NB];
   Key promotionDeferred[SQUARE_NB];
@@ -913,6 +916,7 @@ namespace Zobrist {
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
   Key edgeInsertLock[COLOR_NB][SQUARE_NB];
+  Key autoMovePhase[COLOR_NB][MAX_ZOBRIST_AUTOMOVE_PHASE];
 }
 
 Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
@@ -1340,6 +1344,18 @@ inline void xor_points_bucket(Key& k, Color c, int points) {
   k ^= Zobrist::points[c][idx];
 }
 
+// Automatic-movement phase is legality-relevant state (it selects snail
+// turns), so it contributes to the position key exactly like any other
+// modal rule state. The parser caps autoMoveN, so the phase always indexes
+// the table exactly.
+inline int auto_move_phase(const Variant* var, int count) {
+  return count % (var->autoMoveN + 1);
+}
+
+inline void xor_auto_move_phase(Key& k, const Variant* var, Color c, int count) {
+  k ^= Zobrist::autoMovePhase[c][auto_move_phase(var, count)];
+}
+
 inline int non_negative_points(int points) {
   return std::max(points, 0);
 }
@@ -1638,6 +1654,10 @@ void Position::init() {
   for (Color c : {WHITE, BLACK})
       for (Square s = SQ_A1; s <= SQ_MAX; ++s)
           Zobrist::gate[c][s] = rng.rand<Key>();
+
+  for (Color c : {WHITE, BLACK})
+      for (int i = 0; i < Stockfish::Zobrist::MAX_ZOBRIST_AUTOMOVE_PHASE; ++i)
+          Zobrist::autoMovePhase[c][i] = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -2678,6 +2698,10 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   if (check_counting())
       for (Color c : {WHITE, BLACK})
           si->key ^= Zobrist::checks[c][si->checksRemaining[c]];
+
+  if (has_auto_move())
+      for (Color c : {WHITE, BLACK})
+          xor_auto_move_phase(si->key, var, c, si->autoMoveCount[c]);
 
   if (var->pointsCounting)
       for (Color c : {WHITE, BLACK})
@@ -5932,9 +5956,20 @@ bool Position::legal(Move m) const {
       return false;
 
   if (has_auto_move() && auto_move_turn(us))
+  {
       // The owner's every (autoMoveN+1)th turn is the forced automatic step
       // instead of a normal move, or a pass when the step cannot be resolved.
-      return m == forced_auto_move() || (passMove && forced_auto_move() == MOVE_NONE);
+      // Anything else is rejected here; the selected move still runs through
+      // ordinary legality validation below.
+      Move forced = forced_auto_move();
+      if (forced != MOVE_NONE)
+      {
+          if (m != forced)
+              return false;
+      }
+      else if (!passMove)
+          return false;
+  }
   else if (has_auto_move() && !passMove && !dropMove)
   {
       // Auto-movers are autonomous: they only ever move via the automatic step.
@@ -10506,9 +10541,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // Auto-move bookkeeping. Every non-pass move completes one of its owner's
   // turns; every (autoMoveN+1)th turn is a forced snail step instead of a
   // normal move, so snail steps count as turns too. Passes never advance
-  // the cycle.
+  // the cycle. The phase is legality-relevant, so the key follows it.
   if (has_auto_move() && !passMove && !st->pendingClaimPass && !forced_jump_continuation())
-      ++st->autoMoveCount[~sideToMove];
+  {
+      const Color mover = ~sideToMove;
+      Key diff = Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover])]
+               ^ Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover] + 1)];
+      ++st->autoMoveCount[mover];
+      st->key ^= diff;
+      st->boardKey ^= diff;
+  }
 
 #ifndef NDEBUG
   if (Eval::useNNUE)
@@ -13275,6 +13317,15 @@ bool Position::pos_is_ok() const {
   ASSERT_ALIGNED(&si, Eval::NNUE::CacheLineSize);
 
   set_state(&si);
+  if (has_auto_move())
+  {
+      // Movement phase is keyed but intentionally not reconstructed from the
+      // board (fresh loads start a new cycle): carry it over so the key
+      // comparison below stays meaningful.
+      si.autoMoveCount[WHITE] = st->autoMoveCount[WHITE];
+      si.autoMoveCount[BLACK] = st->autoMoveCount[BLACK];
+      recompute_state_hashes_and_material(&si);
+  }
   bool sameState =
       si.key == st->key
       && si.boardKey == st->boardKey

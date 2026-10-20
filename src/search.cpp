@@ -1763,6 +1763,29 @@ moves_loop: // When in check, search starts from here
 
     assert(0 <= ss->ply && ss->ply < MAX_PLY);
 
+    // Scheduled snail turns have a single mandatory continuation: search it
+    // directly with no stand pat and no pruning. (In-check turns already
+    // take the evasion path below.) Blocked turns with no resolvable step
+    // fall through to ordinary quiescence.
+    if (!ss->inCheck && pos.has_auto_move() && pos.auto_move_turn(pos.side_to_move()))
+    {
+        Move forced = pos.forced_auto_move();
+        if (forced != MOVE_NONE && pos.legal(forced))
+        {
+            ss->currentMove = forced;
+            ss->currentMovePiece = pos.moved_piece(forced);
+            bool forcedCapture = pos.capture_or_promotion(forced);
+            ss->continuationHistory = &thisThread->continuationHistory[false]
+                                            [forcedCapture]
+                                            [history_slot(pos.moved_piece(forced))]
+                                            [to_sq(forced)];
+            pos.do_move(forced, st);
+            value = -qsearch<nodeType>(pos, ss+1, -beta, -alpha, depth - 1);
+            pos.undo_move(forced);
+            return value;
+        }
+    }
+
     // Decide whether or not to include checks: this fixes also the type of
     // TT entry depth that we are going to use. Note that in qsearch we use
     // only two types of depth in TT: DEPTH_QS_CHECKS or DEPTH_QS_NO_CHECKS.
