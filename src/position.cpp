@@ -4059,23 +4059,24 @@ bool Position::has_legal_jump_continuation() const {
   return false;
 }
 
-// Deterministic automatic move: step the side to move's auto-moving piece one
+// Deterministic automatic move: step the given side's auto-moving piece one
 // move toward the nearest enemy piece of its configured target type,
-// preferring the first lowest-indexed destination among ties. Returns
+// preferring the first lowest-indexed destination among ties. Without
+// sidestepping only the geometrically best step resolves, so a blocked best
+// step yields MOVE_NONE even when other squares are playable. Returns
 // MOVE_NONE when the rule is off or no step can be resolved.
-Move Position::forced_auto_move() const {
+Move Position::forced_auto_move_for(Color us) const {
 
   if (!has_auto_move())
       return MOVE_NONE;
 
-  const Square from = auto_move_piece_square(sideToMove);
+  const Square from = auto_move_piece_square(us);
   if (from == SQ_NONE)
       return MOVE_NONE;
   const Piece pc = piece_on(from);
-  if (pc == NO_PIECE)
+  if (pc == NO_PIECE || color_of(pc) != us)
       return MOVE_NONE;
 
-  const Color us = color_of(pc);
   const PieceType pt = type_of(pc);
   PieceType targetPt = var->autoMoveTarget[pt];
   if (targetPt == NO_PIECE_TYPE)
@@ -4087,8 +4088,30 @@ Move Position::forced_auto_move() const {
   if (!targets)
       return MOVE_NONE;
 
-  Bitboard reach = (attacks_from(us, pt, from) | moves_from(us, pt, from)) & board_bb();
-  reach &= ~pieces(us);
+  auto best_step = [&](Bitboard candidates) {
+      int bestDist = 1000;
+      Square best = SQ_NONE;
+      for (; candidates;)
+      {
+          const Square to = pop_lsb(candidates);
+          int dist = 1000;
+          for (Bitboard ts = targets; ts;)
+          {
+              const Square target = pop_lsb(ts);
+              dist = std::min(dist, std::max(std::abs(file_of(to) - file_of(target)),
+                                             std::abs(rank_of(to) - rank_of(target))));
+          }
+          if (dist < bestDist)
+          {
+              bestDist = dist;
+              best = to;
+          }
+      }
+      return best;
+  };
+
+  const Bitboard steps = (attacks_from(us, pt, from) | moves_from(us, pt, from)) & board_bb();
+  Bitboard reach = steps & ~pieces(us);
   // Capturing own pieces "in the way" is the point of selfCapture; the forced
   // step may land on a friendly non-royal piece. The engine still excludes the
   // own royal from self-capture, so do the same here.
@@ -4106,26 +4129,19 @@ Move Position::forced_auto_move() const {
           reach &= ~square_bb(to);
   }
 
-  int bestDist = 1000;
-  Square best = SQ_NONE;
-  for (Bitboard candidates = reach; candidates;)
+  if (!var->autoMoveSidestep)
   {
-      const Square to = pop_lsb(candidates);
-      int dist = 1000;
-      for (Bitboard ts = targets; ts;)
-      {
-          const Square target = pop_lsb(ts);
-          dist = std::min(dist, std::max(std::abs(file_of(to) - file_of(target)),
-                                         std::abs(rank_of(to) - rank_of(target))));
-      }
-      if (dist < bestDist)
-      {
-          bestDist = dist;
-          best = to;
-      }
+      const Square bestAll = best_step(steps);
+      if (bestAll == SQ_NONE || !(reach & bestAll))
+          return MOVE_NONE;
   }
 
+  const Square best = best_step(reach);
   return best == SQ_NONE ? MOVE_NONE : make_move(from, best);
+}
+
+Move Position::forced_auto_move() const {
+  return forced_auto_move_for(sideToMove);
 }
 
 
@@ -10540,16 +10556,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   // Auto-move bookkeeping. Every non-pass move completes one of its owner's
   // turns; every (autoMoveN+1)th turn is a forced snail step instead of a
-  // normal move, so snail steps count as turns too. Passes never advance
-  // the cycle. The phase is legality-relevant, so the key follows it.
-  if (has_auto_move() && !passMove && !st->pendingClaimPass && !forced_jump_continuation())
+  // normal move, so snail steps count as turns too. A safety-valve pass on a
+  // scheduled snail turn consumes that turn, so the owner gets normal turns
+  // again before the next trigger; other passes never advance the cycle.
+  // The phase is legality-relevant, so the key follows it.
+  if (has_auto_move() && !st->pendingClaimPass && !forced_jump_continuation())
   {
       const Color mover = ~sideToMove;
-      Key diff = Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover])]
-               ^ Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover] + 1)];
-      ++st->autoMoveCount[mover];
-      st->key ^= diff;
-      st->boardKey ^= diff;
+      if (!passMove || (auto_move_turn(mover) && forced_auto_move_for(mover) == MOVE_NONE))
+      {
+          Key diff = Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover])]
+                   ^ Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover] + 1)];
+          ++st->autoMoveCount[mover];
+          st->key ^= diff;
+          st->boardKey ^= diff;
+      }
   }
 
 #ifndef NDEBUG

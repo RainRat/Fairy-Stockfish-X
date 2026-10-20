@@ -1315,6 +1315,23 @@ allowChecks = true
 captureForbidden = *:s
 autoMoveN = 1
 autoMoveTarget = s:k
+[test-automove-strict:chess]
+customPiece1 = s:K
+pieceToCharTable = -
+startFen = 4k3/7p/8/8/8/s7/1S5P/4K3 w - - 0 1
+allowChecks = true
+captureForbidden = *:s
+autoMoveN = 1
+autoMoveTarget = s:k
+autoMoveSidestep = false
+[test-automove-sidestep:chess]
+customPiece1 = s:K
+pieceToCharTable = -
+startFen = 4k3/7p/8/8/8/s7/1S5P/4K3 w - - 0 1
+allowChecks = true
+captureForbidden = *:s
+autoMoveN = 1
+autoMoveTarget = s:k
 [test-automove-cycle:chess]
 customPiece1 = s:K
 pieceToCharTable = -
@@ -1368,7 +1385,25 @@ UCI
 )
 assert_contains "${automove_self_capture_output}" "a2a3: 1"
 
-# A walled-in snail with no resolvable step passes instead of playing normal.
+# Without sidestepping only the geometrically best step resolves: the enemy
+# snail on a3 blocks the snail, so it passes. With sidestepping it plays b3.
+automove_strict_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-strict <<'UCI'
+position startpos moves h2h3 h7h6
+go perft 1
+UCI
+)
+assert_contains "${automove_strict_output}" "^0000: 1"
+assert_nodes "${automove_strict_output}" 1
+
+automove_sidestep_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-sidestep <<'UCI'
+position startpos moves h2h3 h7h6
+go perft 1
+UCI
+)
+assert_contains "${automove_sidestep_output}" "b2b3: 1"
+assert_nodes "${automove_sidestep_output}" 1
+
+# A fully walled-in snail with no playable square passes on its turn.
 automove_trapped3_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-trapped <<'UCI'
 position startpos moves h2h3 h7h6
 go perft 1
@@ -1384,8 +1419,17 @@ UCI
 )
 assert_contains "${automove_trapped4_output}" "a7a6: 1"
 
-automove_trapped_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-trapped <<'UCI'
+# The safety pass consumes the scheduled turn: the owner gets normal turns
+# again before the snail retries.
+automove_trapped5_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-trapped <<'UCI'
 position startpos moves h2h3 h7h6 0000 a7a6
+go perft 1
+UCI
+)
+assert_contains "${automove_trapped5_output}" "h3h4: 1"
+
+automove_trapped_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-trapped <<'UCI'
+position startpos moves h2h3 h7h6 0000 a7a6 h3h4 h6h5
 go perft 1
 UCI
 )

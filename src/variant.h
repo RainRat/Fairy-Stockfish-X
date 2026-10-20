@@ -314,6 +314,9 @@ struct Variant {
   PieceType autoMoveTarget[PIECE_TYPE_NB] = {};
   PieceSet autoMoveTypes = NO_PIECE_SET;
   int autoMoveN = 0;
+  // Blocked best step: sidestep to the next-best playable square (true), or
+  // pass unless the best step itself is playable (false).
+  bool autoMoveSidestep = true;
   bool blastOnSameTypeCapture = false;
   bool blastOrthogonals = true;
   ColorSetting<bool> mustDrop = ColorSetting<bool>(false);

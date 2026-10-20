@@ -1837,6 +1837,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     // auto-moving piece type to the enemy type it chases, autoMoveN sets the
     // number of normal turns before each forced automatic turn.
     parse_attribute("autoMoveN", v->autoMoveN);
+    parse_attribute("autoMoveSidestep", v->autoMoveSidestep);
     auto it_auto_move_pt = config.find("autoMoveTarget");
     if (it_auto_move_pt != config.end())
     {

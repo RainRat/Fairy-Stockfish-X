@@ -1225,6 +1225,7 @@ private:
   // is only included by position.cpp/movegen.cpp.
   detail::TwoLegPath resolve_two_leg_move(Move m) const;
   Square auto_move_piece_square(Color us) const;
+  Move forced_auto_move_for(Color us) const;
   bool sole_pseudo_royal_mated() const;
   bool lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo, bool isCapture) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
