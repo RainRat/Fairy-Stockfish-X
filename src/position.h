@@ -882,6 +882,7 @@ public:
   bool has_forced_jump_followup() const;
   Square forced_jump_square() const;
   bool has_auto_move() const;
+  bool auto_move_turn(Color us) const;
   bool auto_move_active() const;
   Square auto_move_piece_square(Color us) const;
   Move forced_auto_move() const;
@@ -2525,9 +2526,12 @@ inline bool Position::has_auto_move() const {
   return bool(var->autoMoveTypes);
 }
 
+inline bool Position::auto_move_turn(Color us) const {
+  return has_auto_move() && st->autoMoveCount[us] % (var->autoMoveN + 1) == var->autoMoveN;
+}
+
 inline bool Position::auto_move_active() const {
-  return has_auto_move() && st->autoMoveCount[sideToMove] % (var->autoMoveN + 1) == var->autoMoveN
-      && forced_auto_move() != MOVE_NONE;
+  return auto_move_turn(sideToMove) && forced_auto_move() != MOVE_NONE;
 }
 
 inline Square Position::auto_move_piece_square(Color us) const {
@@ -3096,6 +3100,10 @@ inline Square Position::pawn_step(Square s, Color us, int steps) const {
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
   if (st->pendingClaimPass && c == sideToMove)
+      return true;
+  // Safety valve: a scheduled snail turn with no resolvable step passes
+  // instead of playing a normal move.
+  if (c == sideToMove && has_auto_move() && auto_move_turn(c) && forced_auto_move() == MOVE_NONE)
       return true;
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
   {

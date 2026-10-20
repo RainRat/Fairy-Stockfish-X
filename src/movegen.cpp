@@ -1346,13 +1346,16 @@ namespace {
         }
     }
 
-    if (pos.has_auto_move() && pos.auto_move_active())
+    if (pos.has_auto_move() && pos.auto_move_turn(Us))
     {
         // The owner's every (autoMoveN+1)th turn is the deterministic
-        // automatic step instead of a normal move.
+        // automatic step instead of a normal move, or a pass when the
+        // step cannot be resolved.
         Move forcedAuto = pos.forced_auto_move();
         if (forcedAuto != MOVE_NONE)
             *moveList++ = forcedAuto;
+        else if (Type != QUIET_CHECKS && pos.pass(Us))
+            moveList = emit_pass_move(pos, moveList, Us);
         return moveList;
     }
 

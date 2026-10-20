@@ -309,7 +309,8 @@ struct Variant {
   ColorSetting<PieceSet> selfCaptureTypes = ColorSetting<PieceSet>(NO_PIECE_SET);
   // Automatic movement ("immortal snail"): the owner's every (autoMoveN+1)th
   // turn is a forced step of one of autoMoveTypes toward the nearest enemy
-  // autoMoveTarget instead of a normal move. autoMoveN <= 0 disables the rule.
+  // autoMoveTarget instead of a normal move. Movers must be king-shaped.
+  // autoMoveN <= 0 disables the rule.
   PieceType autoMoveTarget[PIECE_TYPE_NB] = {};
   PieceSet autoMoveTypes = NO_PIECE_SET;
   int autoMoveN = 0;

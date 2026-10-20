@@ -5931,10 +5931,10 @@ bool Position::legal(Move m) const {
   if (passMove && !pass(us))
       return false;
 
-  if (has_auto_move() && auto_move_active())
+  if (has_auto_move() && auto_move_turn(us))
       // The owner's every (autoMoveN+1)th turn is the forced automatic step
-      // instead of a normal move.
-      return m == forced_auto_move();
+      // instead of a normal move, or a pass when the step cannot be resolved.
+      return m == forced_auto_move() || (passMove && forced_auto_move() == MOVE_NONE);
   else if (has_auto_move() && !passMove && !dropMove)
   {
       // Auto-movers are autonomous: they only ever move via the automatic step.
@@ -7209,9 +7209,9 @@ bool Position::pseudo_legal(const Move m) const {
       }
   }
 
-  if (has_auto_move() && auto_move_active())
+  if (has_auto_move() && auto_move_turn(us))
   {
-      if (m != forced_auto_move())
+      if (m != forced_auto_move() && !(passMove && forced_auto_move() == MOVE_NONE))
           return false;
   }
   else if (has_auto_move() && !passMove && !dropMove)

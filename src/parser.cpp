@@ -2699,6 +2699,14 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "autoMove with royal kings requires allowChecks=true: forced turns cannot satisfy check-evasion obligations." << std::endl;
         valid = false;
     }
+    // Intermediate jump-chain moves are not completed turns, so the two
+    // counters cannot share a turn cycle.
+    if (v->autoMoveTypes && v->forcedJumpContinuation)
+    {
+        if (DoCheck)
+            std::cerr << "autoMove cannot be combined with forcedJumpContinuation." << std::endl;
+        valid = false;
+    }
     // Contradictory adjudication: pseudo-royal loss precedes extinction, so
     // overlapping targets with different results are ambiguous.
     if (v->pseudoRoyalValue != VALUE_NONE && v->pseudoRoyalTypes)

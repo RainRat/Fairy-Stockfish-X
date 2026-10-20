@@ -1265,6 +1265,19 @@ automove_royal_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains "${automove_royal_output}" "autoMove with royal kings requires allowChecks=true"
 
 cat > "$FSX_TMP_INI" <<'INI'
+[test-automove-jump:chess]
+customPiece1 = s:K
+allowChecks = true
+captureForbidden = *:s
+selfCaptureTypes = s
+autoMoveTarget = s:k
+autoMoveN = 1
+forcedJumpContinuation = true
+INI
+automove_jump_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_contains "${automove_jump_output}" "autoMove cannot be combined with forcedJumpContinuation"
+
+cat > "$FSX_TMP_INI" <<'INI'
 [test-automove:chess]
 customPiece1 = s:K
 pieceToCharTable = -
@@ -1284,7 +1297,14 @@ captureForbidden = *:s
 selfCaptureTypes = s
 autoMoveN = 1
 autoMoveTarget = s:k
-
+[test-automove-trapped:chess]
+customPiece1 = s:K
+pieceToCharTable = -
+startFen = 4k3/s6p/8/8/8/8/PP5P/SN2K3 w - - 0 1
+allowChecks = true
+captureForbidden = *:s
+autoMoveN = 1
+autoMoveTarget = s:k
 [test-automove-cycle:chess]
 customPiece1 = s:K
 pieceToCharTable = -
@@ -1337,6 +1357,30 @@ go perft 1
 UCI
 )
 assert_contains "${automove_self_capture_output}" "a2a3: 1"
+
+# A walled-in snail with no resolvable step passes instead of playing normal.
+automove_trapped3_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-trapped <<'UCI'
+position startpos moves h2h3 h7h6
+go perft 1
+UCI
+)
+assert_contains "${automove_trapped3_output}" "^0000: 1"
+assert_nodes "${automove_trapped3_output}" 1
+
+automove_trapped4_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-trapped <<'UCI'
+position startpos moves h2h3 h7h6 0000
+go perft 1
+UCI
+)
+assert_contains "${automove_trapped4_output}" "a7a6: 1"
+
+automove_trapped_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-trapped <<'UCI'
+position startpos moves h2h3 h7h6 0000 a7a6
+go perft 1
+UCI
+)
+assert_contains "${automove_trapped_output}" "^0000: 1"
+assert_nodes "${automove_trapped_output}" 1
 
 # With autoMoveN=3 plies 1-6 are normal, plies 7-8 are the forced snail
 # steps, and the cycle repeats on plies 15-16.
