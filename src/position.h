@@ -331,6 +331,8 @@ struct StateInfoCopied {
   int    countingLimit;
   int    pointsCount[COLOR_NB];
   CheckCount checksRemaining[COLOR_NB];
+  // Number of completed real turns per color, used by autoMove.
+  int    autoMoveCount[COLOR_NB] = {0, 0};
   Bitboard epSquares;
   Bitboard promotionDeferred = Bitboard(0);
   // Squares on which the immediately preceding non-Lion move captured an
@@ -373,7 +375,7 @@ struct StateInfoDerived {
   bool       shak;
   bool       bikjang;
   Move       move = MOVE_NONE;
-  bool       pendingClaimPass = false;
+  bool pendingClaimPass = false;
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
@@ -879,6 +881,10 @@ public:
   bool multimove_pass(int ply) const;
   bool has_forced_jump_followup() const;
   Square forced_jump_square() const;
+  bool has_auto_move() const;
+  bool auto_move_turn(Color us) const;
+  bool auto_move_active() const;
+  Move forced_auto_move() const;
   Bitboard promoted_soldiers(Color c) const;
   bool makpong() const;
   EnclosingRule flip_enclosed_pieces() const;
@@ -1218,6 +1224,8 @@ private:
   // result type; the walker implementation itself lives in two_leg_impl.h and
   // is only included by position.cpp/movegen.cpp.
   detail::TwoLegPath resolve_two_leg_move(Move m) const;
+  Square auto_move_piece_square(Color us) const;
+  Move forced_auto_move_for(Color us) const;
   bool sole_pseudo_royal_mated() const;
   bool lion_capture_legal(Move m, const detail::TwoLegPath& twoLegInfo, bool isCapture) const;
   Bitboard attackers_to_base(Square s, Bitboard occupied, Color c, Bitboard janggiCannons) const;
@@ -2514,6 +2522,31 @@ inline Square Position::forced_jump_square() const {
   return st->forcedJumpSquare;
 }
 
+inline bool Position::has_auto_move() const {
+  assert(var != nullptr);
+  return bool(var->autoMoveTypes);
+}
+
+inline bool Position::auto_move_turn(Color us) const {
+  return has_auto_move() && st->autoMoveCount[us] % (var->autoMoveN + 1) == var->autoMoveN;
+}
+
+inline bool Position::auto_move_active() const {
+  return auto_move_turn(sideToMove) && forced_auto_move() != MOVE_NONE;
+}
+
+inline Square Position::auto_move_piece_square(Color us) const {
+  if (!has_auto_move())
+      return SQ_NONE;
+  for (PieceSet ps = var->autoMoveTypes; ps;)
+  {
+      PieceType apt = pop_lsb(ps);
+      if (Bitboard b = pieces(us, apt))
+          return lsb(b);
+  }
+  return SQ_NONE;
+}
+
 inline bool Position::captures_to_hand() const {
   assert(var != nullptr);
   return var->captureType != MOVE_OUT;
@@ -3068,6 +3101,10 @@ inline Square Position::pawn_step(Square s, Color us, int steps) const {
 inline bool Position::pass(Color c) const {
   assert(var != nullptr);
   if (st->pendingClaimPass && c == sideToMove)
+      return true;
+  // Safety valve: a scheduled snail turn with no resolvable step passes
+  // instead of playing a normal move.
+  if (c == sideToMove && has_auto_move() && auto_move_turn(c) && forced_auto_move() == MOVE_NONE)
       return true;
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
   {

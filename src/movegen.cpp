@@ -1346,6 +1346,29 @@ namespace {
         }
     }
 
+    if (pos.has_auto_move() && pos.auto_move_turn(Us))
+    {
+        // The owner's every (autoMoveN+1)th turn is the deterministic
+        // automatic step instead of a normal move, or a pass when the
+        // step cannot be resolved. Like ordinary captures and quiets, the
+        // step is only emitted in its own category so MovePicker never
+        // searches it twice; passes mirror the forced-jump continuation.
+        Move forcedAuto = pos.forced_auto_move();
+        if (forcedAuto != MOVE_NONE)
+        {
+            bool isCapture = pos.capture(forcedAuto);
+            if ((Type == CAPTURES && isCapture)
+                || (Type == QUIETS && !isCapture)
+                || Type == EVASIONS || Type == NON_EVASIONS)
+                *moveList++ = forcedAuto;
+            else if (Type == QUIET_CHECKS && pos.gives_check(forcedAuto))
+                *moveList++ = forcedAuto;
+        }
+        else if (Type != QUIET_CHECKS && pos.pass(Us))
+            moveList = emit_pass_move(pos, moveList, Us);
+        return moveList;
+    }
+
 #ifndef NDEBUG
     const PieceInfo* pawnInfo = pieceMap.get(PAWN);
     const bool pawnHasCustomNonStepMovement = pawnInfo->has_nonstandard_pawn_movement();
