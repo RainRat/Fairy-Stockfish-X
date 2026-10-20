@@ -375,11 +375,7 @@ struct StateInfoDerived {
   bool       shak;
   bool       bikjang;
   Move       move = MOVE_NONE;
-  bool       pendingClaimPass = false;
-  // Auto-move bookkeeping: when set, the piece on this square must make its
-  // forced automatic move on its owner's turn, and the opponent must pass in
-  // between (mirrors the forced-jump continuation pass).
-  Square     autoMoveSquare = SQ_NONE;
+  bool pendingClaimPass = false;
   OptBool    legalCapture = NO_VALUE;
   OptBool    legalEnPassant = NO_VALUE;
   Bitboard   chased = Bitboard(0);
@@ -887,7 +883,7 @@ public:
   Square forced_jump_square() const;
   bool has_auto_move() const;
   bool auto_move_active() const;
-  Square auto_move_square() const;
+  Square auto_move_piece_square(Color us) const;
   Move forced_auto_move() const;
   Bitboard promoted_soldiers(Color c) const;
   bool makpong() const;
@@ -2530,11 +2526,20 @@ inline bool Position::has_auto_move() const {
 }
 
 inline bool Position::auto_move_active() const {
-  return has_auto_move() && st->autoMoveSquare != SQ_NONE;
+  return has_auto_move() && st->autoMoveCount[sideToMove] % (var->autoMoveN + 1) == var->autoMoveN
+      && forced_auto_move() != MOVE_NONE;
 }
 
-inline Square Position::auto_move_square() const {
-  return st->autoMoveSquare;
+inline Square Position::auto_move_piece_square(Color us) const {
+  if (!has_auto_move())
+      return SQ_NONE;
+  for (PieceSet ps = var->autoMoveTypes; ps;)
+  {
+      PieceType apt = pop_lsb(ps);
+      if (Bitboard b = pieces(us, apt))
+          return lsb(b);
+  }
+  return SQ_NONE;
 }
 
 inline bool Position::captures_to_hand() const {
@@ -3092,12 +3097,6 @@ inline bool Position::pass(Color c) const {
   assert(var != nullptr);
   if (st->pendingClaimPass && c == sideToMove)
       return true;
-  if (has_auto_move() && st->autoMoveSquare != SQ_NONE)
-  {
-      Piece ap = piece_on(st->autoMoveSquare);
-      if (ap != NO_PIECE && color_of(ap) != c)
-          return true;
-  }
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
   {
       Piece fp = piece_on(st->forcedJumpSquare);

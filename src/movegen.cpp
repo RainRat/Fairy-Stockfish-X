@@ -1346,25 +1346,14 @@ namespace {
         }
     }
 
-    Square autoSquare = pos.auto_move_square();
-    if (autoSquare != SQ_NONE)
+    if (pos.has_auto_move() && pos.auto_move_active())
     {
-        Piece autoPiece = pos.piece_on(autoSquare);
-        if (autoPiece != NO_PIECE)
-        {
-            if (color_of(autoPiece) != Us)
-            {
-                // Opponent must pass while the auto-mover's owner takes its step.
-                if (Type != QUIET_CHECKS && pos.pass(Us))
-                    moveList = emit_pass_move(pos, moveList, Us);
-                return moveList;
-            }
-            // The owner's only move is the deterministic automatic step.
-            Move forcedAuto = pos.forced_auto_move();
-            if (forcedAuto != MOVE_NONE)
-                *moveList++ = forcedAuto;
-            return moveList;
-        }
+        // The owner's every (autoMoveN+1)th turn is the deterministic
+        // automatic step instead of a normal move.
+        Move forcedAuto = pos.forced_auto_move();
+        if (forcedAuto != MOVE_NONE)
+            *moveList++ = forcedAuto;
+        return moveList;
     }
 
 #ifndef NDEBUG

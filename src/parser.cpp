@@ -1835,7 +1835,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
     // Automatic movement ("immortal snail"): autoMoveTarget maps an
     // auto-moving piece type to the enemy type it chases, autoMoveN sets the
-    // number of the owner's turns between automatic moves.
+    // number of normal turns before each forced automatic turn.
     parse_attribute("autoMoveN", v->autoMoveN);
     auto it_auto_move_pt = config.find("autoMoveTarget");
     if (it_auto_move_pt != config.end())

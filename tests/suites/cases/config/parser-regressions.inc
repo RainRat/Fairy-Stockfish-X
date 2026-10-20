@@ -1241,9 +1241,9 @@ INI
     assert_contains "${neg_count_output}" "${opt} must be non-negative"
 done
 
-# Automatic movement (autoMoveTarget/autoMoveN, "immortal snail"): the owner
-# is forced to play the deterministic automatic step and the opponent passes
-# in between; the auto-mover is immune to capture but may self-capture.
+# Automatic movement (autoMoveTarget/autoMoveN, "immortal snail"): every
+# (autoMoveN+1)th turn of the owner is the forced deterministic step instead
+# of a normal move; the auto-mover is immune to capture but may self-capture.
 cat > "$FSX_TMP_INI" <<'INI'
 [test-automove-needs-n:chess]
 customPiece1 = s:K
@@ -1275,22 +1275,44 @@ captureForbidden = *:s
 selfCaptureTypes = s
 autoMoveN = 1
 autoMoveTarget = s:k
+
+[test-automove-cycle:chess]
+customPiece1 = s:K
+pieceToCharTable = -
+startFen = rnbqkbnr/sppppppp/8/8/8/8/SPPPPPPP/RNBQKBNR w KQkq - 0 1
+allowChecks = true
+captureForbidden = *:s
+selfCaptureTypes = s
+autoMoveN = 3
+autoMoveTarget = s:k
 INI
 
-automove_pass_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI'
+# Normal turns are unrestricted and need no passes.
+automove_normal_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI'
 position startpos moves e2e4
 go perft 1
 UCI
 )
-assert_contains "${automove_pass_output}" "0000: 1"
-assert_not_contains "${automove_pass_output}" "e7e5"
+assert_contains "${automove_normal_output}" "e7e5: 1"
+assert_not_contains "${automove_normal_output}" "^0000: 1"
 
+# With autoMoveN=1 every 2nd turn is forced: white snail steps on ply 3.
 automove_step_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI'
-position startpos moves e2e4 0000
+position startpos moves e2e4 e7e5
 go perft 1
 UCI
 )
 assert_contains "${automove_step_output}" "a2a3: 1"
+assert_not_contains "${automove_step_output}" "g1f3"
+
+# Black snail steps on ply 4.
+automove_black_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI'
+position startpos moves e2e4 e7e5 a2a3
+go perft 1
+UCI
+)
+assert_contains "${automove_black_output}" "a7a6: 1"
+assert_not_contains "${automove_black_output}" "b8c6"
 
 automove_immune_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI'
 position fen 4k3/8/8/8/8/s7/8/Q3K3 w - - 0 1
@@ -1299,11 +1321,44 @@ UCI
 )
 assert_not_contains "${automove_immune_output}" "a1a3"
 
+# The forced step may capture a friendly piece blocking the way.
 automove_self_capture_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-self <<'UCI'
-position startpos moves e2e4 0000
+position startpos moves e2e4 e7e5
 go perft 1
 UCI
 )
 assert_contains "${automove_self_capture_output}" "a2a3: 1"
+
+# With autoMoveN=3 plies 1-6 are normal, plies 7-8 are the forced snail
+# steps, and the cycle repeats on plies 15-16.
+automove_cycle7_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
+position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 g8f6
+go perft 1
+UCI
+)
+assert_contains "${automove_cycle7_output}" "a2a3: 1"
+assert_not_contains "${automove_cycle7_output}" "d2d3"
+
+automove_cycle8_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
+position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 a2a3
+go perft 1
+UCI
+)
+assert_contains "${automove_cycle8_output}" "a7a6: 1"
+assert_not_contains "${automove_cycle8_output}" "^0000: 1"
+
+automove_cycle15_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
+position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 a2a3 a7a6 d2d3 d7d6 b1c3 c6b8 f3g5 f6g8
+go perft 1
+UCI
+)
+assert_contains "${automove_cycle15_output}" "a3a4: 1"
+
+automove_cycle16_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
+position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 a2a3 a7a6 d2d3 d7d6 b1c3 c6b8 f3g5 f6g8 a3a4
+go perft 1
+UCI
+)
+assert_contains "${automove_cycle16_output}" "a6a5: 1"
 
 echo "parser regression tests passed"

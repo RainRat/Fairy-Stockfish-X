@@ -2717,7 +2717,6 @@ void Position::set_state(StateInfo* si) const {
   si->transforms.clear();
   si->claimedSquares = 0;
   si->pendingClaimPass = false;
-  si->autoMoveSquare = SQ_NONE;
   si->autoMoveCount[WHITE] = 0;
   si->autoMoveCount[BLACK] = 0;
   si->dropHandColor = COLOR_NB;
@@ -4036,16 +4035,18 @@ bool Position::has_legal_jump_continuation() const {
   return false;
 }
 
-// Deterministic automatic move: step the auto-moving piece one move toward the
-// nearest enemy piece of its configured target type, preferring the first
-// lowest-indexed destination among ties. Returns MOVE_NONE when no auto move
-// is pending or it cannot be resolved.
+// Deterministic automatic move: step the side to move's auto-moving piece one
+// move toward the nearest enemy piece of its configured target type,
+// preferring the first lowest-indexed destination among ties. Returns
+// MOVE_NONE when the rule is off or no step can be resolved.
 Move Position::forced_auto_move() const {
 
-  if (!has_auto_move() || st->autoMoveSquare == SQ_NONE)
+  if (!has_auto_move())
       return MOVE_NONE;
 
-  const Square from = st->autoMoveSquare;
+  const Square from = auto_move_piece_square(sideToMove);
+  if (from == SQ_NONE)
+      return MOVE_NONE;
   const Piece pc = piece_on(from);
   if (pc == NO_PIECE)
       return MOVE_NONE;
@@ -5930,18 +5931,10 @@ bool Position::legal(Move m) const {
   if (passMove && !pass(us))
       return false;
 
-  if (has_auto_move() && st->autoMoveSquare != SQ_NONE)
-  {
-      const Piece autoPiece = piece_on(st->autoMoveSquare);
-      if (autoPiece != NO_PIECE)
-      {
-          // The auto-mover's owner must play exactly its deterministic step;
-          // the opponent may only pass to hand the turn back.
-          if (color_of(autoPiece) != us)
-              return passMove;
-          return !passMove && from == st->autoMoveSquare && m == forced_auto_move();
-      }
-  }
+  if (has_auto_move() && auto_move_active())
+      // The owner's every (autoMoveN+1)th turn is the forced automatic step
+      // instead of a normal move.
+      return m == forced_auto_move();
   else if (has_auto_move() && !passMove && !dropMove)
   {
       // Auto-movers are autonomous: they only ever move via the automatic step.
@@ -7216,21 +7209,10 @@ bool Position::pseudo_legal(const Move m) const {
       }
   }
 
-  if (has_auto_move() && st->autoMoveSquare != SQ_NONE)
+  if (has_auto_move() && auto_move_active())
   {
-      Piece autoPiece = piece_on(st->autoMoveSquare);
-      if (autoPiece != NO_PIECE)
-      {
-          if (color_of(autoPiece) != us)
-          {
-              Piece passPiece = moved_piece(m);
-              return passMove && passPiece != NO_PIECE && color_of(passPiece) == us;
-          }
-          if (passMove)
-              return false;
-          if (from != st->autoMoveSquare || m != forced_auto_move())
-              return false;
-      }
+      if (m != forced_auto_move())
+          return false;
   }
   else if (has_auto_move() && !passMove && !dropMove)
   {
@@ -10521,36 +10503,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->forcedJumpHasFollowup = false;
   }
 
-  // Auto-move bookkeeping. The owner must complete exactly one automatic step
-  // and the opponent must pass in between; both are exempt from counting as a
-  // completed turn. Once autoMoveN turns elapse, arm the next step.
-  if (has_auto_move())
-  {
-      const Color mover = ~sideToMove;
-      if (st->previous->autoMoveSquare != SQ_NONE)
-          st->autoMoveSquare = passMove ? st->previous->autoMoveSquare : SQ_NONE;
-      else if (!passMove && !st->pendingClaimPass && !forced_jump_continuation())
-      {
-          if (++st->autoMoveCount[mover] % var->autoMoveN == 0)
-          {
-              Square sq = SQ_NONE;
-              for (PieceSet ps = var->autoMoveTypes; ps;)
-              {
-                  PieceType apt = pop_lsb(ps);
-                  if (Bitboard b = pieces(mover, apt))
-                  {
-                      sq = lsb(b);
-                      break;
-                  }
-              }
-              st->autoMoveSquare = sq;
-              if (sq != SQ_NONE && forced_auto_move() == MOVE_NONE)
-                  st->autoMoveSquare = SQ_NONE;
-          }
-      }
-  }
-  else
-      st->autoMoveSquare = SQ_NONE;
+  // Auto-move bookkeeping. Every non-pass move completes one of its owner's
+  // turns; every (autoMoveN+1)th turn is a forced snail step instead of a
+  // normal move, so snail steps count as turns too. Passes never advance
+  // the cycle.
+  if (has_auto_move() && !passMove && !st->pendingClaimPass && !forced_jump_continuation())
+      ++st->autoMoveCount[~sideToMove];
 
 #ifndef NDEBUG
   if (Eval::useNNUE)
@@ -11114,7 +11072,6 @@ void Position::do_null_move(StateInfo& newSt) {
   st->extinctionSeen[BLACK] = newSt.previous->extinctionSeen[BLACK];
   st->key = st->previous->key;
   st->pendingClaimPass = false;
-  st->autoMoveSquare = SQ_NONE;
 
   if (potions_enabled())
   {
