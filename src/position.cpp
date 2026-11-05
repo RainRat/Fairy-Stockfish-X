@@ -1348,8 +1348,10 @@ inline void xor_points_bucket(Key& k, Color c, int points) {
 // turns), so it contributes to the position key exactly like any other
 // modal rule state. The parser caps autoMoveN, so the phase always indexes
 // the table exactly.
-inline int auto_move_phase(const Variant* var, int count) {
-  return count % (var->autoMoveN + 1);
+inline int auto_move_phase(const Variant* var, int phase) {
+  assert(0 <= phase && phase <= var->autoMoveN);
+  (void)var;
+  return phase;
 }
 
 inline void xor_auto_move_phase(Key& k, const Variant* var, Color c, int count) {
@@ -10565,9 +10567,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       const Color mover = ~sideToMove;
       if (!passMove || (auto_move_turn(mover) && forced_auto_move_for(mover) == MOVE_NONE))
       {
-          Key diff = Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover])]
-                   ^ Zobrist::autoMovePhase[mover][auto_move_phase(var, st->autoMoveCount[mover] + 1)];
-          ++st->autoMoveCount[mover];
+          const int oldPhase = auto_move_phase(var, st->autoMoveCount[mover]);
+          const int newPhase = oldPhase == var->autoMoveN ? 0 : oldPhase + 1;
+          Key diff = Zobrist::autoMovePhase[mover][oldPhase]
+                   ^ Zobrist::autoMovePhase[mover][newPhase];
+          st->autoMoveCount[mover] = newPhase;
           st->key ^= diff;
           st->boardKey ^= diff;
       }

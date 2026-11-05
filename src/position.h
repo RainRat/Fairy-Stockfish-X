@@ -331,7 +331,7 @@ struct StateInfoCopied {
   int    countingLimit;
   int    pointsCount[COLOR_NB];
   CheckCount checksRemaining[COLOR_NB];
-  // Number of completed real turns per color, used by autoMove.
+  // Current automatic-movement phase per color, in [0, autoMoveN].
   int    autoMoveCount[COLOR_NB] = {0, 0};
   Bitboard epSquares;
   Bitboard promotionDeferred = Bitboard(0);
@@ -2528,7 +2528,7 @@ inline bool Position::has_auto_move() const {
 }
 
 inline bool Position::auto_move_turn(Color us) const {
-  return has_auto_move() && st->autoMoveCount[us] % (var->autoMoveN + 1) == var->autoMoveN;
+  return has_auto_move() && st->autoMoveCount[us] == var->autoMoveN;
 }
 
 inline bool Position::auto_move_active() const {
