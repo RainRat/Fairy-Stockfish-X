@@ -676,5 +676,23 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(sf.validate_position("chess", fen, []), 1)
         self.assertIsInstance(sf.get_fog_fen(fen, "chess"), str)
 
+    def test_automove_requires_one_piece_per_side(self):
+        fen = "4k3/8/8/8/8/8/SS6/4K3 w - - 0 1"
+        self.assertEqual(sf.validate_fen(fen, "immortal-snail"), sf.FEN_INVALID_AUTOMOVE_COUNT)
+
+    def test_automove_fen_restores_scheduled_turn(self):
+        self.assertEqual(
+            sf.start_fen("immortal-snail"),
+            "rnbqkbnr/pppppppp/8/s7/S7/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        )
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6"]
+        fen = sf.get_fen("immortal-snail", "startpos", moves)
+        self.assertEqual(sf.legal_moves("immortal-snail", fen, []), ["a4b5"])
+
+    def test_automove_can_capture_own_king(self):
+        fen = "4k3/8/8/8/8/3K4/4S3/8 w - - 0 4"
+        self.assertEqual(sf.legal_moves("immortal-snail", fen, []), ["e2d3"])
+        self.assertEqual(sf.game_result("immortal-snail", fen, ["e2d3"]), sf.VALUE_MATE)
+
 if __name__ == "__main__":
     unittest.main()

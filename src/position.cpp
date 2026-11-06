@@ -891,6 +891,9 @@ Bitboard Position::hopper_immobility_potential(Color c, PieceType pt, Square sq)
 namespace Zobrist {
 
   constexpr int MAX_ZOBRIST_POINTS = 512;
+  // Automatic-movement phases range over [0, autoMoveN]; the parser caps
+  // autoMoveN so every phase has an exact key (no bucket clamping).
+  constexpr int MAX_ZOBRIST_AUTOMOVE_PHASE = 512;
   Key psq[PIECE_NB][SQUARE_NB];
   Key enpassant[SQUARE_NB];
   Key promotionDeferred[SQUARE_NB];
@@ -913,6 +916,7 @@ namespace Zobrist {
   Key endgame[EG_EVAL_NB];
   Key points[COLOR_NB][MAX_ZOBRIST_POINTS];
   Key edgeInsertLock[COLOR_NB][SQUARE_NB];
+  Key autoMovePhase[COLOR_NB][MAX_ZOBRIST_AUTOMOVE_PHASE];
 }
 
 Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
@@ -1340,6 +1344,20 @@ inline void xor_points_bucket(Key& k, Color c, int points) {
   k ^= Zobrist::points[c][idx];
 }
 
+// Automatic-movement phase is legality-relevant state (it selects snail
+// turns), so it contributes to the position key exactly like any other
+// modal rule state. The parser caps autoMoveN, so the phase always indexes
+// the table exactly.
+inline int auto_move_phase(const Variant* var, int phase) {
+  assert(0 <= phase && phase <= var->autoMoveN);
+  (void)var;
+  return phase;
+}
+
+inline void xor_auto_move_phase(Key& k, const Variant* var, Color c, int count) {
+  k ^= Zobrist::autoMovePhase[c][auto_move_phase(var, count)];
+}
+
 inline int non_negative_points(int points) {
   return std::max(points, 0);
 }
@@ -1638,6 +1656,10 @@ void Position::init() {
   for (Color c : {WHITE, BLACK})
       for (Square s = SQ_A1; s <= SQ_MAX; ++s)
           Zobrist::gate[c][s] = rng.rand<Key>();
+
+  for (Color c : {WHITE, BLACK})
+      for (int i = 0; i < Stockfish::Zobrist::MAX_ZOBRIST_AUTOMOVE_PHASE; ++i)
+          Zobrist::autoMovePhase[c][i] = rng.rand<Key>();
 
   for (Square from = SQ_A1; from <= SQ_MAX; ++from)
       for (Square to = SQ_A1; to <= SQ_MAX; ++to)
@@ -2679,6 +2701,10 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
       for (Color c : {WHITE, BLACK})
           si->key ^= Zobrist::checks[c][si->checksRemaining[c]];
 
+  if (has_auto_move())
+      for (Color c : {WHITE, BLACK})
+          xor_auto_move_phase(si->key, var, c, si->autoMoveCount[c]);
+
   if (var->pointsCounting)
       for (Color c : {WHITE, BLACK})
           xor_points_bucket(si->key, c, si->pointsCount[c]);
@@ -2717,6 +2743,13 @@ void Position::set_state(StateInfo* si) const {
   si->transforms.clear();
   si->claimedSquares = 0;
   si->pendingClaimPass = false;
+  // Every played ply, including a pass, consumes one side's turn. The FEN
+  // move number therefore restores the automatic-movement cycle on load.
+  if (has_auto_move())
+  {
+      si->autoMoveCount[WHITE] = (gamePly / 2 + (gamePly & 1)) % (var->autoMoveN + 1);
+      si->autoMoveCount[BLACK] = (gamePly / 2) % (var->autoMoveN + 1);
+  }
   si->dropHandColor = COLOR_NB;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
@@ -4032,6 +4065,87 @@ bool Position::has_legal_jump_continuation() const {
           return true;
   return false;
 }
+
+// Deterministic automatic move: step the given side's auto-moving piece one
+// move toward the nearest enemy piece of its configured target type,
+// preferring the first lowest-indexed destination among ties. Without
+// sidestepping only the geometrically best step resolves, so a blocked best
+// step yields MOVE_NONE even when other squares are playable. Returns
+// MOVE_NONE when the rule is off or no step can be resolved.
+Move Position::forced_auto_move_for(Color us) const {
+
+  if (!has_auto_move())
+      return MOVE_NONE;
+
+  const Square from = auto_move_piece_square(us);
+  if (from == SQ_NONE)
+      return MOVE_NONE;
+  const Piece pc = piece_on(from);
+  if (pc == NO_PIECE || color_of(pc) != us)
+      return MOVE_NONE;
+
+  const PieceType pt = type_of(pc);
+  PieceType targetPt = var->autoMoveTarget[pt];
+  if (targetPt == NO_PIECE_TYPE)
+      return MOVE_NONE;
+
+  Bitboard targets = pieces(~us, targetPt);
+  if (!targets && targetPt == KING && king_type() != KING)
+      targets = pieces(~us, king_type());
+  if (!targets)
+      return MOVE_NONE;
+
+  auto best_step = [&](Bitboard candidates) {
+      int bestDist = 1000;
+      Square best = SQ_NONE;
+      for (; candidates;)
+      {
+          const Square to = pop_lsb(candidates);
+          int dist = 1000;
+          for (Bitboard ts = targets; ts;)
+          {
+              const Square target = pop_lsb(ts);
+              dist = std::min(dist, std::max(std::abs(file_of(to) - file_of(target)),
+                                             std::abs(rank_of(to) - rank_of(target))));
+          }
+          if (dist < bestDist)
+          {
+              bestDist = dist;
+              best = to;
+          }
+      }
+      return best;
+  };
+
+  const Bitboard steps = (attacks_from(us, pt, from) | moves_from(us, pt, from)) & board_bb();
+  Bitboard reach = steps & ~pieces(us);
+  // The forced step may crush any friendly piece, including its own royal.
+  if (self_capture(pt))
+      reach |= pieces(us) & attacks_bb<KING>(from) & board_bb();
+  // Drop destinations whose occupant this piece is forbidden to capture.
+  for (Bitboard cand = reach; cand;)
+  {
+      const Square to = pop_lsb(cand);
+      const Piece victim = piece_on(to);
+      if (victim != NO_PIECE && (var->captureForbiddenByColor[us][pt] & type_of(victim)))
+          reach &= ~square_bb(to);
+  }
+
+  if (!var->autoMoveSidestep)
+  {
+      const Square bestAll = best_step(steps);
+      if (bestAll == SQ_NONE || !(reach & bestAll))
+          return MOVE_NONE;
+  }
+
+  const Square best = best_step(reach);
+  return best == SQ_NONE ? MOVE_NONE : make_move(from, best);
+}
+
+Move Position::forced_auto_move() const {
+  return forced_auto_move_for(sideToMove);
+}
+
 
 /// Position::checked_pseudo_royals computes a bitboard of
 /// all pseudo-royal pieces of a particular color that are in check
@@ -5859,6 +5973,29 @@ bool Position::legal(Move m) const {
   if (passMove && !pass(us))
       return false;
 
+  if (has_auto_move() && auto_move_turn(us))
+  {
+      // The owner's every (autoMoveN+1)th turn is the forced automatic step
+      // instead of a normal move, or a pass when the step cannot be resolved.
+      // Anything else is rejected here; the selected move still runs through
+      // ordinary legality validation below.
+      Move forced = forced_auto_move();
+      if (forced != MOVE_NONE)
+      {
+          if (m != forced)
+              return false;
+      }
+      else if (!passMove)
+          return false;
+  }
+  else if (has_auto_move() && !passMove && !dropMove)
+  {
+      // Auto-movers are autonomous: they only ever move via the automatic step.
+      const Piece p = piece_on(from);
+      if (p != NO_PIECE && (var->autoMoveTypes & piece_set(type_of(p))))
+          return false;
+  }
+
   if (is_two_leg(m))
   {
       PromotionStatus promo = move_promotion_status(moved_piece(m), from, to, isCapture);
@@ -6068,6 +6205,8 @@ bool Position::legal(Move m) const {
 
   const Square royalSquare = royal_square(us);
   const bool hasRoyal = royalSquare != SQ_NONE;
+  const bool autoRoyalCapture = hasRoyal && has_auto_move() && auto_move_turn(us)
+                             && !passMove && to == royalSquare;
   if (!passMove && !hasRoyal && royal_piece_type(us) != NO_PIECE_TYPE && is_actual_runtime_royal(us, king_type()))
       return false;
 
@@ -6186,7 +6325,7 @@ bool Position::legal(Move m) const {
   // Universal-hopper semantics are fully encoded in attacks/moves generation and
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
   if ((pieces(us) & to) && !passMove && !is_self_destruct(m) && !is_stack_move(m) && !is_two_leg(m)
-      && is_uncapturable_royal_square(us, to))
+      && is_uncapturable_royal_square(us, to) && !autoRoyalCapture)
       return false;
   if (!dropMove && violates_mutual_hop_restriction(from, to, movePt))
       return false;
@@ -6890,7 +7029,7 @@ bool Position::legal(Move m) const {
       }
   }
 
-  if (hasRoyal)
+  if (hasRoyal && !autoRoyalCapture)
   {
       Square kingSquareAfterMove = moverIsRoyal ? (rifleShot ? from : to)
                                                 : royalSquare;
@@ -7125,6 +7264,18 @@ bool Position::pseudo_legal(const Move m) const {
       }
   }
 
+  if (has_auto_move() && auto_move_turn(us))
+  {
+      if (m != forced_auto_move() && !(passMove && forced_auto_move() == MOVE_NONE))
+          return false;
+  }
+  else if (has_auto_move() && !passMove && !dropMove)
+  {
+      const Piece p = piece_on(from);
+      if (p != NO_PIECE && (var->autoMoveTypes & piece_set(type_of(p))))
+          return false;
+  }
+
   if (is_laser_fire(m))
       return laser_game() && !var->laserAutoFire && pc != NO_PIECE && color_of(pc) == us
           && type_of(pc) == var->emitterPieceType;
@@ -7332,7 +7483,8 @@ bool Position::pseudo_legal(const Move m) const {
       bool antiRoyalSelfCapture = anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)));
       if (!pushMove && !((self_capture(type_of(pc)) || antiRoyalSelfCapture) && isCapture))
           return false;
-      if (is_uncapturable_royal_square(us, to))
+      if (is_uncapturable_royal_square(us, to)
+          && !(has_auto_move() && auto_move_turn(us)))
           return false;
   }
 
@@ -10407,6 +10559,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->forcedJumpHasFollowup = false;
   }
 
+  // Every played turn, including a pass, advances the owner's cycle. This
+  // matches the FEN move number used to restore the phase on a fresh load.
+  // The phase is legality-relevant, so the key follows it.
+  if (has_auto_move())
+  {
+      const Color mover = ~sideToMove;
+      const int oldPhase = auto_move_phase(var, st->autoMoveCount[mover]);
+      const int newPhase = oldPhase == var->autoMoveN ? 0 : oldPhase + 1;
+      Key diff = Zobrist::autoMovePhase[mover][oldPhase]
+               ^ Zobrist::autoMovePhase[mover][newPhase];
+      st->autoMoveCount[mover] = newPhase;
+      st->key ^= diff;
+      st->boardKey ^= diff;
+  }
+
 #ifndef NDEBUG
   if (Eval::useNNUE)
   {
@@ -13172,6 +13339,14 @@ bool Position::pos_is_ok() const {
   ASSERT_ALIGNED(&si, Eval::NNUE::CacheLineSize);
 
   set_state(&si);
+  if (has_auto_move())
+  {
+      // Null search can flip sides without advancing gamePly. Check the key
+      // against the actual in-memory phase in that speculative position.
+      si.autoMoveCount[WHITE] = st->autoMoveCount[WHITE];
+      si.autoMoveCount[BLACK] = st->autoMoveCount[BLACK];
+      recompute_state_hashes_and_material(&si);
+  }
   bool sameState =
       si.key == st->key
       && si.boardKey == st->boardKey

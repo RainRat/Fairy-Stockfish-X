@@ -334,6 +334,24 @@ describe('board.setFen(fen)', function () {
     chai.expect(board.fen()).to.equal(originalFen);
     board.delete();
   });
+
+  it("restores an automatic turn from the FEN move number", () => {
+    const board = new ffish.Board("immortal-snail");
+    board.pushMoves("e2e4 e7e5 g1f3 b8c6 f1c4 g8f6");
+    const loaded = new ffish.Board("immortal-snail", board.fen());
+    chai.expect(board.legalMoves()).to.equal("a4b5");
+    chai.expect(loaded.legalMoves()).to.equal("a4b5");
+    loaded.delete();
+    board.delete();
+  });
+
+  it("ends the game when a forced snail captures its own king", () => {
+    const board = new ffish.Board("immortal-snail", "4k3/8/8/8/8/3K4/4S3/8 w - - 0 4");
+    chai.expect(board.legalMoves()).to.equal("e2d3");
+    chai.expect(board.push("e2d3")).to.equal(true);
+    chai.expect(board.result()).to.equal("0-1");
+    board.delete();
+  });
 });
 
 describe('board.sanMove(uciMove)', function () {
@@ -935,6 +953,10 @@ describe('ffish.validateFen(fen)', function () {
 
 describe('ffish.validateFen(fen, uciVariant)', function () {
     const FEN_INVALID_CHAR = -10;
+
+    it("rejects multiple auto movers on one side", () => {
+      chai.expect(ffish.validateFen("4k3/8/8/8/8/8/SS6/4K3 w - - 0 1", "immortal-snail")).to.equal(-18);
+    });
 
     it("it validates a given fen and returns +1 if fen is valid. Otherwise an error code will be returned.", () => {
       // check if starting fens are valid for all variants

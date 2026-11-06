@@ -1382,6 +1382,23 @@ void state() {
     Position pos;
     StateListPtr states;
 
+    set_position(pos, states, "immortal-snail",
+                 variants.get("immortal-snail")->startFen.c_str());
+    const char* autoMoves[] = {
+      "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6", "a4b5", "a5b4"
+    };
+    for (int ply = 0; ply < 8; ++ply)
+    {
+        Move autoMove = parse_move(pos, autoMoves[ply]);
+        states->emplace_back();
+        pos.do_move(autoMove, states->back());
+        const Color mover = Color(ply & 1);
+        check(pos.state()->autoMoveCount[mover] == ((ply / 2 + 1) % 4),
+              "automatic-movement phase did not wrap after the forced turn");
+        check(pos.state()->autoMoveCount[~mover] <= 3,
+              "inactive automatic-movement phase escaped its configured range");
+    }
+
     set_position(pos, states, "atomic",
                  "4k3/8/8/8/8/8/1p6/R3K3 b - - 0 1");
     Move move = parse_move(pos, "b2a1q");

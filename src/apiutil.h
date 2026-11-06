@@ -581,6 +581,7 @@ inline Bitboard evasion_checked(const Position& pos) {
 namespace FEN {
 
 enum FenValidation : int {
+    FEN_INVALID_AUTOMOVE_COUNT = -18,
     FEN_INVALID_VARIANT = -17,
     FEN_INVALID_MOVE = -16,
     FEN_INVALID_POINTS_INFO = -15,
@@ -1644,6 +1645,18 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     {
         if (check_pocket_info(fenParts[0], nbRanks, v, pocket) == NOK)
             return FEN_INVALID_POCKET_INFO;
+    }
+
+    for (Color c : {WHITE, BLACK})
+    {
+        int autoMovers = 0;
+        for (PieceSet ps = v->autoMoveTypes; ps;)
+            autoMovers += piece_count(fenParts[0], c, pop_lsb(ps), v);
+        if (autoMovers > 1)
+        {
+            std::cerr << "At most one auto-moving piece per side is supported." << std::endl;
+            return FEN_INVALID_AUTOMOVE_COUNT;
+        }
     }
 
     // check for number of kings

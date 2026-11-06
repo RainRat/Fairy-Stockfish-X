@@ -1833,6 +1833,24 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             return false;
         }
     }
+    // Automatic movement ("immortal snail"): autoMoveTarget maps an
+    // auto-moving piece type to the enemy type it chases, autoMoveN sets the
+    // number of normal turns before each forced automatic turn.
+    parse_attribute("autoMoveN", v->autoMoveN);
+    parse_attribute("autoMoveSidestep", v->autoMoveSidestep);
+    auto it_auto_move_pt = config.find("autoMoveTarget");
+    if (it_auto_move_pt != config.end())
+    {
+        if (!parse_piece_type_map(it_auto_move_pt->second, v, v->autoMoveTarget))
+        {
+            if (DoCheck)
+                std::cerr << "autoMoveTarget - Invalid syntax." << std::endl;
+            return false;
+        }
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            if (v->autoMoveTarget[pt] != NO_PIECE_TYPE)
+                v->autoMoveTypes |= piece_set(pt);
+    }
     auto it_capture_demoted_pt = config.find("captureDemotedPieceType");
     if (it_capture_demoted_pt != config.end())
     {
@@ -2665,6 +2683,83 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "checking=onlyMate requires allowChecks=false: mate is defined by legal replies." << std::endl;
+        valid = false;
+    }
+    if ((v->autoMoveN != 0) != bool(v->autoMoveTypes) || v->autoMoveN < 0)
+    {
+        if (DoCheck)
+            std::cerr << "autoMoveTarget and a positive autoMoveN must be specified together." << std::endl;
+        valid = false;
+    }
+    // Movement phases range over [0, autoMoveN] with an exact Zobrist key each.
+    if (v->autoMoveN > 511)
+    {
+        if (DoCheck)
+            std::cerr << "autoMoveN must not exceed 511." << std::endl;
+        valid = false;
+    }
+    for (PieceSet ps = v->autoMoveTypes; ps;)
+    {
+        PieceType pt = pop_lsb(ps);
+        if (pt != KING && pt != COMMONER
+            && (!is_custom(pt) || v->customPiece[pt - CUSTOM_PIECES] != "K"))
+        {
+            if (DoCheck)
+                std::cerr << "autoMoveTarget requires king movement (K) for every auto-moving type." << std::endl;
+            valid = false;
+        }
+    }
+    if (v->autoMoveTypes)
+    {
+        if (popcount(v->autoMoveTypes) != 1)
+        {
+            if (DoCheck)
+                std::cerr << "autoMoveTarget supports one auto-moving piece type per variant." << std::endl;
+            valid = false;
+        }
+        bool createsAutoMover = v->captureType != MOVE_OUT || v->captureMorph
+                             || v->promotionSteal || v->flipEnclosedPieces != NO_ENCLOSING
+                             || v->borrowOpponentDropsWhenEmpty
+                             || (v->changingColorPieceTypes & v->autoMoveTypes)
+                             || (v->edgeInsertTypes & v->autoMoveTypes)
+                             || (v->surroundClaimPiece != NO_PIECE_TYPE
+                                 && (v->autoMoveTypes & piece_set(v->surroundClaimPiece)));
+        for (Color c : {WHITE, BLACK})
+            createsAutoMover |= bool(v->promotionPieceTypes[c] & v->autoMoveTypes);
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            createsAutoMover |= (v->promotedPieceType[pt] != NO_PIECE_TYPE
+                                 && (v->autoMoveTypes & piece_set(v->promotedPieceType[pt])))
+                             || (v->moveMorphPieceType[pt] != NO_PIECE_TYPE
+                                 && (v->autoMoveTypes & piece_set(v->moveMorphPieceType[pt])));
+        if (createsAutoMover)
+        {
+            if (DoCheck)
+                std::cerr << "autoMove does not support rules that create or transfer auto-moving pieces." << std::endl;
+            valid = false;
+        }
+    }
+    // A forced automatic turn replaces the whole turn, so it cannot satisfy
+    // royal check-evasion obligations: automove games with royal kings must
+    // be king-capture games.
+    if (v->autoMoveTypes && v->kingType != NO_PIECE_TYPE && !v->allowChecks)
+    {
+        if (DoCheck)
+            std::cerr << "autoMove with royal kings requires allowChecks=true: forced turns cannot satisfy check-evasion obligations." << std::endl;
+        valid = false;
+    }
+    // Intermediate jump-chain moves are not completed turns, so the two
+    // counters cannot share a turn cycle.
+    if (v->autoMoveTypes && v->forcedJumpContinuation)
+    {
+        if (DoCheck)
+            std::cerr << "autoMove cannot be combined with forcedJumpContinuation." << std::endl;
+        valid = false;
+    }
+    if (v->autoMoveTypes && (!v->multimoves.empty() || v->progressiveMultimove
+                             || v->surroundClaimExtraTurn))
+    {
+        if (DoCheck)
+            std::cerr << "autoMove requires alternating turns without extra-turn rules." << std::endl;
         valid = false;
     }
     // Contradictory adjudication: pseudo-royal loss precedes extinction, so
