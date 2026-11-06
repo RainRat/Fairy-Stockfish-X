@@ -1,0 +1,28 @@
+name: Huge boards MSVC
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+jobs:
+  msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure 64-bit MSVC checks
+        run: cmake -S tests/msvc -B .local/build/msvc -A x64
+      - name: Build arithmetic checks and engines
+        run: cmake --build .local/build/msvc --config Release --parallel 2
+      - name: Check arithmetic and bit scans
+        shell: pwsh
+        run: |
+          foreach ($width in 256, 512) {
+            foreach ($mode in "table", "hardware") {
+              & ".local/build/msvc/Release/bitboard-$width-$mode.exe"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+            $result = "uci`nsetoption name Use NNUE value false`nposition startpos`ngo perft 1`nquit" | & ".local/build/msvc/Release/engine-$width.exe"
+            if ($LASTEXITCODE -ne 0 -or ($result -join "`n") -notmatch "Nodes searched: 20") { throw "MSVC engine $width failed" }
+          }
+      - name: Check Huge board geometry and moves
+        run: python tests/board-expansion.py .local/build/msvc/Release/engine-512.exe

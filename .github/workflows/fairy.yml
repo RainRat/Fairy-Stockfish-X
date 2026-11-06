@@ -108,3 +108,20 @@ jobs:
             ./stockfish-allvars bench shogi
             ./stockfish-allvars bench capablanca
           fi
+
+      - name: Test Huge boards
+        run: |
+          ../tests/build.sh ARCH=x86-64 hugeboards=yes all=yes debug=yes EXE=stockfish-huge
+          python3 ../tests/board-expansion.py ./stockfish-huge
+          python3 ../tests/huge-board-placement.py ./stockfish-huge
+          bash ../tests/board-size-options.sh
+          bash ../tests/multiword-bitboard.sh
+
+      - name: Test Huge move generation under ASan and UBSan
+        if: ${{ matrix.config.run_expensive_tests }}
+        run: |
+          bash ../tests/huge-movegen.sh
+
+      - name: Test DLL board-size switches
+        if: ${{ matrix.config.run_expensive_tests }}
+        run: JOBS=2 bash ../tests/dll-board-size.sh

@@ -1250,11 +1250,9 @@ namespace {
             // Deduplicate equivalent routes within each movement subtype.
             // Keyed by (kind, capture-via, to): quiet routes sharing the same
             // destination collapse, while distinct via captures stay separate.
-            // Small linear table avoids a Bitboard-per-square table (≈16KB on
-            // VLB) on the stack for every two-leg piece. 512 covers 2 kinds x
-            // SQUARE_NB destinations; overflow only emits duplicates, which
-            // legal() filters, so the bound is safe rather than exact.
-            std::array<std::pair<int, int>, 512> seenPairs;
+            // Hooks cannot capture the bend, so they have at most SQUARE_NB
+            // keys. Two-step movement has at most 64 direction pairs.
+            std::array<std::pair<int, int>, SQUARE_NB + 64> seenPairs;
             int seenCount = 0;
             Bitboard directTargets = pos.moves_from(Us, pt, from, pos.pieces()) & ~pos.pieces();
             directTargets |= pos.attacks_from(Us, pt, from, pos.pieces()) & pos.pieces(them);
@@ -1286,8 +1284,16 @@ namespace {
                     }
                     if (duplicate)
                         return false;
-                    if (!routeSensitive && seenCount < int(seenPairs.size()))
-                        seenPairs[seenCount++] = {kindIdx * (SQUARE_NB + 1) + captureVia, toIdx};
+                    if (!routeSensitive)
+                    {
+                        // Bound is exact: at most 64 two-step direction pairs
+                        // plus one hook key per destination (hooks never capture
+                        // the bend). The guard keeps release builds safe anyway:
+                        // overflow only emits duplicates, which legal() filters.
+                        assert(seenCount < int(seenPairs.size()));
+                        if (seenCount < int(seenPairs.size()))
+                            seenPairs[seenCount++] = {kindIdx * (SQUARE_NB + 1) + captureVia, toIdx};
+                    }
                     moveList = emit_two_leg_candidate<Us, Type>(pos, moveList, pt, path.kind, from,
                                                                  path.via, path.to, capVia, capTo,
                                                                  target, checkers);

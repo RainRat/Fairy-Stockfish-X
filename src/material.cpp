@@ -121,13 +121,17 @@ namespace {
         if (!pieceCount[Us][pt1])
             continue;
 
+#ifdef HUGEBOARDS
+        Score v = QuadraticOurs[pt1][pt1] * pieceCount[Us][pt1];
+#else
         int v = QuadraticOurs[pt1][pt1] * pieceCount[Us][pt1];
+#endif
 
         for (int pt2 = NO_PIECE_TYPE; pt2 < pt1; ++pt2)
             v +=  QuadraticOurs[pt1][pt2] * pieceCount[Us][pt2]
                 + QuadraticTheirs[pt1][pt2] * pieceCount[Them][pt2];
 
-        bonus += pieceCount[Us][pt1] * v;
+        bonus += v * pieceCount[Us][pt1];
     }
 
     if (pos.must_capture())

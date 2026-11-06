@@ -1984,9 +1984,15 @@ namespace {
     }
 
     // Interpolate between the middlegame and (scaled by 'sf') endgame score
+#ifdef HUGEBOARDS
+    v = int((int64_t(mg) * int(me->game_phase())
+           + int64_t(eg) * int(PHASE_MIDGAME - me->game_phase()) * ScaleFactor(sf) / SCALE_FACTOR_NORMAL)
+            / PHASE_MIDGAME);
+#else
     v =  mg * int(me->game_phase())
        + eg * int(PHASE_MIDGAME - me->game_phase()) * ScaleFactor(sf) / SCALE_FACTOR_NORMAL;
     v /= PHASE_MIDGAME;
+#endif
 
     if constexpr (T)
     {
@@ -2066,9 +2072,14 @@ namespace {
 
         Value mg = mg_value(score);
         Value eg = eg_value(score);
+#ifdef HUGEBOARDS
+        Value v = Value((int64_t(mg) * int(me->game_phase())
+                       + int64_t(eg) * int(PHASE_MIDGAME - me->game_phase())) / PHASE_MIDGAME);
+#else
         Value v =  mg * int(me->game_phase())
                  + eg * int(PHASE_MIDGAME - me->game_phase());
         v /= PHASE_MIDGAME;
+#endif
 
         // Evaluation grain
         v = (v / 16) * 16;

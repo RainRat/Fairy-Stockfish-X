@@ -8,6 +8,7 @@
 **/*.s
 src/.depend
 src/.build-config
+src/*.link-config
 
 # Built binary
 src/stockfish*
