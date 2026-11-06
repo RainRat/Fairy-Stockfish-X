@@ -2743,8 +2743,13 @@ void Position::set_state(StateInfo* si) const {
   si->transforms.clear();
   si->claimedSquares = 0;
   si->pendingClaimPass = false;
-  si->autoMoveCount[WHITE] = 0;
-  si->autoMoveCount[BLACK] = 0;
+  // Every played ply, including a pass, consumes one side's turn. The FEN
+  // move number therefore restores the automatic-movement cycle on load.
+  if (has_auto_move())
+  {
+      si->autoMoveCount[WHITE] = (gamePly / 2 + (gamePly & 1)) % (var->autoMoveN + 1);
+      si->autoMoveCount[BLACK] = (gamePly / 2) % (var->autoMoveN + 1);
+  }
   si->dropHandColor = COLOR_NB;
   si->forcedJumpSquare = SQ_NONE;
   si->forcedJumpHasFollowup = false;
@@ -10556,25 +10561,19 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->forcedJumpHasFollowup = false;
   }
 
-  // Auto-move bookkeeping. Every non-pass move completes one of its owner's
-  // turns; every (autoMoveN+1)th turn is a forced snail step instead of a
-  // normal move, so snail steps count as turns too. A safety-valve pass on a
-  // scheduled snail turn consumes that turn, so the owner gets normal turns
-  // again before the next trigger; other passes never advance the cycle.
+  // Every played turn, including a pass, advances the owner's cycle. This
+  // matches the FEN move number used to restore the phase on a fresh load.
   // The phase is legality-relevant, so the key follows it.
-  if (has_auto_move() && !st->pendingClaimPass && !forced_jump_continuation())
+  if (has_auto_move())
   {
       const Color mover = ~sideToMove;
-      if (!passMove || (auto_move_turn(mover) && forced_auto_move_for(mover) == MOVE_NONE))
-      {
-          const int oldPhase = auto_move_phase(var, st->autoMoveCount[mover]);
-          const int newPhase = oldPhase == var->autoMoveN ? 0 : oldPhase + 1;
-          Key diff = Zobrist::autoMovePhase[mover][oldPhase]
-                   ^ Zobrist::autoMovePhase[mover][newPhase];
-          st->autoMoveCount[mover] = newPhase;
-          st->key ^= diff;
-          st->boardKey ^= diff;
-      }
+      const int oldPhase = auto_move_phase(var, st->autoMoveCount[mover]);
+      const int newPhase = oldPhase == var->autoMoveN ? 0 : oldPhase + 1;
+      Key diff = Zobrist::autoMovePhase[mover][oldPhase]
+               ^ Zobrist::autoMovePhase[mover][newPhase];
+      st->autoMoveCount[mover] = newPhase;
+      st->key ^= diff;
+      st->boardKey ^= diff;
   }
 
 #ifndef NDEBUG
@@ -13344,9 +13343,8 @@ bool Position::pos_is_ok() const {
   set_state(&si);
   if (has_auto_move())
   {
-      // Movement phase is keyed but intentionally not reconstructed from the
-      // board (fresh loads start a new cycle): carry it over so the key
-      // comparison below stays meaningful.
+      // Null search can flip sides without advancing gamePly. Check the key
+      // against the actual in-memory phase in that speculative position.
       si.autoMoveCount[WHITE] = st->autoMoveCount[WHITE];
       si.autoMoveCount[BLACK] = st->autoMoveCount[BLACK];
       recompute_state_hashes_and_material(&si);

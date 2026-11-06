@@ -2749,6 +2749,13 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "autoMove cannot be combined with forcedJumpContinuation." << std::endl;
         valid = false;
     }
+    if (v->autoMoveTypes && (!v->multimoves.empty() || v->progressiveMultimove
+                             || v->surroundClaimExtraTurn))
+    {
+        if (DoCheck)
+            std::cerr << "autoMove requires alternating turns without extra-turn rules." << std::endl;
+        valid = false;
+    }
     // Contradictory adjudication: pseudo-royal loss precedes extinction, so
     // overlapping targets with different results are ambiguous.
     if (v->pseudoRoyalValue != VALUE_NONE && v->pseudoRoyalTypes)

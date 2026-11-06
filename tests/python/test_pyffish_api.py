@@ -680,5 +680,10 @@ class TestPublicAPI(unittest.TestCase):
         fen = "4k3/8/8/8/8/8/SS6/4K3 w - - 0 1"
         self.assertEqual(sf.validate_fen(fen, "immortal-snail"), sf.FEN_INVALID_AUTOMOVE_COUNT)
 
+    def test_automove_fen_restores_scheduled_turn(self):
+        moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6"]
+        fen = sf.get_fen("immortal-snail", "startpos", moves)
+        self.assertEqual(sf.legal_moves("immortal-snail", fen, []), ["a2a3"])
+
 if __name__ == "__main__":
     unittest.main()

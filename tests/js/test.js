@@ -334,6 +334,16 @@ describe('board.setFen(fen)', function () {
     chai.expect(board.fen()).to.equal(originalFen);
     board.delete();
   });
+
+  it("restores an automatic turn from the FEN move number", () => {
+    const board = new ffish.Board("immortal-snail");
+    board.pushMoves("e2e4 e7e5 g1f3 b8c6 f1c4 g8f6");
+    const loaded = new ffish.Board("immortal-snail", board.fen());
+    chai.expect(board.legalMoves()).to.equal("a2a3");
+    chai.expect(loaded.legalMoves()).to.equal("a2a3");
+    loaded.delete();
+    board.delete();
+  });
 });
 
 describe('board.sanMove(uciMove)', function () {

@@ -1278,6 +1278,17 @@ automove_jump_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains "${automove_jump_output}" "autoMove cannot be combined with forcedJumpContinuation"
 
 cat > "$FSX_TMP_INI" <<'INI'
+[test-automove-multimove:chess]
+customPiece1 = s:K
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
+multimoves = 2 2
+INI
+automove_multimove_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_contains "${automove_multimove_output}" "autoMove requires alternating turns without extra-turn rules."
+
+cat > "$FSX_TMP_INI" <<'INI'
 [test-automove-big-n:chess]
 customPiece1 = s:K
 allowChecks = true
@@ -1344,6 +1355,16 @@ startFen = 4k3/a7/8/8/8/8/S7/4K3 w - - 0 1
 allowChecks = true
 autoMoveTarget = s:k a:k
 autoMoveN = 1
+
+[test-automove-pass:chess]
+king = -
+customPiece1 = s:K
+pieceToCharTable = -
+startFen = q6s/8/8/8/8/8/8/S6Q w - - 0 1
+pass = true
+doublePassEndsGame = false
+autoMoveN = 1
+autoMoveTarget = s:q
 
 [test-automove-self:chess]
 customPiece1 = s:K
@@ -1528,9 +1549,7 @@ UCI
 )
 assert_contains "${automove_cycle16_output}" "a6a5: 1"
 
-# The movement phase is legality-relevant state: the same board and side to
-# move hash differently when reached with different turn counts than when
-# loaded fresh from FEN (which resets the cycle).
+# A fresh FEN load restores the same phase and key from the move number.
 automove_key_played=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
 position startpos moves e2e4 e7e5 g1f3 b8c6 f1c4 g8f6
 d
@@ -1544,6 +1563,30 @@ UCI
 automove_key_played=$(grep -oE '^Key: [0-9A-F]+' <<<"${automove_key_played}")
 automove_key_fen=$(grep -oE '^Key: [0-9A-F]+' <<<"${automove_key_fen}")
 [[ -n "${automove_key_played}" && -n "${automove_key_fen}" ]]
-[[ "${automove_key_played}" != "${automove_key_fen}" ]]
+[[ "${automove_key_played}" == "${automove_key_fen}" ]]
+
+automove_fen_step=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-cycle <<'UCI'
+position fen r1bqkb1r/sppp1ppp/2n2n2/4p3/2B1P3/5N2/SPPP1PPP/RNBQK2R w KQkq - 4 4
+go perft 1
+UCI
+)
+assert_contains "${automove_fen_step}" "a2a3: 1"
+assert_nodes "${automove_fen_step}" 1
+
+# Ordinary passes consume turns too, including when the cycle is loaded from FEN.
+automove_pass_played=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-pass <<'UCI'
+position startpos moves 0000 0000
+go perft 1
+UCI
+)
+assert_contains "${automove_pass_played}" "a1a2: 1"
+assert_nodes "${automove_pass_played}" 1
+automove_pass_loaded=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-pass <<'UCI'
+position fen q6s/8/8/8/8/8/8/S6Q w - - 2 2
+go perft 1
+UCI
+)
+assert_contains "${automove_pass_loaded}" "a1a2: 1"
+assert_nodes "${automove_pass_loaded}" 1
 
 echo "parser regression tests passed"
