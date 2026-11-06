@@ -936,6 +936,10 @@ describe('ffish.validateFen(fen)', function () {
 describe('ffish.validateFen(fen, uciVariant)', function () {
     const FEN_INVALID_CHAR = -10;
 
+    it("rejects multiple auto movers on one side", () => {
+      chai.expect(ffish.validateFen("4k3/8/8/8/8/8/SS6/4K3 w - - 0 1", "immortal-snail")).to.equal(-18);
+    });
+
     it("it validates a given fen and returns +1 if fen is valid. Otherwise an error code will be returned.", () => {
       // check if starting fens are valid for all variants
       const variants = ffish.variants().split(" ")

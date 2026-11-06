@@ -2698,6 +2698,40 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "autoMoveN must not exceed 511." << std::endl;
         valid = false;
     }
+    for (PieceSet ps = v->autoMoveTypes; ps;)
+    {
+        PieceType pt = pop_lsb(ps);
+        if (pt != KING && pt != COMMONER
+            && (!is_custom(pt) || v->customPiece[pt - CUSTOM_PIECES] != "K"))
+        {
+            if (DoCheck)
+                std::cerr << "autoMoveTarget requires king movement (K) for every auto-moving type." << std::endl;
+            valid = false;
+        }
+    }
+    if (v->autoMoveTypes)
+    {
+        bool createsAutoMover = v->captureType != MOVE_OUT || v->captureMorph
+                             || v->promotionSteal || v->flipEnclosedPieces != NO_ENCLOSING
+                             || v->borrowOpponentDropsWhenEmpty
+                             || (v->changingColorPieceTypes & v->autoMoveTypes)
+                             || (v->edgeInsertTypes & v->autoMoveTypes)
+                             || (v->surroundClaimPiece != NO_PIECE_TYPE
+                                 && (v->autoMoveTypes & piece_set(v->surroundClaimPiece)));
+        for (Color c : {WHITE, BLACK})
+            createsAutoMover |= bool(v->promotionPieceTypes[c] & v->autoMoveTypes);
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            createsAutoMover |= (v->promotedPieceType[pt] != NO_PIECE_TYPE
+                                 && (v->autoMoveTypes & piece_set(v->promotedPieceType[pt])))
+                             || (v->moveMorphPieceType[pt] != NO_PIECE_TYPE
+                                 && (v->autoMoveTypes & piece_set(v->moveMorphPieceType[pt])));
+        if (createsAutoMover)
+        {
+            if (DoCheck)
+                std::cerr << "autoMove does not support rules that create or transfer auto-moving pieces." << std::endl;
+            valid = false;
+        }
+    }
     // A forced automatic turn replaces the whole turn, so it cannot satisfy
     // royal check-evasion obligations: automove games with royal kings must
     // be king-capture games.

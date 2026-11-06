@@ -757,6 +757,7 @@ PyMODINIT_FUNC PyInit_pyffish() {
     PyModule_AddObject(module, "NOTATION_THAI_LAN", PyLong_FromLong(NOTATION_THAI_LAN));
 
     // validation
+    PyModule_AddObject(module, "FEN_INVALID_AUTOMOVE_COUNT", PyLong_FromLong(FEN::FEN_INVALID_AUTOMOVE_COUNT));
     PyModule_AddObject(module, "FEN_INVALID_VARIANT", PyLong_FromLong(FEN::FEN_INVALID_VARIANT));
     PyModule_AddObject(module, "FEN_INVALID_MOVE", PyLong_FromLong(FEN::FEN_INVALID_MOVE));
     PyModule_AddObject(module, "FEN_INVALID_POINTS_INFO", PyLong_FromLong(FEN::FEN_INVALID_POINTS_INFO));

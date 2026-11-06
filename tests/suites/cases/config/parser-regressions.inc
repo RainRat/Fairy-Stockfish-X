@@ -1288,6 +1288,44 @@ automove_bign_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains "${automove_bign_output}" "autoMoveN must not exceed 511"
 
 cat > "$FSX_TMP_INI" <<'INI'
+[test-automove-rook:chess]
+customPiece1 = s:R
+pieceToCharTable = -
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
+
+[test-automove-two:chess]
+customPiece1 = s:K
+pieceToCharTable = -
+startFen = 4k3/8/8/8/8/8/SS6/4K3 w - - 0 1
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
+
+[test-automove-two-types:chess]
+customPiece1 = s:K
+customPiece2 = a:K
+pieceToCharTable = -
+startFen = 4k3/8/8/8/8/8/SA6/4K3 w - - 0 1
+allowChecks = true
+autoMoveTarget = s:k a:k
+autoMoveN = 1
+
+[test-automove-promotion:chess]
+customPiece1 = s:K
+pieceToCharTable = -
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
+promotionPieceTypes = s
+INI
+automove_invalid_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_contains_literal "${automove_invalid_output}" "autoMoveTarget requires king movement (K)"
+assert_contains "${automove_invalid_output}" "At most one auto-moving piece per side is supported."
+assert_contains "${automove_invalid_output}" "autoMove does not support rules that create or transfer auto-moving pieces."
+
+cat > "$FSX_TMP_INI" <<'INI'
 [test-automove:chess]
 customPiece1 = s:K
 pieceToCharTable = -
@@ -1297,6 +1335,15 @@ captureForbidden = *:s
 selfCaptureTypes = s
 autoMoveN = 1
 autoMoveTarget = s:k
+
+[test-automove-different-types:chess]
+customPiece1 = s:K
+customPiece2 = a:K
+pieceToCharTable = -
+startFen = 4k3/a7/8/8/8/8/S7/4K3 w - - 0 1
+allowChecks = true
+autoMoveTarget = s:k a:k
+autoMoveN = 1
 
 [test-automove-self:chess]
 customPiece1 = s:K
@@ -1342,6 +1389,19 @@ selfCaptureTypes = s
 autoMoveN = 3
 autoMoveTarget = s:k
 INI
+
+automove_valid_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-different-types <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "${automove_valid_output}" "e1e2: 1"
+
+automove_fen_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI' || true
+position fen 4k3/8/8/8/8/8/SS6/4K3 w - - 0 1
+UCI
+)
+assert_contains_literal "${automove_fen_output}" "Invalid position FEN (validation error -18)"
 
 # Normal turns are unrestricted and need no passes.
 automove_normal_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI'

@@ -676,5 +676,9 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(sf.validate_position("chess", fen, []), 1)
         self.assertIsInstance(sf.get_fog_fen(fen, "chess"), str)
 
+    def test_automove_requires_one_piece_per_side(self):
+        fen = "4k3/8/8/8/8/8/SS6/4K3 w - - 0 1"
+        self.assertEqual(sf.validate_fen(fen, "immortal-snail"), sf.FEN_INVALID_AUTOMOVE_COUNT)
+
 if __name__ == "__main__":
     unittest.main()
