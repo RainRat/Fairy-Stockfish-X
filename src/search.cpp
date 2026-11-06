@@ -1765,11 +1765,18 @@ moves_loop: // When in check, search starts from here
 
     // Scheduled snail turns have a single mandatory continuation: search it
     // directly with no stand pat and no pruning. (In-check turns already
-    // take the evasion path below.) Blocked turns with no resolvable step
-    // fall through to ordinary quiescence.
+    // take the evasion path below.)
     if (!ss->inCheck && pos.has_auto_move() && pos.auto_move_turn(pos.side_to_move()))
     {
         Move forced = pos.forced_auto_move();
+        if (forced == MOVE_NONE)
+        {
+            // A blocked step consumes its turn through a real pass, which also
+            // advances the automatic-movement phase. Reuse its legal encoding.
+            MoveList<LEGAL> legal(pos);
+            if (legal.size() == 1 && is_pass(legal.begin()->move))
+                forced = legal.begin()->move;
+        }
         if (forced != MOVE_NONE && pos.legal(forced))
         {
             ss->currentMove = forced;

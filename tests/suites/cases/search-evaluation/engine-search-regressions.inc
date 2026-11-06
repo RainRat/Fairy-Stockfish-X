@@ -74,6 +74,38 @@ EOF
   [[ "$skill_best" =~ ^(e2e4|d2d4|g1f3|b1c3)$ ]]
 }
 
+test_blocked_automove_qsearch() {
+  load_inline_variants <<'EOF'
+[automove-qsearch:chess]
+customPiece1 = s:K
+pieceToCharTable = -
+startFen = k7/4r3/8/8/8/8/P2s3P/SN1QK3 w - - 0 1
+allowChecks = true
+captureForbidden = *:s
+autoMoveN = 1
+autoMoveTarget = s:k
+autoMoveSidestep = false
+doublePassEndsGame = false
+EOF
+  local out
+  out=$(run_expect "$ENGINE" "$FSX_TMP_INI" <<EOF
+$(expect_engine_setup)
+ set variant_path [lindex \$argv 1]
+ send "uci\n"
+ expect "uciok"
+ send "setoption name VariantPath value \$variant_path\n"
+ send "setoption name UCI_Variant value automove-qsearch\n"
+ send "position startpos moves h2h3\n"
+ send "go depth 1 searchmoves e7e2\n"
+ expect "bestmove e7e2"
+ send "quit\n"
+ expect eof
+EOF
+)
+  # White's blocked snail must pass before Black's snail captures the king.
+  assert_contains "$out" '^info depth 1 .* score mate 2 '
+}
+
 test_gating_regressions() {
   load_inline_variants <<'EOF'
 [gatingblock:chess]
@@ -140,6 +172,7 @@ test_signature() {
 test_invalid_scalar_regression
 test_verbosity
 test_rootmove_searchmoves
+test_blocked_automove_qsearch
 test_gating_regressions
 test_bench_stdin
 test_signature
