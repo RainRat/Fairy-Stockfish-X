@@ -95,7 +95,7 @@ verify_build_board_family() {
         echo "FAILED: ${EXE} board-family mismatch (profile: ${BUILD_PROFILE}): ${fail}" >&2
         return 1
     fi
-    if [[ "$board" == huge && "$catalog" != *" HB 512"* ]]; then
+    if [[ "$board" == huge && "$catalog" != *" HB "* ]]; then
         echo "FAILED: ${EXE} must identify its Huge boards (HB) capacity" >&2
         return 1
     fi

@@ -74,7 +74,7 @@ ROOT_DIR="$out/profile-fixture"
 unset FSX_ENGINE_FAMILY
 [[ $(fsx_engine_family "$ROOT_DIR" stockfish-avx512) == normal ]]
 [[ $(fsx_engine_family "$ROOT_DIR" stockfish-huge) == huge ]]
-[[ $(fsx_engine_family "$ROOT_DIR" stockfish-512-debug) == huge ]]
+[[ $(fsx_engine_family "$ROOT_DIR" stockfish-huge-debug) == huge ]]
 mkdir -p "$ROOT_DIR/src"
 printf '#!/bin/sh\nexit 0\n' > "$ROOT_DIR/src/stockfish-avx512"
 for bits in 64 128 256 512; do

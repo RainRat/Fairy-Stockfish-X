@@ -185,7 +185,7 @@ string engine_info(bool to_uci, bool to_xboard) {
   }
 
 #ifdef HUGEBOARDS
-  ss << " HB 512";
+  ss << " HB";
 #elif defined(VERY_LARGE_BOARDS)
   ss << " VLB";
 #elif defined(LARGEBOARDS)

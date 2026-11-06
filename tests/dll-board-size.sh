@@ -12,7 +12,7 @@ import sys
 dll = ctypes.CDLL(str(pathlib.Path(sys.argv[1]).resolve()))
 bits = int(sys.argv[2])
 width, height, banner = {64: (8, 8, ""), 128: (12, 10, " LB "),
-                       256: (16, 16, " VLB "), 512: (22, 22, " HB 512 ")}[bits]
+                       256: (16, 16, " VLB "), 512: (22, 22, " HB ")}[bits]
 
 
 def function(name, result, *args):
@@ -59,7 +59,7 @@ finally:
 assert load((f"[dll-oversized:chess]\nmaxFile = {width + 1}\nmaxRank = {height}\n"
              "castling = false\n").encode()) == 0
 assert not new(b"dll-oversized", b"", False), info
-print(f"DLL {bits}-bit banner, maximum geometry, boundary move/undo and size rejection passed")
+print(f"DLL {width}x{height} banner, boundary move/undo and size rejection passed")
 PY
 }
 # Revisit 128 after larger tiers to check cached object and link selection.

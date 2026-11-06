@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""512-bit checks; optional extra engine paths compare perft on overlapping boards."""
+"""Huge-board checks; optional engines compare perft on overlapping boards."""
 import pathlib
 import re
 import subprocess
@@ -15,7 +15,7 @@ for path in sys.argv[2:]:
     engine = pathlib.Path(path).resolve()
     info = subprocess.run([str(engine)], input="quit\n", text=True, capture_output=True,
                           check=True, timeout=60).stdout.splitlines()[0].split()
-    limits = (22, 22) if "512" in info else (16, 16) if "VLB" in info else (12, 10) if "LB" in info else (8, 8)
+    limits = (22, 22) if "HB" in info else (16, 16) if "VLB" in info else (12, 10) if "LB" in info else (8, 8)
     REFERENCES.append((engine, limits))
 
 
@@ -208,7 +208,7 @@ check_special("compound", {**kings, (18, 15): "A", (19, 16): "p", (20, 17): "p"}
               "s16t17u18", {**kings, (20, 17): "A"})
 check_special("hook", {**kings, (19, 18): "A"}, "t19t21u21", {**kings, (20, 20): "A"})
 check_special("wrap", {**kings, (21, 20): "R"}, "v21a21", {**kings, (0, 20): "R"})
-print("512-bit promotions, drops, compound moves, hooks, wrapping and undo passed")
+print("Huge-board promotions, drops, compound moves, hooks, wrapping and undo passed")
 
 pin = {(19, 19): "K", (19, 20): "R", (19, 21): "r", (0, 21): "k", (1, 0): "N"}
 output = run("royal", f"position fen {fen(22, 22, pin)}\ngo perft 1")
@@ -216,7 +216,7 @@ assert "t21t22: 1" in output and "t21u21: 1" not in output, output
 del pin[(19, 20)]
 output = run("royal", f"position fen {fen(22, 22, pin)}\ngo perft 1")
 assert "t20u20: 1" in output and "b1c3: 1" not in output, output
-print("512-bit pins and check evasions above square 255 passed")
+print("Huge-board pins and check evasions above square 255 passed")
 
 output = run("board-22x22", "position startpos\ngo perft 1", protocol="usi")
 assert "21v21a: 1" in output, output
@@ -225,14 +225,14 @@ del after[(1, 0)]
 after[(1, 21)] = "R"
 output = run("board-22x22", "position startpos moves 21v21a\nd", protocol="usi")
 assert "Fen: " + fen(22, 22, after, "b").split()[0] in output, output
-print("512-bit USI coordinates passed")
+print("Huge-board USI coordinates passed")
 
 dense = fen(22, 22, {(x, y): "N" for x in range(22) for y in range(22)})
 output = run("capacity", f"position fen {dense}\nd\ngo perft 1\nd")
 assert output.count("Fen: " + dense) == 2 and "Nodes searched: 0" in output, output
 keys = re.findall(r"^Key: (\w+)$", output, re.M)
 assert keys[0] == keys[1], output
-print("512-bit 484-piece position capacity passed")
+print("Huge-board 484-piece position capacity passed")
 
 dense_pieces = {(x, y): "N" for x in range(22) for y in range(22)}
 for x in range(18, 22):
@@ -242,4 +242,4 @@ dense_pieces[(21, 21)] = "n"
 INI.write_text(INI.read_text() + "\n[dense-search:capacity]\nstartFen = "
                + fen(22, 22, dense_pieces) + "\n")
 search("dense-search")
-print("512-bit dense position search passed")
+print("Huge-board dense position search passed")

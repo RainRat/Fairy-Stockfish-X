@@ -27,31 +27,27 @@ For example:
 make -C src -j build ARCH=x86-64-modern largeboards=yes
 ```
 
-One Boolean option selects each compile-time capacity: the default 64-bit
-build, `largeboards=yes` for 128 bits, `verylargeboards=yes` for 256 bits,
-and `hugeboards=yes` for 512 bits. Explicit Boolean options must agree with
-each other. The 256- and
-512-bit builds use the same multiword operations and generic rider geometry;
-their packed moves occupy 64 bits. Magic tables and PEXT are disabled for both.
-The 512-bit tier also uses 32-bit evaluation score lanes so dense positions
-do not overflow the ordinary 16-bit lanes. Composed movegen on 22x22 can need
-tens of thousands of move entries, so the huge test build uses `all=yes` for
+The default build supports boards up to 8x8; `largeboards=yes` supports 12x10,
+`verylargeboards=yes` supports 16x16, and `hugeboards=yes` supports 22x22.
+Explicit Boolean options must agree with each other. Very-large and huge builds
+share multiword operations and generic rider geometry. Magic tables and PEXT
+are disabled for both. Huge builds use wider evaluation scores for dense
+positions. Composed movegen on 22x22 can need tens of thousands of move
+entries, so the huge test build uses `all=yes` for
 the larger move lists; the base huge buffer already covers drop variants at
 that size.
-Keep the 256-bit tier for existing variants: the 512-bit executable has larger
+Keep the very-large tier for existing variants: the huge executable has larger
 geometry and search-history tables even when it searches a smaller board.
 
-Swapped-order GCC 11.4 measurements against the pre-change 256-bit build found
+Swapped-order GCC 11.4 measurements against the pre-change very-large build found
 Chu Shogi +0.3%, Dai Shogi -2.2%, and 16x16 Hex -4.2% in nodes per second,
 with matching node totals. This PR retains the shared arithmetic at that
 measured cost; shift-unrolling and bit-clearing experiments slowed other games.
 Recovering that cost requires further measured optimization.
 
-Make builds select capacity through the Boolean options, rather than legacy `-D`
-flags in `CXXFLAGS`. Direct compiler builds still accept `-DLARGEBOARDS`,
-`-DVERY_LARGE_BOARDS`, or `-DHUGEBOARDS` when `BOARD_BITS` is absent.
-Compatibility macros that require a larger board than an explicit `BOARD_BITS`
-fail at compile time.
+Make builds select capacity through the Boolean options. Direct compiler builds
+still accept `-DLARGEBOARDS`, `-DVERY_LARGE_BOARDS`, or `-DHUGEBOARDS`.
+Conflicting capacity macros fail at compile time.
 
 ```bash
 tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
@@ -62,10 +58,10 @@ bash tests/multiword-bitboard.sh
 ```
 
 The Boolean options also work with `src/Makefile_js` and
-`src/Makefile_dll`. The engine banner includes `HB 512`; recorded build profiles
+`src/Makefile_dll`. The engine banner includes `HB`; recorded build profiles
 use `board=huge` (named like `normal`/`large`/`very-large`). For the
-Python extension, set `CFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"` and
-`CXXFLAGS="-O3 -DNDEBUG -DBOARD_BITS=512"`, then run
+Python extension, set `CFLAGS="-O3 -DNDEBUG -DHUGEBOARDS"` and
+`CXXFLAGS="-O3 -DNDEBUG -DHUGEBOARDS"`, then run
 `python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
 object files and bindings from different tiers are incompatible.
 
@@ -88,7 +84,7 @@ table and hardware popcount, and engine builds.
 CI runs the full ASan/UBSan stress build with GCC. Both GCC and Clang run the
 Huge debug engine checks and the independent UBSan arithmetic tests.
 
-A 512-bit build currently uses about 74 MiB for fixed geometry tables and
+A huge-board build currently uses about 74 MiB for fixed geometry tables and
 roughly 673 MiB resident memory at native startup without embedded NNUE, with
 one thread and a 16 MiB hash table. Most of the per-thread allocation is
 continuation history (about 458 MiB per thread). This allocation also applies

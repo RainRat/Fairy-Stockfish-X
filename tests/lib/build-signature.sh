@@ -67,7 +67,7 @@ fsx_engine_family() {
   case "${engine##*/}" in
     stockfish-large*|stockfish-allvars*) echo large ;;
     stockfish-vlb*) echo very-large ;;
-    stockfish-512*|stockfish-huge*) echo huge ;;
+    stockfish-huge*) echo huge ;;
     *) echo normal ;;
   esac
 }

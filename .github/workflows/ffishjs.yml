@@ -44,15 +44,15 @@ jobs:
       - name: Run unit tests
         working-directory: tests/js
         env:
-          FSX_TEST_BOARD_BITS: '128'
+          FSX_TEST_BOARD_FAMILY: large
         run: npm test
-      - name: Build 64-bit board module
+      - name: Build normal-board module
         working-directory: src
         run: make -f Makefile_js clean && make -f Makefile_js build largeboards=no
-      - name: Test 64-bit board capacity
+      - name: Test normal-board capacity
         working-directory: tests/js
         env:
-          FSX_TEST_BOARD_BITS: '64'
+          FSX_TEST_BOARD_FAMILY: normal
         run: npm test -- --grep 'compiled board capacity'
       - name: Build very-large-board module
         working-directory: src
@@ -61,7 +61,7 @@ jobs:
         working-directory: tests/js
         env:
           FSX_REQUIRE_VLB: '1'
-          FSX_TEST_BOARD_BITS: '256'
+          FSX_TEST_BOARD_FAMILY: very-large
         run: npm test
       - name: Build Huge boards module
         working-directory: src
@@ -70,7 +70,7 @@ jobs:
         working-directory: tests/js
         env:
           FSX_REQUIRE_HUGE: '1'
-          FSX_TEST_BOARD_BITS: '512'
+          FSX_TEST_BOARD_FAMILY: huge
         run: npm test
       - name: Build very-large-board ES6 module
         working-directory: src

@@ -50,7 +50,7 @@ binary sits alongside the other tier binaries instead of overwriting
 Run `python3 tests/board-expansion.py src/stockfish-huge`,
 `python3 tests/huge-board-placement.py src/stockfish-huge`, and
 `bash tests/multiword-bitboard.sh` for expansion coverage. Keep the smaller
-tiers available: 512-bit search histories use substantially more memory.
+tiers available: huge-board search histories use substantially more memory.
 The placement case reports explicit geometry skips on smaller suite engines;
 run it directly against `src/stockfish-huge` to require all seven variants.
 

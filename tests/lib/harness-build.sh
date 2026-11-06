@@ -87,7 +87,7 @@ fsx_harness_init() {
     stockfish-allvars*) FSX_HARNESS_BUILD_EXE=stockfish-allvars; all=yes; nnue=yes ;;
     stockfish-large*) FSX_HARNESS_BUILD_EXE=stockfish-large; all=yes ;;
     stockfish-vlb*) FSX_HARNESS_BUILD_EXE=stockfish-vlb; all=yes; nnue=yes ;;
-    stockfish-512*|stockfish-huge*) FSX_HARNESS_BUILD_EXE=${FSX_HARNESS_ENGINE_BASENAME%%-nnue*}; all=yes ;;
+    stockfish-huge*) FSX_HARNESS_BUILD_EXE=${FSX_HARNESS_ENGINE_BASENAME%%-nnue*}; all=yes ;;
   esac
 
   recorded_profile=$(fsx_build_recorded_profile "$root_dir" "$engine" 2>/dev/null || true)

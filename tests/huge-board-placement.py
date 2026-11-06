@@ -42,7 +42,7 @@ def fen(size, pieces, turn="w", points=""):
 
 catalog = subprocess.run([str(ENGINE)], input=f"uci\nsetoption name VariantPath value {INI}\nuci\nquit\n",
                          text=True, capture_output=True, check=True, timeout=60).stdout
-huge = " HB 512 " in catalog
+huge = " HB " in catalog
 available = set(re.findall(r"\bvar ([^\s]+)", catalog))
 cases = [("gomoku-19x19", 19, False), ("hex-19x19", 19, False), ("hex-22x22", 22, False),
          ("go19", 19, True), ("capture-go19", 19, False), ("nogo19", 19, False),

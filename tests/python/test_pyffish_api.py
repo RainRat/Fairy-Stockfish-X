@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT_DIR))
 import pyffish as sf
 
 class TestBindings(unittest.TestCase):
-    @unittest.skipUnless(" HB 512 " in sf.info(), "requires a Huge boards extension")
+    @unittest.skipUnless(" HB " in sf.info(), "requires a Huge boards extension")
     def test_huge_placement_definitions(self):
         for variant, size, passes in [("gomoku-19x19", 19, False), ("hex-19x19", 19, False),
                                      ("hex-22x22", 22, False), ("go19", 19, True),
@@ -27,7 +27,7 @@ class TestBindings(unittest.TestCase):
                 self.assertIn(move, moves)
                 self.assertNotEqual(sf.get_fen(variant, start, [move]), sf.get_fen(variant, start, []))
 
-    @unittest.skipUnless(" 512 " in sf.info(), "requires a 512-bit extension")
+    @unittest.skipUnless(" HB " in sf.info(), "requires a Huge boards extension")
     def test_board_512_coordinates(self):
         fen = "21k/20R1/" + "22/" * 19 + "K21 w - - 0 1"
         sf.load_variant_config(

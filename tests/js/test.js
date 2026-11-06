@@ -1195,11 +1195,11 @@ describe('two-leg route parsing', function () {
 describe('compiled board capacity', function () {
   it('checks the banner, maximum coordinates, move/undo and oversized rejection', function () {
     const info = ffish.info();
-    const bits = info.includes(' HB 512 ') ? 512 : info.includes(' VLB ') ? 256
-      : info.includes(' LB ') ? 128 : 64;
-    if (process.env.FSX_TEST_BOARD_BITS)
-      chai.expect(bits).to.equal(Number(process.env.FSX_TEST_BOARD_BITS));
-    const [width, height] = {64: [8, 8], 128: [12, 10], 256: [16, 16], 512: [22, 22]}[bits];
+    const family = info.includes(' HB ') ? 'huge' : info.includes(' VLB ') ? 'very-large'
+      : info.includes(' LB ') ? 'large' : 'normal';
+    if (process.env.FSX_TEST_BOARD_FAMILY)
+      chai.expect(family).to.equal(process.env.FSX_TEST_BOARD_FAMILY);
+    const [width, height] = {normal: [8, 8], large: [12, 10], 'very-large': [16, 16], huge: [22, 22]}[family];
     const fen = `${width - 1}k/${width - 2}R1/` + `${width}/`.repeat(height - 3)
       + `K${width - 1} w - - 0 1`;
     ffish.loadVariantConfig(`[js-capacity:chess]\nmaxFile = ${width}\nmaxRank = ${height}\n`
@@ -1227,7 +1227,7 @@ describe('compiled board capacity', function () {
 
 describe('Huge-board placement variants', function () {
   before(function () {
-    if (!ffish.info().includes(' HB 512 ')) {
+    if (!ffish.info().includes(' HB ')) {
       if (process.env.FSX_REQUIRE_HUGE === '1') throw new Error('Expected a Huge boards module');
       this.skip();
     }
