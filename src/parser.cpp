@@ -2711,6 +2711,12 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
     if (v->autoMoveTypes)
     {
+        if (popcount(v->autoMoveTypes) != 1)
+        {
+            if (DoCheck)
+                std::cerr << "autoMoveTarget supports one auto-moving piece type per variant." << std::endl;
+            valid = false;
+        }
         bool createsAutoMover = v->captureType != MOVE_OUT || v->captureMorph
                              || v->promotionSteal || v->flipEnclosedPieces != NO_ENCLOSING
                              || v->borrowOpponentDropsWhenEmpty

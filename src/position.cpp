@@ -4119,14 +4119,9 @@ Move Position::forced_auto_move_for(Color us) const {
 
   const Bitboard steps = (attacks_from(us, pt, from) | moves_from(us, pt, from)) & board_bb();
   Bitboard reach = steps & ~pieces(us);
-  // Capturing own pieces "in the way" is the point of selfCapture; the forced
-  // step may land on a friendly non-royal piece. The engine still excludes the
-  // own royal from self-capture, so do the same here.
+  // The forced step may crush any friendly piece, including its own royal.
   if (self_capture(pt))
       reach |= pieces(us) & attacks_bb<KING>(from) & board_bb();
-  const Square ownRoyal = royal_square(us);
-  if (ownRoyal != SQ_NONE)
-      reach &= ~square_bb(ownRoyal);
   // Drop destinations whose occupant this piece is forbidden to capture.
   for (Bitboard cand = reach; cand;)
   {
@@ -6210,6 +6205,8 @@ bool Position::legal(Move m) const {
 
   const Square royalSquare = royal_square(us);
   const bool hasRoyal = royalSquare != SQ_NONE;
+  const bool autoRoyalCapture = hasRoyal && has_auto_move() && auto_move_turn(us)
+                             && !passMove && to == royalSquare;
   if (!passMove && !hasRoyal && royal_piece_type(us) != NO_PIECE_TYPE && is_actual_runtime_royal(us, king_type()))
       return false;
 
@@ -6328,7 +6325,7 @@ bool Position::legal(Move m) const {
   // Universal-hopper semantics are fully encoded in attacks/moves generation and
   // jump_capture_square() capture-square resolution; avoid legacy pre-filters here.
   if ((pieces(us) & to) && !passMove && !is_self_destruct(m) && !is_stack_move(m) && !is_two_leg(m)
-      && is_uncapturable_royal_square(us, to))
+      && is_uncapturable_royal_square(us, to) && !autoRoyalCapture)
       return false;
   if (!dropMove && violates_mutual_hop_restriction(from, to, movePt))
       return false;
@@ -7032,7 +7029,7 @@ bool Position::legal(Move m) const {
       }
   }
 
-  if (hasRoyal)
+  if (hasRoyal && !autoRoyalCapture)
   {
       Square kingSquareAfterMove = moverIsRoyal ? (rifleShot ? from : to)
                                                 : royalSquare;
@@ -7486,7 +7483,8 @@ bool Position::pseudo_legal(const Move m) const {
       bool antiRoyalSelfCapture = anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)));
       if (!pushMove && !((self_capture(type_of(pc)) || antiRoyalSelfCapture) && isCapture))
           return false;
-      if (is_uncapturable_royal_square(us, to))
+      if (is_uncapturable_royal_square(us, to)
+          && !(has_auto_move() && auto_move_turn(us)))
           return false;
   }
 

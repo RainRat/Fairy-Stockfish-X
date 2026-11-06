@@ -1385,7 +1385,7 @@ void state() {
     set_position(pos, states, "immortal-snail",
                  variants.get("immortal-snail")->startFen.c_str());
     const char* autoMoves[] = {
-      "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6", "a2a3", "a7a6"
+      "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6", "a4b5", "a5b4"
     };
     for (int ply = 0; ply < 8; ++ply)
     {

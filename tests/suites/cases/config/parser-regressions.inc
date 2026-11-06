@@ -1334,6 +1334,7 @@ INI
 automove_invalid_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains_literal "${automove_invalid_output}" "autoMoveTarget requires king movement (K)"
 assert_contains "${automove_invalid_output}" "At most one auto-moving piece per side is supported."
+assert_contains "${automove_invalid_output}" "autoMoveTarget supports one auto-moving piece type per variant."
 assert_contains "${automove_invalid_output}" "autoMove does not support rules that create or transfer auto-moving pieces."
 
 cat > "$FSX_TMP_INI" <<'INI'
@@ -1346,15 +1347,6 @@ captureForbidden = *:s
 selfCaptureTypes = s
 autoMoveN = 1
 autoMoveTarget = s:k
-
-[test-automove-different-types:chess]
-customPiece1 = s:K
-customPiece2 = a:K
-pieceToCharTable = -
-startFen = 4k3/a7/8/8/8/8/S7/4K3 w - - 0 1
-allowChecks = true
-autoMoveTarget = s:k a:k
-autoMoveN = 1
 
 [test-automove-pass:chess]
 king = -
@@ -1411,12 +1403,12 @@ autoMoveN = 3
 autoMoveTarget = s:k
 INI
 
-automove_valid_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove-different-types <<'UCI'
+automove_valid_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI'
 position startpos
 go perft 1
 UCI
 )
-assert_contains "${automove_valid_output}" "e1e2: 1"
+assert_contains "${automove_valid_output}" "e2e4: 1"
 
 automove_fen_output=$(run_uci "$ENGINE" "$FSX_TMP_INI" test-automove <<'UCI' || true
 position fen 4k3/8/8/8/8/8/SS6/4K3 w - - 0 1
