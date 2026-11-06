@@ -4,9 +4,18 @@ ifeq (,$(filter $(hugeboards),yes no))
   $(error hugeboards must be yes or no)
 endif
 ifneq ($(filter command line environment override,$(origin boardbits)),)
-  $(error boardbits is removed; select capacity with hugeboards=yes, verylargeboards=yes, or largeboards=yes)
+  $(error boardbits is removed; select capacity with largeboards=yes, verylargeboards=yes, or hugeboards=yes)
 endif
-boardbits := $(if $(filter yes,$(hugeboards)),512,$(if $(filter yes,$(verylargeboards)),256,$(if $(filter yes,$(largeboards)),128,64)))
+boardbits := 64
+ifeq ($(largeboards),yes)
+  boardbits := 128
+endif
+ifeq ($(verylargeboards),yes)
+  boardbits := 256
+endif
+ifeq ($(hugeboards),yes)
+  boardbits := 512
+endif
 ifneq ($(filter command line environment override,$(origin largeboards)),)
   ifneq ($(largeboards),$(if $(filter 64,$(boardbits)),no,yes))
     $(error largeboards=no conflicts with verylargeboards=yes or hugeboards=yes)

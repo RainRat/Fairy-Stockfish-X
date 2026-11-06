@@ -47,10 +47,10 @@ endif
 # Compile version with support for large board variants
 # Use precomputed magics by default
 include board-size.mk
+ifeq ($(boardbits),128)
+	CXXFLAGS += -DPRECOMPUTED_MAGICS
+endif
 ifneq ($(largeboards),no)
-	ifeq ($(verylargeboards),no)
-		CXXFLAGS += -DPRECOMPUTED_MAGICS
-	endif
 	CXXFLAGS += -s INITIAL_MEMORY=$(if $(filter 512,$(boardbits)),128,32)MB -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=1GB
 endif
 ifeq ($(boardbits),512)

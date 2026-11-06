@@ -56,7 +56,7 @@
 #  endif
 #endif
 
-#if (defined(HUGEBOARDS) && BOARD_BITS < 512) || (defined(VERY_LARGE_BOARDS) && BOARD_BITS < 256) || (defined(LARGEBOARDS) && BOARD_BITS < 128)
+#if (defined(LARGEBOARDS) && BOARD_BITS < 128) || (defined(VERY_LARGE_BOARDS) && BOARD_BITS < 256) || (defined(HUGEBOARDS) && BOARD_BITS < 512)
 #  error "Legacy board macros conflict with BOARD_BITS; select capacity with hugeboards in make builds"
 #endif
 #if BOARD_BITS >= 512 && !defined(HUGEBOARDS)

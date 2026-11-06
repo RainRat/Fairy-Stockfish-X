@@ -64,9 +64,9 @@ for bits in 64 128 256 512; do
     "arch=x86-64-modern;board=$(fsx_board_family "$bits");all=yes;nnue=no;debug=yes;optimize=no"
   fsx_harness_init "$fixture/custom-avx512" "$fixture"
   case "$bits" in
-    512) has_build_arg hugeboards=yes ;;
-    256) has_build_arg verylargeboards=yes ;;
     128) has_build_arg largeboards=yes ;;
+    256) has_build_arg verylargeboards=yes ;;
+    512) has_build_arg hugeboards=yes ;;
     *) has_build_arg largeboards=no ;;
   esac
   has_build_arg EXE=custom-avx512

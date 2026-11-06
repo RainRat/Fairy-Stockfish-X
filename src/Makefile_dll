@@ -22,16 +22,14 @@ SRCS = ffishdll.cpp benchmark.cpp bitbase.cpp bitboard.cpp endgame.cpp evaluate.
 	partner.cpp parser.cpp piece.cpp variant.cpp apiutil.cpp xboard.cpp \
 	nnue/features/half_ka_v2_variants.cpp
 
-verylargeboards ?= no
 largeboards ?= yes
+verylargeboards ?= no
 
 CXXFLAGS ?= -O3 -DNDEBUG
 CXXFLAGS += -std=c++17 -Wall -Wextra -DALLVARS -DNNUE_EMBEDDING_OFF $(EXTRACXXFLAGS)
 include board-size.mk
-ifeq ($(verylargeboards),no)
-  ifneq ($(largeboards),no)
-    CXXFLAGS += -DPRECOMPUTED_MAGICS
-  endif
+ifeq ($(boardbits),128)
+  CXXFLAGS += -DPRECOMPUTED_MAGICS
 endif
 LDFLAGS ?= -shared
 ifneq (,$(filter $(OS_NAME),Linux Darwin))

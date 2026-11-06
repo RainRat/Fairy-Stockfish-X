@@ -62,11 +62,12 @@ assert not new(b"dll-oversized", b"", False), info
 print(f"DLL {bits}-bit banner, maximum geometry, boundary move/undo and size rejection passed")
 PY
 }
+# Revisit 128 after larger tiers to check cached object and link selection.
 for width in 64 128 512 256 128; do
     case "$width" in
-        512) capacity=hugeboards=yes ;;
-        256) capacity=verylargeboards=yes ;;
         128) capacity=largeboards=yes ;;
+        256) capacity=verylargeboards=yes ;;
+        512) capacity=hugeboards=yes ;;
         *) capacity=largeboards=no ;;
     esac
     make -C "$root/src" -f Makefile_dll -j "${JOBS:-2}" "$capacity" \

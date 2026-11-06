@@ -65,9 +65,9 @@ fsx_engine_family() {
     return
   fi
   case "${engine##*/}" in
-    stockfish-512*|stockfish-huge*) echo huge ;;
-    stockfish-vlb*) echo very-large ;;
     stockfish-large*|stockfish-allvars*) echo large ;;
+    stockfish-vlb*) echo very-large ;;
+    stockfish-512*|stockfish-huge*) echo huge ;;
     *) echo normal ;;
   esac
 }
@@ -121,9 +121,8 @@ fsx_build_signature() {
 }
 
 fsx_build_profile() {
-  local arch=x86-64-modern board=normal largeboards=no verylargeboards=no
+  local arch=x86-64-modern board=normal largeboards=no verylargeboards=no hugeboards=no
   local all=no nnue=no debug=no optimize=yes
-  local hugeboards=no
   local compiler="${CXX:-g++}" compiler_kind="${COMP:-native}" arg
 
   for arg in "$@"; do
@@ -140,12 +139,14 @@ fsx_build_profile() {
     esac
   done
 
+  if [[ "$largeboards" == yes ]]; then
+    board=large
+  fi
+  if [[ "$verylargeboards" == yes ]]; then
+    board=very-large
+  fi
   if [[ "$hugeboards" == yes ]]; then
     board=huge
-  elif [[ "$verylargeboards" == yes ]]; then
-    board=very-large
-  elif [[ "$largeboards" == yes ]]; then
-    board=large
   fi
 
   printf 'arch=%s;board=%s;all=%s;nnue=%s;debug=%s;optimize=%s;compiler=%s;comp=%s\n' \

@@ -38,7 +38,7 @@ for makefile in Makefile Makefile_js Makefile_dll; do
     check '128 yes no no' largeboards=yes
     check '256 yes yes no' verylargeboards=yes
     check '512 yes yes yes' hugeboards=yes
-    check '512 yes yes yes' hugeboards=yes largeboards=yes verylargeboards=yes
+    check '512 yes yes yes' largeboards=yes verylargeboards=yes hugeboards=yes
     check '256 yes yes no' hugeboards=no verylargeboards=yes
     reject boardbits=512
     reject boardbits=256
@@ -47,9 +47,9 @@ for makefile in Makefile Makefile_js Makefile_dll; do
     reject hugeboards=maybe
     for width in 64 128 256 512; do
         case "$width" in
-            512) capacity=hugeboards=yes ;;
-            256) capacity=verylargeboards=yes ;;
             128) capacity=largeboards=yes ;;
+            256) capacity=verylargeboards=yes ;;
+            512) capacity=hugeboards=yes ;;
             *) capacity=largeboards=no ;;
         esac
         # Upstream semantics: command-line CXXFLAGS replace the makefile's
@@ -69,7 +69,7 @@ for makefile in Makefile Makefile_js Makefile_dll; do
     done
 done
 [[ $(fsx_build_profile hugeboards=yes) == *';board=huge;'* ]]
-[[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile hugeboards=yes largeboards=yes verylargeboards=yes)" ]]
+[[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile largeboards=yes verylargeboards=yes hugeboards=yes)" ]]
 ROOT_DIR="$out/profile-fixture"
 unset FSX_ENGINE_FAMILY
 [[ $(fsx_engine_family "$ROOT_DIR" stockfish-avx512) == normal ]]
