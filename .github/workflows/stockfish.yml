@@ -72,7 +72,7 @@ jobs:
           export CXXFLAGS="-Werror -D_GLIBCXX_DEBUG"
           make clean
           make -j2 ARCH=x86-64-modern optimize=no debug=yes build
-          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" ./stockfish
+          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" "${PWD}/stockfish"
           cd .. && FSX_TEST_PROFILE=portable FSX_ALLOW_SMALL_BOARD=1 bash tests/run.sh suite movement src/stockfish
 
       - name: Test debug x86-64-modern profile build (Optimization on, All features)
@@ -85,31 +85,31 @@ jobs:
         run: |
           make clean
           make -j2 ARCH=x86-64-modern build
-          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" ./stockfish
+          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" "${PWD}/stockfish"
 
       - name: Test x86-64-ssse3 build
         run: |
           make clean
           make -j2 ARCH=x86-64-ssse3 build
-          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" ./stockfish
+          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" "${PWD}/stockfish"
 
       - name: Test x86-64-sse3-popcnt build
         run: |
           make clean
           make -j2 ARCH=x86-64-sse3-popcnt build
-          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" ./stockfish
+          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" "${PWD}/stockfish"
 
       - name: Test x86-64 build
         run: |
           make clean
           make -j2 ARCH=x86-64 build
-          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" ./stockfish
+          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" "${PWD}/stockfish"
 
       - name: Test general-64 build
         run: |
           make clean
           make -j2 ARCH=general-64 build
-          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" ./stockfish
+          FSX_TEST_PROFILE=portable ../tests/bench-regressions.sh "${benchref:-}" "${PWD}/stockfish"
 
       # x86-64 with newer extensions tests
 
