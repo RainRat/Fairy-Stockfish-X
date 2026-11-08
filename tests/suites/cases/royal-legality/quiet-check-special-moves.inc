@@ -81,7 +81,6 @@ maxFile = e
 maxRank = 5
 castling = false
 checking = false
-king = -
 pieceToCharTable = K...A...R...k...b...r...
 king = k
 customPiece1 = a:mW

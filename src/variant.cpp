@@ -2444,7 +2444,9 @@ Variant* Variant::conclude() {
                           || bool(pseudoRoyalTypes) || bool(antiRoyalTypes) || flagPieceSafe;
         bool anyCaptureForbidden = false;
         for (PieceType pt = PAWN; pt < PIECE_TYPE_NB && !anyCaptureForbidden; ++pt)
-            anyCaptureForbidden = bool(captureForbidden[pt]);
+            anyCaptureForbidden = bool(captureForbidden[pt]
+                                    || captureForbiddenByColor[WHITE][pt]
+                                    || captureForbiddenByColor[BLACK][pt]);
         jumpContinuationsNeedLegality = forcedJumpContinuation && !allowChecks
                                      && (royalPossible || bool(mutuallyHopIllegalTypes)
                                          || samePlayerBoardRepetitionIllegalAtN > 0

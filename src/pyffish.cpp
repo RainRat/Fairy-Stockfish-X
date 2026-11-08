@@ -534,15 +534,13 @@ extern "C" PyObject* pyffish_gameResult(PyObject* self, PyObject *args) {
         gameEnd = true;
         result = VALUE_DRAW;
     }
-    if (!gameEnd && pos.is_optional_game_end(result))
-    {
-        gameEnd = true;
-    }
     if (!gameEnd && MoveList<LEGAL>(pos).size() == 0)
     {
         gameEnd = true;
         result = pos.evasion_checkers() ? pos.checkmate_value() : pos.stalemate_value();
     }
+    if (!gameEnd && pos.is_optional_game_end(result))
+        gameEnd = true;
     // Match the ffish.js/DLL result(): a drawn terminal with material
     // counting resolves via counting rules.
     if (gameEnd && result == VALUE_DRAW && pos.material_counting())

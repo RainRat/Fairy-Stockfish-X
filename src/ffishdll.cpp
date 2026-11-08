@@ -221,18 +221,25 @@ public:
         return "";
       }
       moves.emplace_back(move);
-      if (first) {
+      if (first)
+      {
         first = false;
-        if (moveNumbers) {
+        if (moveNumbers)
+        {
           variationSan = std::to_string(fullmove_number());
           variationSan += (pos.side_to_move() == WHITE) ? ". " : "...";
         }
-      } else if (moveNumbers && pos.side_to_move() == WHITE) {
-        variationSan += DELIM;
-        variationSan += std::to_string(fullmove_number());
-        variationSan += ".";
       }
-      variationSan += (variationSan.empty() ? "" : DELIM);
+      else
+      {
+        if (moveNumbers && pos.side_to_move() == WHITE)
+        {
+          variationSan += DELIM;
+          variationSan += std::to_string(fullmove_number());
+          variationSan += ".";
+        }
+        variationSan += DELIM;
+      }
       variationSan += SAN::move_to_san(pos, moves.back(), notation);
       states->emplace_back();
       pos.do_move(moves.back(), states->back());
@@ -325,10 +332,17 @@ public:
   bool is_real_check() const { return pos.evasion_checkers(); }
   bool is_bikjang() const { return pos.bikjang(); }
   bool is_capture(std::string uciMove) const {
+    bool result = false;
+    try_is_capture(uciMove, result);
+    return result;
+  }
+
+  bool try_is_capture(std::string uciMove, bool& result) const {
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
       return false;
-    return pos.capture(move);
+    result = pos.capture(move);
+    return true;
   }
 
   std::string move_stack() const {
@@ -342,25 +356,41 @@ public:
   }
 
   void push_moves(std::string uciMoves) {
+    int applied;
+    push_moves_checked(uciMoves, applied);
+  }
+
+  bool push_moves_checked(std::string uciMoves, int& applied) {
+    applied = 0;
     std::stringstream ss(uciMoves);
     std::string uciMove;
     while (std::getline(ss, uciMove, ' ')) {
       if (uciMove.empty())
         continue;
       if (!push(uciMove))
-        break;
+        return false;
+      ++applied;
     }
+    return true;
   }
 
   void push_san_moves(std::string sanMoves, Notation notation = NOTATION_SAN) {
+    int applied;
+    push_san_moves_checked(sanMoves, notation, applied);
+  }
+
+  bool push_san_moves_checked(std::string sanMoves, Notation notation, int& applied) {
+    applied = 0;
     std::stringstream ss(sanMoves);
     std::string sanMove;
     while (std::getline(ss, sanMove, ' ')) {
       if (sanMove.empty())
         continue;
       if (!push_san(sanMove, notation))
-        break;
+        return false;
+      ++applied;
     }
+    return true;
   }
 
   std::string pocket(bool color) {
@@ -438,13 +468,14 @@ namespace ffish {
 std::string info() { return engine_info(); }
 
 template <typename T>
-void set_option(std::string name, T value) {
+bool set_option(std::string name, T value) {
   ensure_stockfish_initialized();
   std::lock_guard<std::mutex> lock(variant_state_mutex);
-  if (Options.count(name)) {
-    Options[name] = value;
-    Board::sfInitialized.store(false, std::memory_order_relaxed);
-  }
+  if (!Options.count(name))
+    return false;
+  Options[name] = value;
+  Board::sfInitialized.store(false, std::memory_order_relaxed);
+  return true;
 }
 
 std::string available_variants() {
@@ -589,11 +620,29 @@ FSF_API bool fsf_is_bikjang(fsf_board b) { return b && static_cast<Board*>(b)->i
 FSF_API bool fsf_is_capture(fsf_board b, const char* uciMove) {
   return b && static_cast<Board*>(b)->is_capture(uciMove ? uciMove : "");
 }
+FSF_API bool fsf_try_is_capture(fsf_board b, const char* uciMove, bool* result) {
+  if (!result)
+    return false;
+  *result = false;
+  return b && static_cast<Board*>(b)->try_is_capture(uciMove ? uciMove : "", *result);
+}
 
 FSF_API const char* fsf_move_stack(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->move_stack() : ""); }
 FSF_API void fsf_push_moves(fsf_board b, const char* uciMoves) { if (b) static_cast<Board*>(b)->push_moves(uciMoves ? uciMoves : ""); }
 FSF_API void fsf_push_san_moves(fsf_board b, const char* sanMoves, int notation) {
   if (b) static_cast<Board*>(b)->push_san_moves(sanMoves ? sanMoves : "", to_notation(notation));
+}
+FSF_API bool fsf_try_push_moves(fsf_board b, const char* uciMoves, int* applied) {
+  if (!applied)
+    return false;
+  *applied = 0;
+  return b && static_cast<Board*>(b)->push_moves_checked(uciMoves ? uciMoves : "", *applied);
+}
+FSF_API bool fsf_try_push_san_moves(fsf_board b, const char* sanMoves, int notation, int* applied) {
+  if (!applied)
+    return false;
+  *applied = 0;
+  return b && static_cast<Board*>(b)->push_san_moves_checked(sanMoves ? sanMoves : "", to_notation(notation), *applied);
 }
 
 FSF_API const char* fsf_pocket(fsf_board b, bool color) { return to_cstr(b ? static_cast<Board*>(b)->pocket(color) : ""); }
@@ -602,6 +651,11 @@ FSF_API const char* fsf_board_verbose_string(fsf_board b) { return to_cstr(b ? s
 FSF_API const char* fsf_board_variant(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->variant() : ""); }
 
 FSF_API const char* fsf_available_variants() { return to_cstr(ffish::available_variants()); }
+FSF_API const char* fsf_variant_info(const char* variant) {
+  ensure_stockfish_initialized();
+  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  return to_cstr(variant_info_json(variant ? variant : ""));
+}
 FSF_API void fsf_load_variant_config(const char* content) {
   ffish::load_variant_config(content ? content : "");
 }
@@ -630,6 +684,15 @@ FSF_API void fsf_set_option_int(const char* name, int value) {
 }
 FSF_API void fsf_set_option_bool(const char* name, bool value) {
   if (name) ffish::set_option<bool>(name, value);
+}
+FSF_API bool fsf_try_set_option_str(const char* name, const char* value) {
+  return name && value && ffish::set_option<std::string>(name, value);
+}
+FSF_API bool fsf_try_set_option_int(const char* name, int value) {
+  return name && ffish::set_option<int>(name, value);
+}
+FSF_API bool fsf_try_set_option_bool(const char* name, bool value) {
+  return name && ffish::set_option<bool>(name, value);
 }
 
 FSF_API void fsf_free(const char* p) { delete[] p; }

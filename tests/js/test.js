@@ -68,6 +68,11 @@ describe('ffish.variantInfo(uciVariant)', function () {
     const king = customInfo.pieces.find(piece => piece.type === 'king');
     chai.expect(king.customBetza).to.equal('KN');
 
+    ffish.loadVariantConfig('[js-symbol-piece-region:chess]\ncustomPiece1 = z!:K\npromotionRegion = Z(a7);\n');
+    const symbolRegion = JSON.parse(ffish.variantInfo('js-symbol-piece-region'));
+    chai.expect(symbolRegion.promotion.regionsByPiece.white.byPiece.custom1)
+      .to.deep.equal(['a7']);
+
     chai.expect(ffish.variantInfo('does-not-exist')).to.equal('');
   });
 });
@@ -567,6 +572,14 @@ describe('board.isGameOver()', function () {
 });
 
 describe('board.result()', function () {
+  it('gives stalemate precedence over an optional move-count draw', () => {
+    ffish.loadVariantConfig('[js-stalemate-claim-precedence:chess]\nstalemateValue = loss\n');
+    const board = new ffish.Board('js-stalemate-claim-precedence', '7k/5Q2/6K1/8/8/8/8/8 b - - 100 51');
+    chai.expect(board.numberLegalMoves()).to.equal(0);
+    chai.expect(board.result(true)).to.equal('1-0');
+    board.delete();
+  });
+
   it("it returns a string representing the winner of the game", () => {
     // Scholar's mate (win for white)
     let board = new ffish.Board();

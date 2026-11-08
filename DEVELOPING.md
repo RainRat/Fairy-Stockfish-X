@@ -184,10 +184,17 @@ Each interface still has its own contract for other malformed commands:
   the next command. This mirrors upstream's fail-fast spirit without
   upstream's abort, which would lose GUI games.
 - **Python (`pyffish`)**: whole-request rejection. A bad move in the list
-  raises `ValueError` and applies nothing.
+  raises `ValueError`; the helper returns no partially built position.
 - **JS (`ffish.js`)**: per-call choice. `push` returns `false` per move,
   `pushMoves` stops at the first failure keeping the prefix, and
   `variationSan` rolls everything back and returns `""`.
+- **DLL C API**: the legacy `fsf_push_moves` functions stop at the first bad
+  move and keep the prefix, but return no status. `fsf_try_push_moves` and
+  `fsf_try_push_san_moves` report success and the number applied through an
+  output parameter; a failed batch still keeps its legal prefix. The legacy
+  `fsf_is_capture` returns false for both a quiet move and invalid input;
+  `fsf_try_is_capture` distinguishes them. Legacy `fsf_set_option_*` calls
+  ignore unknown names; `fsf_try_set_option_*` reports failure.
 - **Low-level FEN parsing**: `Position::set()` assumes its caller has already
   validated the FEN. Its parser is best-effort for malformed fields and is not
   a public input-validation API. Public UCI, Python, JavaScript, and C entry
@@ -235,18 +242,37 @@ print(f"New FEN: {new_fen}")
 
 ### Binding and metadata compatibility
 
-The Python binding raises `ValueError` for invalid FEN and move lists. The
-JavaScript `Board.push()` contract follows upstream ffish.js: it returns
-`false` and leaves the board unchanged. The native `go searchmoves` path also
-expects valid move strings.
+The bindings share engine rules but keep surface-specific call and error
+contracts. Invalid FEN raises `ValueError` in Python, throws in JavaScript
+constructors and `setFen()`, and returns `nullptr`/`false` in the DLL. Python
+helpers that accept a move list reject the request with `ValueError` and return
+no position. JS `pushMoves` and legacy DLL bulk-push stop at the first invalid
+move and keep the valid prefix. The DLL's `fsf_try_push_*` functions expose
+success and the applied count without changing that prefix behavior.
+
+Single-move failures also differ by surface: Python raises `ValueError`, JS
+`Board.push()` returns `false`, and DLL `fsf_push()` returns `false`. For C
+callers, `fsf_try_is_capture()` distinguishes malformed moves from valid quiet
+moves; legacy `fsf_is_capture()` returns false for either. Use
+`fsf_try_set_option_*()` to detect an unknown option; legacy setters keep their
+void signatures and ignore unknown names.
+
+Argument order follows the existing public APIs. Python `validate_fen(fen,
+variant)` and `get_fog_fen(fen, variant)` are FEN-first, while the other
+position helpers take `variant` first. JS `validateFen(fen, variant)` and
+`getFogFen(fen, variant)` are also FEN-first. DLL validators take
+`(fen, variant, is960)`; board construction takes `(variant, fen, is960)`.
 
 `pyffish.game_result()` is an FSX extension of upstream's older terminal
 position helper. In addition to variant endings and checkmate/stalemate, FSX
 considers mutual insufficient material and optional draw conditions, and
-normalizes public mate scores. The JavaScript `Board.result()` API keeps the
-upstream default: `result()` and `result(false)` do not claim optional draws;
-`result(true)` does. `variantInfo()` is FSX-only: Python raises `ValueError`
-for an unknown variant, while JavaScript returns an empty string.
+normalizes public mate scores. Python includes optional draw conditions in
+`game_result()`; JavaScript and DLL `result()` default to no optional claim, and
+`result(true)` includes one. Across all three result APIs, forced endings and
+insufficient material precede no-legal-move results, which precede optional
+draw claims. `variantInfo()` and DLL `fsf_variant_info()` expose the shared
+schema: Python raises `ValueError` for an unknown variant, while JS and DLL
+return an empty string.
 
 `variantInfo()` returns resolved configuration JSON with `schemaVersion: 2`.
 This is a pre-release FSX format, not an upstream pyffish/ffish.js contract.

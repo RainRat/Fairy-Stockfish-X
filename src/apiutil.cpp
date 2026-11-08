@@ -195,11 +195,13 @@ std::string piece_type_group_json(const PieceTypeBitboardGroup& group, const Var
             if (!(v.pieceTypes & piece_set(pt))) continue;
             char pieceChar = v.pieceToChar[make_piece(WHITE, pt)];
             pieceChar = char(std::toupper(static_cast<unsigned char>(pieceChar)));
-            if (pieceChar < 'A' || pieceChar > 'Z') continue;
+            Bitboard region = pieceChar >= 'A' && pieceChar <= 'Z'
+                            ? group.boardOfPiece(pieceChar)
+                            : group.boardOfPiece('*');
             if (!first) out << ',';
             first = false;
             out << quote(variant_piece_type_name(v, pt)) << ':'
-                << region_json(group.boardOfPiece(pieceChar), v.maxFile, v.maxRank);
+                << region_json(region, v.maxFile, v.maxRank);
         }
         out << '}';
     }

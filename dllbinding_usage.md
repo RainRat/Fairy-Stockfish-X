@@ -40,15 +40,24 @@ Make sure `ffish.dll` is in the same folder as the executable or on `PATH`. Link
 Key exported functions (see `src/ffishdll.cpp`):
 - Initialization: `fsf_init()`
 - Board lifecycle: `fsf_new_board(variant, fen, is960)`, `fsf_free_board`
-- Moves: `fsf_legal_moves`, `fsf_legal_moves_san`, `fsf_number_legal_moves`, `fsf_push`, `fsf_push_san`, `fsf_pop`
+- Moves: `fsf_legal_moves`, `fsf_legal_moves_san`, `fsf_number_legal_moves`, `fsf_push`, `fsf_push_san`, `fsf_pop`; checked batch forms are `fsf_try_push_moves` and `fsf_try_push_san_moves`
 - FEN/SAN: `fsf_fen`, `fsf_san_move`, `fsf_variation_san`
 - State: `fsf_is_game_over`, `fsf_result`, `fsf_turn`, `fsf_fullmove_number`, `fsf_halfmove_clock`, `fsf_game_ply`
-- Material/hand: `fsf_has_insufficient_material`, `fsf_is_insufficient_material`, `fsf_checked_pieces`, `fsf_is_check`, `fsf_is_capture`, `fsf_pocket`
-- Variant/meta: `fsf_available_variants`, `fsf_starting_fen`, `fsf_captures_to_hand`, `fsf_validate_fen`, `fsf_board_variant`
-- Options/engine info: `fsf_info`, `fsf_set_option_str/int/bool`
+- Material/hand: `fsf_has_insufficient_material`, `fsf_is_insufficient_material`, `fsf_checked_pieces`, `fsf_is_check`, `fsf_is_capture`, `fsf_try_is_capture`, `fsf_pocket`
+- Variant/meta: `fsf_available_variants`, `fsf_variant_info`, `fsf_starting_fen`, `fsf_captures_to_hand`, `fsf_validate_fen`, `fsf_board_variant`
+- Options/engine info: `fsf_info`, legacy `fsf_set_option_str/int/bool`, checked `fsf_try_set_option_str/int/bool`
 - Memory release for returned strings: `fsf_free`
 
 All returned `const char*` strings are allocated on the heap; free them with `fsf_free()`.
+
+Legacy batch-push functions stop at the first invalid move and keep the valid
+prefix, but do not report how many moves were applied. The `fsf_try_push_*`
+forms return `true` only when every move was accepted and write the applied
+count to the supplied `int*`; failure still keeps the accepted prefix. The
+legacy capture predicate returns false for invalid moves as well as valid quiet
+moves. Use `fsf_try_is_capture(board, move, &capture)` to distinguish those
+cases. Checked option setters return false for an unknown option; legacy void
+setters ignore unknown names.
 
 ## Minimal usage
 ```cpp

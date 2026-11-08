@@ -67,6 +67,13 @@ class TestBindings(unittest.TestCase):
         res = sf.game_result("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", [])
         self.assertEqual(res, sf.VALUE_NONE)
 
+    def test_stalemate_precedes_optional_draw(self):
+        sf.load_variant_config("[api-stalemate-claim-precedence:chess]\nstalemateValue = loss\n")
+        fen = "7k/5Q2/6K1/8/8/8/8/8 b - - 100 51"
+        self.assertEqual(sf.legal_moves("api-stalemate-claim-precedence", fen, []), [])
+        self.assertTrue(sf.is_optional_game_end("api-stalemate-claim-precedence", fen, [])[0])
+        self.assertEqual(sf.game_result("api-stalemate-claim-precedence", fen, []), -sf.VALUE_MATE)
+
     def test_jcsa_repetition_attacking_moves(self):
         sf.load_variant_config(
             "[api-jcsa-repetition:chess]\n"
@@ -442,6 +449,17 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(info["promotion"]["promotedPieceTypes"], {})
         self.assertEqual(info["promotion"]["captureDemotedPieceTypes"], {})
         self.assertFalse(info["promotion"]["declineRule"])
+
+        sf.load_variant_config(
+            "[api-symbol-piece-region:chess]\n"
+            "customPiece1 = z!:K\n"
+            "promotionRegion = Z(a7);\n"
+        )
+        symbol_region = json.loads(sf.variant_info("api-symbol-piece-region"))
+        self.assertEqual(
+            symbol_region["promotion"]["regionsByPiece"]["white"]["byPiece"]["custom1"],
+            ["a7"],
+        )
 
         janggi_info = json.loads(sf.variant_info("janggi"))
         self.assertIn("e2", janggi_info["board"]["diagonalLines"])

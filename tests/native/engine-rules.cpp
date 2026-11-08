@@ -1600,6 +1600,16 @@ void state() {
 }
 
 void royal() {
+    Position pinnedCheckless;
+    StateListPtr pinnedChecklessStates;
+    set_position(pinnedCheckless, pinnedChecklessStates, "checkless",
+                 "k3r3/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    const Move pinnedCheck = make<NORMAL>(SQ_E2, SQ_A2);
+    check(pinnedCheckless.gives_check(pinnedCheck),
+          "mate-only pinned-check fixture does not give check");
+    check(!pinnedCheckless.legal(pinnedCheck),
+          "mate-only check probe accepted a pinned move that leaves the royal attacked");
+
     struct Case { const char* variant; const char* fen; };
     const Case cases[] = {
       {"khet1", "9k/10/10/10/10/10/OO8/9K w - - 0 1"},

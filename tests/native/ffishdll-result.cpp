@@ -22,6 +22,7 @@ const char* fsf_fen(fsf_board board, bool showPromoted, int countStarted);
 bool fsf_set_fen(fsf_board board, const char* fen);
 const char* fsf_san_move(fsf_board board, const char* uci, int notation);
 const char* fsf_variation_san(fsf_board board, const char* moves, int notation, bool moveNumbers);
+const char* fsf_variant_info(const char* variant);
 bool fsf_turn(fsf_board board);
 int fsf_fullmove_number(fsf_board board);
 int fsf_halfmove_clock(fsf_board board);
@@ -36,9 +37,12 @@ bool fsf_is_check(fsf_board board);
 bool fsf_is_real_check(fsf_board board);
 bool fsf_is_bikjang(fsf_board board);
 bool fsf_is_capture(fsf_board board, const char* uci);
+bool fsf_try_is_capture(fsf_board board, const char* uci, bool* result);
 const char* fsf_move_stack(fsf_board board);
 void fsf_push_moves(fsf_board board, const char* moves);
 void fsf_push_san_moves(fsf_board board, const char* moves, int notation);
+bool fsf_try_push_moves(fsf_board board, const char* moves, int* applied);
+bool fsf_try_push_san_moves(fsf_board board, const char* moves, int notation, int* applied);
 const char* fsf_pocket(fsf_board board, bool color);
 const char* fsf_board_string(fsf_board board);
 const char* fsf_board_verbose_string(fsf_board board);
@@ -48,6 +52,7 @@ int fsf_validate_fen(const char* fen, const char* variant, bool is960);
 int fsf_validate_position(const char* fen, const char* variant, bool is960, const char* moves);
 const char* fsf_starting_fen(const char* variant);
 bool fsf_captures_to_hand(const char* variant);
+bool fsf_try_set_option_bool(const char* name, bool value);
 void fsf_free(const char* value);
 }
 
@@ -70,6 +75,8 @@ void check_empty(const char* value, const char* name) {
 }
 
 void check_null_board_api() {
+    bool capture = true;
+    int applied = -1;
     check_empty(fsf_legal_moves(nullptr), "fsf_legal_moves");
     check_empty(fsf_legal_moves_san(nullptr), "fsf_legal_moves_san");
     check(fsf_number_legal_moves(nullptr) == 0, "fsf_number_legal_moves should return zero");
@@ -92,9 +99,13 @@ void check_null_board_api() {
     check(!fsf_is_check(nullptr) && !fsf_is_real_check(nullptr) && !fsf_is_bikjang(nullptr)
               && !fsf_is_capture(nullptr, "e2e4"),
           "check and capture accessors should return false");
+    check(!fsf_try_is_capture(nullptr, "e2e4", &capture) && !capture,
+          "checked capture accessor did not report a null board");
     check_empty(fsf_move_stack(nullptr), "fsf_move_stack");
     fsf_push_moves(nullptr, "e2e4");
     fsf_push_san_moves(nullptr, "e4", 1);
+    check(!fsf_try_push_moves(nullptr, "e2e4", &applied) && applied == 0,
+          "checked batch push did not report a null board");
     check_empty(fsf_pocket(nullptr, true), "fsf_pocket");
     check_empty(fsf_board_string(nullptr), "fsf_board_string");
     check_empty(fsf_board_verbose_string(nullptr), "fsf_board_verbose_string");
@@ -125,7 +136,21 @@ int main() {
         check(fsf_new_board("chess", "bad-fen", false) == nullptr,
               "invalid FEN board creation did not return nullptr");
         check_null_board_api();
+        check(take_string(fsf_variant_info("chess")).find("\"name\":\"chess\"") != std::string::npos,
+              "DLL variant metadata did not match the shared schema");
         fsf_init();
+        check(fsf_try_load_variant_config(
+                  "[dll-symbol-piece-region:chess]\n"
+                  "customPiece1 = z!:K\n"
+                  "promotionRegion = Z(a7);\n") == 1,
+              "failed to register symbolic metadata variant");
+        check(take_string(fsf_variant_info("dll-symbol-piece-region")).find("\"custom1\":[\"a7\"]")
+                  != std::string::npos,
+              "DLL omitted region data for a symbolic custom piece");
+        check(fsf_try_load_variant_config(
+                  "[dll-stalemate-claim-precedence:chess]\n"
+                  "stalemateValue = loss\n") == 1,
+              "failed to register stalemate precedence variant");
         check(fsf_try_load_variant_config(
                   "[dll-no-royal-result:chess]\n"
                   "king = -\n"
@@ -149,6 +174,42 @@ int main() {
         check(take_string(fsf_result(board, false)) == "*"
                   && take_string(fsf_result(board, true)) == "*",
               "DLL inferred a result for a playable no-royal position");
+        fsf_free_board(board);
+
+        board = fsf_new_board("chess", chessFen.c_str(), false);
+        check(board != nullptr, "DLL failed to create chess board for API contract checks");
+        bool capture = true;
+        check(fsf_try_is_capture(board, "e2e4", &capture) && !capture,
+              "try_is_capture did not distinguish a valid quiet move");
+        check(!fsf_try_is_capture(board, "bad", &capture),
+              "try_is_capture accepted a malformed move");
+        int applied = -1;
+        check(!fsf_try_push_moves(board, "e2e4 bad g1f3", &applied) && applied == 1
+                  && take_string(fsf_fen(board, false, 0))
+                     == "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+              "checked bulk push did not report its applied prefix");
+        check(!fsf_try_set_option_bool("UnknownOption", true),
+              "checked option setter accepted an unknown option");
+        check(fsf_try_set_option_bool("DynamicMagicsByBoardSize", true),
+              "checked option setter rejected a known option");
+        check(take_string(fsf_variation_san(board, "e7e5 g1f3", 1, true)) == "1...e5 2. Nf3",
+              "DLL variation SAN spacing differs from JS");
+        fsf_free_board(board);
+
+        board = fsf_new_board("chess", chessFen.c_str(), false);
+        int sanApplied = -1;
+        check(board && !fsf_try_push_san_moves(board, "e4 ?? Nf3", 1, &sanApplied)
+                  && sanApplied == 1
+                  && take_string(fsf_fen(board, false, 0))
+                     == "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+              "checked SAN batch did not report its applied prefix");
+        fsf_free_board(board);
+
+        const char* stalemateFen = "7k/5Q2/6K1/8/8/8/8/8 b - - 100 51";
+        board = fsf_new_board("dll-stalemate-claim-precedence", stalemateFen, false);
+        check(board != nullptr && fsf_number_legal_moves(board) == 0
+                  && take_string(fsf_result(board, true)) == "1-0",
+              "DLL optional draw took precedence over stalemate loss");
         fsf_free_board(board);
 
         std::atomic<bool> start{false};

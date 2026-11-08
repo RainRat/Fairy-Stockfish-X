@@ -39,6 +39,9 @@ startFen = 8/8/8/6K1/7m/8/1m6/8 w - - 0 1
 pieceToCharTable = PNBRQKDFGHS
 customPiece1 = d:c{hurdles: 1,1; pre: 1,*; post: 1,1; capture: locust_first; hurdle_types:enemy}R
 forcedJumpContinuation = true
+
+[forced-jump-color-capture-ban:checkers]
+captureForbiddenWhite = m:k
 EOF
 tmp_ini="${FSX_TMP_INI}"
 
@@ -83,3 +86,13 @@ EOF
 )
 ! grep -Fq "e3g3: 1" <<<"$pinned_out"
 grep -Fq "e1d1: 1" <<<"$pinned_out"
+
+# A white-only capture ban makes the forced piece's apparent continuation
+# illegal. The chain must end so another checker can make its legal capture.
+color_ban_out=$(run_uci "$ENGINE" "$tmp_ini" forced-jump-color-capture-ban <<'EOF'
+position fen 8/8/5k2/8/3m4/2M5/1m6/M7 w - - 0 1 moves c3e5 0000
+go perft 1
+EOF
+)
+! grep -Fq "e5g7: 1" <<<"$color_ban_out"
+grep -Fq "a1c3: 1" <<<"$color_ban_out"
