@@ -41,6 +41,7 @@ start = f"{width - 1}k/{width - 2}R1/" + f"{width}/" * (height - 3) + f"K{width 
 load = function("fsf_try_load_variant_config", ctypes.c_int, string)
 new = function("fsf_new_board", ptr, string, string, ctypes.c_bool)
 push = function("fsf_push", ctypes.c_bool, ptr, string)
+san_move = function("fsf_san_move", ptr, ptr, string, ctypes.c_int)
 pop = function("fsf_pop", None, ptr)
 release = function("fsf_free_board", None, ptr)
 assert load((f"[dll-capacity:chess]\nmaxFile = {width}\nmaxRank = {height}\n"
@@ -49,6 +50,13 @@ board = new(b"dll-capacity", b"", False)
 assert board, info
 try:
     move = f"{chr(97 + width - 2)}{height - 1}{chr(97 + width - 2)}{height}"
+    if width >= 16:
+        thai_san_ptr = san_move(board, move.encode(), 8)
+        try:
+            thai_san = ctypes.string_at(thai_san_ptr).decode()
+        finally:
+            free(thai_san_ptr)
+        assert thai_san == f"ร-{chr(97 + width - 2)}{height}+", thai_san
     assert push(board, move.encode()), move
     expected = f"{width - 2}Rk/" + f"{width}/" * (height - 2) + f"K{width - 1} b - - 1 1"
     assert text("fsf_fen", board, False, 0) == expected

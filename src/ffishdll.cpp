@@ -96,7 +96,7 @@ Notation to_notation(int n) {
 
 class Board {
 private:
-  const Variant* v;
+  const Variant* v = nullptr;
   StateListPtr states;
   Position pos;
   Thread* thread = nullptr;
@@ -111,6 +111,7 @@ public:
   Board(std::string uciVariant) : Board(uciVariant, "", false) {}
   Board(std::string uciVariant, std::string fen) : Board(uciVariant, fen, false) {}
   Board(std::string uciVariant, std::string fen, bool is960) { init(uciVariant, fen, is960); }
+  bool valid() const { return v != nullptr; }
 
   std::string legal_moves() {
     std::string moves;
@@ -415,11 +416,16 @@ private:
     Board::sfInitialized.store(true, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     v = get_variant(uciVariant);
-    assert(v);
+    if (!v)
+      return;
     UCI::init_variant(v);
-    resetStates();
     if (fen.empty())
       fen = v->startFen;
+    if (FEN::validate_fen(fen, v, is960Flag) != FEN::FEN_OK) {
+      v = nullptr;
+      return;
+    }
+    resetStates();
     pos.set(v, fen, is960Flag, &states->back(), thread);
     is960 = is960Flag;
   }
@@ -442,6 +448,7 @@ void set_option(std::string name, T value) {
 }
 
 std::string available_variants() {
+  ensure_stockfish_initialized();
   std::string available;
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   for (const std::string& variant : variants.get_keys()) {
@@ -469,18 +476,21 @@ void load_variant_config(std::string variantInitContent) {
 }
 
 bool captures_to_hand(std::string uciVariant) {
+  ensure_stockfish_initialized();
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   return v && v->captureType != MOVE_OUT;
 }
 
 std::string starting_fen(std::string uciVariant) {
+  ensure_stockfish_initialized();
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   return v ? v->startFen : "";
 }
 
 int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
+  ensure_stockfish_initialized();
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   if (!v)
@@ -489,6 +499,7 @@ int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
 }
 
 int validate_position(std::string fen, std::string uciVariant, std::string uciMoves, bool chess960) {
+  ensure_stockfish_initialized();
   std::lock_guard<std::mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   if (!v)
@@ -521,37 +532,28 @@ FSF_API void fsf_init() {
 }
 
 FSF_API fsf_board fsf_new_board(const char* variant, const char* fen, bool is960) {
-  fsf_init();
-  std::string uciVariant = variant ? std::string(variant) : std::string("chess");
-  {
-      std::lock_guard<std::mutex> lock(variant_state_mutex);
-      const Variant* v = get_variant(uciVariant);
-      if (!v)
-          return nullptr;
-      const std::string requestedFen = fen ? std::string(fen) : std::string();
-      if (FEN::validate_fen(requestedFen.empty() ? v->startFen : requestedFen, v, is960) != FEN::FEN_OK)
-          return nullptr;
-  }
-  return new Board(uciVariant,
-                   fen ? std::string(fen) : std::string(""),
-                   is960);
+  auto* board = new Board(variant ? variant : "chess", fen ? fen : "", is960);
+  if (board->valid())
+    return board;
+  delete board;
+  return nullptr;
 }
 
 FSF_API void fsf_free_board(fsf_board b) { delete static_cast<Board*>(b); }
 
-FSF_API const char* fsf_legal_moves(fsf_board b) { return to_cstr(static_cast<Board*>(b)->legal_moves()); }
-FSF_API const char* fsf_legal_moves_san(fsf_board b) { return to_cstr(static_cast<Board*>(b)->legal_moves_san()); }
-FSF_API int fsf_number_legal_moves(fsf_board b) { return static_cast<Board*>(b)->number_legal_moves(); }
+FSF_API const char* fsf_legal_moves(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->legal_moves() : ""); }
+FSF_API const char* fsf_legal_moves_san(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->legal_moves_san() : ""); }
+FSF_API int fsf_number_legal_moves(fsf_board b) { return b ? static_cast<Board*>(b)->number_legal_moves() : 0; }
 
-FSF_API bool fsf_push(fsf_board b, const char* uci) { return static_cast<Board*>(b)->push(uci ? uci : ""); }
+FSF_API bool fsf_push(fsf_board b, const char* uci) { return b && static_cast<Board*>(b)->push(uci ? uci : ""); }
 FSF_API bool fsf_push_san(fsf_board b, const char* san, int notation) {
-  return static_cast<Board*>(b)->push_san(san ? san : "", to_notation(notation));
+  return b && static_cast<Board*>(b)->push_san(san ? san : "", to_notation(notation));
 }
-FSF_API void fsf_pop(fsf_board b) { (void)static_cast<Board*>(b)->pop(); }
-FSF_API void fsf_reset(fsf_board b) { static_cast<Board*>(b)->reset(); }
+FSF_API void fsf_pop(fsf_board b) { if (b) (void)static_cast<Board*>(b)->pop(); }
+FSF_API void fsf_reset(fsf_board b) { if (b) static_cast<Board*>(b)->reset(); }
 
 FSF_API const char* fsf_fen(fsf_board b, bool showPromoted, int countStarted) {
-  return to_cstr(static_cast<Board*>(b)->fen(showPromoted, countStarted));
+  return to_cstr(b ? static_cast<Board*>(b)->fen(showPromoted, countStarted) : "");
 }
 
 FSF_API bool fsf_set_fen(fsf_board b, const char* fen) {
@@ -559,45 +561,45 @@ FSF_API bool fsf_set_fen(fsf_board b, const char* fen) {
 }
 
 FSF_API const char* fsf_san_move(fsf_board b, const char* uciMove, int notation) {
-  return to_cstr(static_cast<Board*>(b)->san_move(uciMove ? uciMove : "", to_notation(notation)));
+  return to_cstr(b ? static_cast<Board*>(b)->san_move(uciMove ? uciMove : "", to_notation(notation)) : "");
 }
 
 FSF_API const char* fsf_variation_san(fsf_board b, const char* uciMoves, int notation, bool moveNumbers) {
-  return to_cstr(static_cast<Board*>(b)->variation_san(uciMoves ? uciMoves : "", to_notation(notation), moveNumbers));
+  return to_cstr(b ? static_cast<Board*>(b)->variation_san(uciMoves ? uciMoves : "", to_notation(notation), moveNumbers) : "");
 }
 
-FSF_API bool fsf_turn(fsf_board b) { return static_cast<Board*>(b)->turn(); }
-FSF_API int fsf_fullmove_number(fsf_board b) { return static_cast<Board*>(b)->fullmove_number(); }
-FSF_API int fsf_halfmove_clock(fsf_board b) { return static_cast<Board*>(b)->halfmove_clock(); }
-FSF_API int fsf_game_ply(fsf_board b) { return static_cast<Board*>(b)->game_ply(); }
+FSF_API bool fsf_turn(fsf_board b) { return b && static_cast<Board*>(b)->turn(); }
+FSF_API int fsf_fullmove_number(fsf_board b) { return b ? static_cast<Board*>(b)->fullmove_number() : 0; }
+FSF_API int fsf_halfmove_clock(fsf_board b) { return b ? static_cast<Board*>(b)->halfmove_clock() : 0; }
+FSF_API int fsf_game_ply(fsf_board b) { return b ? static_cast<Board*>(b)->game_ply() : 0; }
 
 FSF_API bool fsf_has_insufficient_material(fsf_board b, bool turnColor) {
-  return static_cast<Board*>(b)->has_insufficient_material(turnColor);
+  return b && static_cast<Board*>(b)->has_insufficient_material(turnColor);
 }
-FSF_API bool fsf_is_insufficient_material(fsf_board b) { return static_cast<Board*>(b)->is_insufficient_material(); }
+FSF_API bool fsf_is_insufficient_material(fsf_board b) { return b && static_cast<Board*>(b)->is_insufficient_material(); }
 
-FSF_API bool fsf_is_game_over(fsf_board b, bool claim_draw) { return static_cast<Board*>(b)->is_game_over(claim_draw); }
-FSF_API const char* fsf_result(fsf_board b, bool claim_draw) { return to_cstr(static_cast<Board*>(b)->result(claim_draw)); }
+FSF_API bool fsf_is_game_over(fsf_board b, bool claim_draw) { return b && static_cast<Board*>(b)->is_game_over(claim_draw); }
+FSF_API const char* fsf_result(fsf_board b, bool claim_draw) { return to_cstr(b ? static_cast<Board*>(b)->result(claim_draw) : ""); }
 
-FSF_API const char* fsf_checked_pieces(fsf_board b) { return to_cstr(static_cast<Board*>(b)->checked_pieces()); }
-FSF_API const char* fsf_evasion_checked_pieces(fsf_board b) { return to_cstr(static_cast<Board*>(b)->evasion_checked_pieces()); }
-FSF_API bool fsf_is_check(fsf_board b) { return static_cast<Board*>(b)->is_check(); }
-FSF_API bool fsf_is_real_check(fsf_board b) { return static_cast<Board*>(b)->is_real_check(); }
-FSF_API bool fsf_is_bikjang(fsf_board b) { return static_cast<Board*>(b)->is_bikjang(); }
+FSF_API const char* fsf_checked_pieces(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->checked_pieces() : ""); }
+FSF_API const char* fsf_evasion_checked_pieces(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->evasion_checked_pieces() : ""); }
+FSF_API bool fsf_is_check(fsf_board b) { return b && static_cast<Board*>(b)->is_check(); }
+FSF_API bool fsf_is_real_check(fsf_board b) { return b && static_cast<Board*>(b)->is_real_check(); }
+FSF_API bool fsf_is_bikjang(fsf_board b) { return b && static_cast<Board*>(b)->is_bikjang(); }
 FSF_API bool fsf_is_capture(fsf_board b, const char* uciMove) {
-  return static_cast<Board*>(b)->is_capture(uciMove ? uciMove : "");
+  return b && static_cast<Board*>(b)->is_capture(uciMove ? uciMove : "");
 }
 
-FSF_API const char* fsf_move_stack(fsf_board b) { return to_cstr(static_cast<Board*>(b)->move_stack()); }
-FSF_API void fsf_push_moves(fsf_board b, const char* uciMoves) { static_cast<Board*>(b)->push_moves(uciMoves ? uciMoves : ""); }
+FSF_API const char* fsf_move_stack(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->move_stack() : ""); }
+FSF_API void fsf_push_moves(fsf_board b, const char* uciMoves) { if (b) static_cast<Board*>(b)->push_moves(uciMoves ? uciMoves : ""); }
 FSF_API void fsf_push_san_moves(fsf_board b, const char* sanMoves, int notation) {
-  static_cast<Board*>(b)->push_san_moves(sanMoves ? sanMoves : "", to_notation(notation));
+  if (b) static_cast<Board*>(b)->push_san_moves(sanMoves ? sanMoves : "", to_notation(notation));
 }
 
-FSF_API const char* fsf_pocket(fsf_board b, bool color) { return to_cstr(static_cast<Board*>(b)->pocket(color)); }
-FSF_API const char* fsf_board_string(fsf_board b) { return to_cstr(static_cast<Board*>(b)->to_string()); }
-FSF_API const char* fsf_board_verbose_string(fsf_board b) { return to_cstr(static_cast<Board*>(b)->to_verbose_string()); }
-FSF_API const char* fsf_board_variant(fsf_board b) { return to_cstr(static_cast<Board*>(b)->variant()); }
+FSF_API const char* fsf_pocket(fsf_board b, bool color) { return to_cstr(b ? static_cast<Board*>(b)->pocket(color) : ""); }
+FSF_API const char* fsf_board_string(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->to_string() : ""); }
+FSF_API const char* fsf_board_verbose_string(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->to_verbose_string() : ""); }
+FSF_API const char* fsf_board_variant(fsf_board b) { return to_cstr(b ? static_cast<Board*>(b)->variant() : ""); }
 
 FSF_API const char* fsf_available_variants() { return to_cstr(ffish::available_variants()); }
 FSF_API void fsf_load_variant_config(const char* content) {

@@ -173,7 +173,8 @@ inline std::string file(const Position& pos, Square s, Notation n) {
         return std::to_string((pos.side_to_move() == WHITE ? pos.max_file() - file_of(s) : file_of(s)) + 1);
     case NOTATION_THAI_SAN:
     case NOTATION_THAI_LAN:
-        return THAI_FILES[file_of(s)];
+        return int(file_of(s)) < int(THAI_FILES.size()) ? THAI_FILES[file_of(s)]
+                                               : std::string(1, char('a' + file_of(s)));
     default:
         return std::string(1, char('a' + file_of(s)));
     }
@@ -210,7 +211,8 @@ inline std::string rank(const Position& pos, Square s, Notation n) {
     }
     case NOTATION_THAI_SAN:
     case NOTATION_THAI_LAN:
-        return THAI_RANKS[rank_of(s)];
+        return int(rank_of(s)) < int(THAI_RANKS.size()) ? THAI_RANKS[rank_of(s)]
+                                               : std::to_string(rank_of(s) + 1);
     default:
         return std::to_string(rank_of(s) + 1);
     }

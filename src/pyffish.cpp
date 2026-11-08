@@ -562,7 +562,7 @@ extern "C" PyObject* pyffish_isImmediateGameEnd(PyObject* self, PyObject *args) 
     Position pos;
     const char *fen, *variant;
     bool gameEnd;
-    Value result;
+    Value result = VALUE_NONE;
     int chess960 = false;
     if (!PyArg_ParseTuple(args, "ssO!|p", &variant, &fen, &PyList_Type, &moveList, &chess960)) {
         return NULL;
@@ -587,7 +587,7 @@ extern "C" PyObject* pyffish_isOptionalGameEnd(PyObject* self, PyObject *args) {
     Position pos;
     const char *fen, *variant;
     bool gameEnd;
-    Value result;
+    Value result = VALUE_NONE;
     int chess960 = false, countStarted = 0;
     if (!PyArg_ParseTuple(args, "ssO!|pi", &variant, &fen, &PyList_Type, &moveList, &chess960, &countStarted)) {
         return NULL;

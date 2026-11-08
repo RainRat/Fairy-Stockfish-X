@@ -145,7 +145,8 @@ const char* checking_name(CheckingRule v) {
   return v == CheckingRule::MATE_ONLY ? "onlyMate" : v == CheckingRule::FORBIDDEN ? "false" : "true";
 }
 const char* material_counting_name(MaterialCounting v) {
-    static const char* names[] = {"none", "janggi", "unweighted", "whiteDrawOdds", "blackDrawOdds"};
+    static const char* names[] = {"none", "janggi", "unweighted", "whiteDrawOdds", "blackDrawOdds", "connectn"};
+    static_assert(std::size(names) == CONNECT_N_COUNT + 1);
     return names[int(v)];
 }
 const char* counting_name(CountingRule v) {

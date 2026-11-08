@@ -12,10 +12,42 @@ fsf_board fsf_new_board(const char* variant, const char* fen, bool is960);
 void fsf_free_board(fsf_board board);
 void fsf_set_option_bool(const char* name, bool value);
 const char* fsf_legal_moves(fsf_board board);
+const char* fsf_legal_moves_san(fsf_board board);
+int fsf_number_legal_moves(fsf_board board);
+bool fsf_push(fsf_board board, const char* uci);
+bool fsf_push_san(fsf_board board, const char* san, int notation);
+void fsf_pop(fsf_board board);
+void fsf_reset(fsf_board board);
+const char* fsf_fen(fsf_board board, bool showPromoted, int countStarted);
+bool fsf_set_fen(fsf_board board, const char* fen);
+const char* fsf_san_move(fsf_board board, const char* uci, int notation);
+const char* fsf_variation_san(fsf_board board, const char* moves, int notation, bool moveNumbers);
+bool fsf_turn(fsf_board board);
+int fsf_fullmove_number(fsf_board board);
+int fsf_halfmove_clock(fsf_board board);
+int fsf_game_ply(fsf_board board);
 bool fsf_has_insufficient_material(fsf_board board, bool turnColor);
 bool fsf_is_insufficient_material(fsf_board board);
 bool fsf_is_game_over(fsf_board board, bool claimDraw);
 const char* fsf_result(fsf_board board, bool claimDraw);
+const char* fsf_checked_pieces(fsf_board board);
+const char* fsf_evasion_checked_pieces(fsf_board board);
+bool fsf_is_check(fsf_board board);
+bool fsf_is_real_check(fsf_board board);
+bool fsf_is_bikjang(fsf_board board);
+bool fsf_is_capture(fsf_board board, const char* uci);
+const char* fsf_move_stack(fsf_board board);
+void fsf_push_moves(fsf_board board, const char* moves);
+void fsf_push_san_moves(fsf_board board, const char* moves, int notation);
+const char* fsf_pocket(fsf_board board, bool color);
+const char* fsf_board_string(fsf_board board);
+const char* fsf_board_verbose_string(fsf_board board);
+const char* fsf_board_variant(fsf_board board);
+const char* fsf_available_variants();
+int fsf_validate_fen(const char* fen, const char* variant, bool is960);
+int fsf_validate_position(const char* fen, const char* variant, bool is960, const char* moves);
+const char* fsf_starting_fen(const char* variant);
+bool fsf_captures_to_hand(const char* variant);
 void fsf_free(const char* value);
 }
 
@@ -33,10 +65,66 @@ std::string take_string(const char* value) {
     return result;
 }
 
+void check_empty(const char* value, const char* name) {
+    check(take_string(value).empty(), std::string(name) + " should return an empty string for a null board");
+}
+
+void check_null_board_api() {
+    check_empty(fsf_legal_moves(nullptr), "fsf_legal_moves");
+    check_empty(fsf_legal_moves_san(nullptr), "fsf_legal_moves_san");
+    check(fsf_number_legal_moves(nullptr) == 0, "fsf_number_legal_moves should return zero");
+    check(!fsf_push(nullptr, "e2e4") && !fsf_push_san(nullptr, "e4", 1), "push should fail for a null board");
+    fsf_pop(nullptr);
+    fsf_reset(nullptr);
+    check_empty(fsf_fen(nullptr, false, 0), "fsf_fen");
+    check(!fsf_set_fen(nullptr, ""), "fsf_set_fen should fail for a null board");
+    check_empty(fsf_san_move(nullptr, "e2e4", 1), "fsf_san_move");
+    check_empty(fsf_variation_san(nullptr, "e2e4", 1, true), "fsf_variation_san");
+    check(!fsf_turn(nullptr) && fsf_fullmove_number(nullptr) == 0
+              && fsf_halfmove_clock(nullptr) == 0 && fsf_game_ply(nullptr) == 0,
+          "numeric board accessors should return neutral values");
+    check(!fsf_has_insufficient_material(nullptr, true) && !fsf_is_insufficient_material(nullptr)
+              && !fsf_is_game_over(nullptr, false),
+          "material and game-over accessors should return false");
+    check_empty(fsf_result(nullptr, false), "fsf_result");
+    check_empty(fsf_checked_pieces(nullptr), "fsf_checked_pieces");
+    check_empty(fsf_evasion_checked_pieces(nullptr), "fsf_evasion_checked_pieces");
+    check(!fsf_is_check(nullptr) && !fsf_is_real_check(nullptr) && !fsf_is_bikjang(nullptr)
+              && !fsf_is_capture(nullptr, "e2e4"),
+          "check and capture accessors should return false");
+    check_empty(fsf_move_stack(nullptr), "fsf_move_stack");
+    fsf_push_moves(nullptr, "e2e4");
+    fsf_push_san_moves(nullptr, "e4", 1);
+    check_empty(fsf_pocket(nullptr, true), "fsf_pocket");
+    check_empty(fsf_board_string(nullptr), "fsf_board_string");
+    check_empty(fsf_board_verbose_string(nullptr), "fsf_board_verbose_string");
+    check_empty(fsf_board_variant(nullptr), "fsf_board_variant");
+    fsf_free_board(nullptr);
+}
+
 } // namespace
 
 int main() {
     try {
+        const std::string chessFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        check(take_string(fsf_available_variants()).find("chess") != std::string::npos,
+              "variant getter did not initialize the DLL lazily");
+        check(take_string(fsf_starting_fen("chess")) == chessFen,
+              "start-FEN getter failed before explicit initialization");
+        check(!fsf_captures_to_hand("chess"), "capture-to-hand getter failed before explicit initialization");
+        check(fsf_validate_fen(chessFen.c_str(), "chess", false) == 1,
+              "FEN validation failed before explicit initialization");
+        check(fsf_validate_position(chessFen.c_str(), "chess", false, "") == 1,
+              "position validation failed before explicit initialization");
+        check(fsf_validate_fen(chessFen.c_str(), "missing-variant", false) == -17,
+              "unknown variant FEN validation did not return FEN_INVALID_VARIANT");
+        check(fsf_validate_position(chessFen.c_str(), "missing-variant", false, "") == -17,
+              "unknown variant position validation did not return FEN_INVALID_VARIANT");
+        check(fsf_new_board("missing-variant", nullptr, false) == nullptr,
+              "unknown variant board creation did not return nullptr");
+        check(fsf_new_board("chess", "bad-fen", false) == nullptr,
+              "invalid FEN board creation did not return nullptr");
+        check_null_board_api();
         fsf_init();
         check(fsf_try_load_variant_config(
                   "[dll-no-royal-result:chess]\n"

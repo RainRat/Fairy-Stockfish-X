@@ -40,6 +40,16 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(sf.get_fen("api-board-512", fen, ["u21u22"]), moved)
         self.assertEqual(json.loads(sf.variant_info("api-board-512"))["board"]["width"], 22)
 
+    @unittest.skipUnless(" VLB " in sf.info() or " HB " in sf.info(), "requires a large-board extension")
+    def test_thai_notation_falls_back_on_large_board_coordinates(self):
+        fen = "15k/14R1/" + "16/" * 13 + "K15 w - - 0 1"
+        sf.load_variant_config(
+            "[api-thai-large:chess]\nmaxFile = p\nmaxRank = 16\n"
+            "castling = false\nallowChecks = true\nstartFen = " + fen + "\n"
+        )
+        self.assertEqual(sf.get_san("api-thai-large", fen, "o15o16", False, sf.NOTATION_THAI_SAN), "ร-o16+")
+        self.assertIn("o16", sf.get_san("api-thai-large", fen, "o15o16", False, sf.NOTATION_THAI_LAN))
+
     @classmethod
     def setUpClass(cls):
         with open(ROOT_DIR / "src" / "variants.ini", "r", encoding="utf-8") as f:
@@ -497,6 +507,10 @@ class TestPublicAPI(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unknown variant"):
             sf.variant_info("does-not-exist")
 
+        for variant in sf.variants():
+            with self.subTest(variant=variant):
+                self.assertEqual(json.loads(sf.variant_info(variant))["name"], variant)
+
     def test_public_predicate_return_types(self):
         fen = sf.start_fen("chess")
         self.assertIsInstance(sf.is_capture("chess", fen, [], "e2e4"), bool)
@@ -515,6 +529,8 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(len(optional), 2)
         self.assertIsInstance(optional[0], bool)
         self.assertIsInstance(optional[1], int)
+        self.assertEqual(immediate, (False, sf.VALUE_NONE))
+        self.assertEqual(optional, (False, sf.VALUE_NONE))
         self.assertIsInstance(sf.has_insufficient_material("chess", fen, []), tuple)
 
     def test_two_leg_pieces_disable_insufficient_material_shortcut(self):

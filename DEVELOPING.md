@@ -158,18 +158,21 @@ Common engine commands:
 
 ## Invalid input handling
 
-Native UCI `position` commands are strict: malformed syntax, invalid
-variant-aware FEN, or any illegal move prints an `info string` diagnostic and
-exits with failure. The engine never searches a valid prefix of a rejected
-move list. The Python API raises `ValueError` for invalid FEN and invalid
-moves. JavaScript board creation and `setFen()` throw on invalid FEN; the C
-binding reports failure from board creation or `fsf_set_fen()`. Native XBoard
-rejects invalid `setboard` FEN with an error and retains its previous position;
-an illegal XBoard move is reported and skipped.
+Public FEN entry points validate variant-aware input before loading it. Native
+UCI rejects an invalid `position` command with an `info string` diagnostic and
+does not search a valid prefix of an invalid move list. Python raises
+`ValueError` for invalid FEN and moves. JavaScript board creation and
+`setFen()` throw on invalid FEN. The C API returns `nullptr` from
+`fsf_new_board()` and `false` from `fsf_set_fen()` for invalid input. Native
+XBoard rejects invalid `setboard` FEN and retains its previous position; an
+illegal XBoard move is reported and skipped.
 
 Strict FEN checks use the selected variant's board, piece, pocket, promotion,
 castling, and rule-specific fields. They do not impose orthodox chess rules on
 variants.
+
+Thai SAN/LAN uses Thai coordinate symbols for the first 12 files and ranks.
+Coordinates beyond those tables use algebraic file letters and decimal ranks.
 
 Each interface still has its own contract for other malformed commands:
 - **`go searchmoves`**: tokens that match no legal move select nothing. A
@@ -185,11 +188,19 @@ Each interface still has its own contract for other malformed commands:
 - **JS (`ffish.js`)**: per-call choice. `push` returns `false` per move,
   `pushMoves` stops at the first failure keeping the prefix, and
   `variationSan` rolls everything back and returns `""`.
-- **FEN loading** (`position fen`, `set_fen`, board constructors) is
-  best-effort everywhere: unknown pieces, off-board squares, and bad flags
-  are skipped, not rejected. Use the opt-in `validate_fen` /
-  `validate_position` APIs (all three bindings) before loading untrusted
-  input, and note that gating-mask suffixes are strictly validated there.
+- **Low-level FEN parsing**: `Position::set()` assumes its caller has already
+  validated the FEN. Its parser is best-effort for malformed fields and is not
+  a public input-validation API. Public UCI, Python, JavaScript, and C entry
+  points validate before loading. `validate_fen` and `validate_position` are
+  also available for checking input explicitly; gating-mask suffixes are
+  strictly validated there.
+
+The DLL C API accepts a null `fsf_board` handle safely: string getters return
+an allocated empty string, numeric getters return zero, boolean getters return
+false, mutators do nothing (or return false), and `fsf_free_board(nullptr)` is
+safe. A failed `fsf_new_board()` returns `nullptr`; check it before calling
+board operations. Read-only global getters and validators initialize the
+engine on first use, so calling `fsf_init()` explicitly is optional.
 
 ## Python Bindings
 

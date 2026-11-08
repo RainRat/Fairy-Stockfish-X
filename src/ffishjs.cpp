@@ -80,9 +80,7 @@ inline void save_pop_back(std::string& s) {
 const Variant* get_variant(const std::string& uciVariant) {
   if (uciVariant.size() == 0 || uciVariant == "Standard" || uciVariant == "standard")
     return variants.get("chess");
-  if (const Variant* v = variants.get(uciVariant))
-    return v;
-  throw_js_error("No such variant '" + uciVariant + "'");
+  return variants.get(uciVariant);
 }
 
 template <bool isUCI>
@@ -517,16 +515,27 @@ private:
   void init(std::string uciVariant, std::string fen, bool is960) {
     ensure_stockfish_initialized();
     Board::sfInitialized.store(true, std::memory_order_relaxed);
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
-    v = get_variant(uciVariant);
-    UCI::init_variant(v);
-    this->resetStates();
-    if (fen == "")
-      fen = v->startFen;
-    const FEN::FenValidation validation = FEN::validate_fen(fen, v, is960);
-    if (validation != FEN::FEN_OK)
-      throw_js_error("Invalid FEN (validation error " + std::to_string(validation) + ").");
-    this->pos.set(this->v, fen, is960, &this->states->back(), Threads.empty() ? nullptr : Threads.main());
+    std::string error;
+    {
+      std::lock_guard<std::mutex> lock(variant_state_mutex);
+      v = get_variant(uciVariant);
+      if (!v)
+        error = "No such variant '" + uciVariant + "'";
+      else {
+        UCI::init_variant(v);
+        if (fen.empty())
+          fen = v->startFen;
+        const FEN::FenValidation validation = FEN::validate_fen(fen, v, is960);
+        if (validation != FEN::FEN_OK)
+          error = "Invalid FEN (validation error " + std::to_string(validation) + ").";
+        else {
+          this->resetStates();
+          this->pos.set(this->v, fen, is960, &this->states->back(), Threads.empty() ? nullptr : Threads.main());
+        }
+      }
+    }
+    if (!error.empty())
+      throw_js_error(error);
     this->is960 = is960;
   }
 };
@@ -542,11 +551,17 @@ namespace ffish {
   template <typename T>
   void set_option(std::string name, T value) {
     ensure_stockfish_initialized();
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
-    if (!Options.count(name))
+    bool found;
+    {
+      std::lock_guard<std::mutex> lock(variant_state_mutex);
+      found = Options.count(name);
+      if (found) {
+        Options[name] = value;
+        Board::sfInitialized.store(false, std::memory_order_relaxed);
+      }
+    }
+    if (!found)
       throw_js_error("No such option '" + name + "'");
-    Options[name] = value;
-    Board::sfInitialized.store(false, std::memory_order_relaxed);
   }
 
   std::string available_variants() {
@@ -582,37 +597,60 @@ namespace ffish {
 
   bool captures_to_hand(std::string uciVariant) {
     ensure_stockfish_initialized();
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
-    const Variant* v = get_variant(uciVariant);
+    const Variant* v;
+    {
+      std::lock_guard<std::mutex> lock(variant_state_mutex);
+      v = get_variant(uciVariant);
+    }
+    if (!v)
+      throw_js_error("No such variant '" + uciVariant + "'");
     return v->captureType != MOVE_OUT;
   }
 
   std::string starting_fen(std::string uciVariant) {
     ensure_stockfish_initialized();
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
-    const Variant* v = get_variant(uciVariant);
+    const Variant* v;
+    {
+      std::lock_guard<std::mutex> lock(variant_state_mutex);
+      v = get_variant(uciVariant);
+    }
+    if (!v)
+      throw_js_error("No such variant '" + uciVariant + "'");
     return v->startFen;
   }
 
   int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
     ensure_stockfish_initialized();
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
-    const Variant* v = get_variant(uciVariant);
-    return FEN::validate_fen(fen, v, chess960);
+    int result = FEN::FEN_INVALID_VARIANT;
+    {
+      std::lock_guard<std::mutex> lock(variant_state_mutex);
+      if (const Variant* v = get_variant(uciVariant))
+        result = FEN::validate_fen(fen, v, chess960);
+    }
+    if (result == FEN::FEN_INVALID_VARIANT)
+      throw_js_error("No such variant '" + uciVariant + "'");
+    return result;
   }
 
   int validate_position(std::string fen, std::string uciVariant, std::string uciMoves, bool chess960) {
     ensure_stockfish_initialized();
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
-    const Variant* v = get_variant(uciVariant);
-    std::stringstream ss(uciMoves);
-    std::string token;
-    std::vector<std::string> moves;
-    while (std::getline(ss, token, ' ')) {
-      if (!token.empty())
-        moves.push_back(token);
+    int result = FEN::FEN_INVALID_VARIANT;
+    {
+      std::lock_guard<std::mutex> lock(variant_state_mutex);
+      if (const Variant* v = get_variant(uciVariant)) {
+        std::stringstream ss(uciMoves);
+        std::string token;
+        std::vector<std::string> moves;
+        while (std::getline(ss, token, ' ')) {
+          if (!token.empty())
+            moves.push_back(token);
+        }
+        result = FEN::validate_position(fen, v, moves, chess960);
+      }
     }
-    return FEN::validate_position(fen, v, moves, chess960);
+    if (result == FEN::FEN_INVALID_VARIANT)
+      throw_js_error("No such variant '" + uciVariant + "'");
+    return result;
   }
 
   int validate_fen(std::string fen, std::string uciVariant) {

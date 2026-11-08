@@ -56,6 +56,9 @@ describe('ffish.variantInfo(uciVariant)', function () {
     chai.expect(info.promotion.promotedPieceTypes).to.deep.equal({});
     chai.expect(info.promotion.captureDemotedPieceTypes).to.deep.equal({});
 
+    ffish.loadVariantConfig('[js-connectn:chess]\nmaterialCounting = connectn\n');
+    chai.expect(JSON.parse(ffish.variantInfo('js-connectn')).gameEnd.materialCounting).to.equal('connectn');
+
     const janggiInfo = JSON.parse(ffish.variantInfo('janggi'));
     chai.expect(janggiInfo.board.diagonalLines).to.include('e2');
     chai.expect(janggiInfo.movement.soldierPromotionRank).to.equal(1);
@@ -335,6 +338,21 @@ describe('board.setFen(fen)', function () {
     board.delete();
   });
 
+  it("keeps the instance usable after errors from locked APIs", () => {
+    for (let i = 0; i < 2; ++i) {
+      chai.expect(() => new ffish.Board("missing-variant")).to.throw();
+      chai.expect(() => new ffish.Board("chess", "not-a-fen")).to.throw();
+      chai.expect(() => ffish.setOption("missing-option", "value")).to.throw();
+      chai.expect(() => ffish.startingFen("missing-variant")).to.throw();
+      chai.expect(() => ffish.capturesToHand("missing-variant")).to.throw();
+      chai.expect(() => ffish.validateFen("bad-fen", "missing-variant")).to.throw();
+      chai.expect(ffish.variants()).to.include("chess");
+    }
+    const board = new ffish.Board();
+    chai.expect(board.legalMoves()).to.include("e2e4");
+    board.delete();
+  });
+
   it("restores an automatic turn from the FEN move number", () => {
     const board = new ffish.Board("immortal-snail");
     board.pushMoves("e2e4 e7e5 g1f3 b8c6 f1c4 g8f6");
@@ -374,6 +392,20 @@ describe('board.sanMove(ffish.Notation)', function () {
     chai.expect(board.sanMove("g1f3", ffish.Notation.SHOGI_HODGES_NUMBER)).to.equal("N-36");
     chai.expect(["N87-66", "N07-66"]).to.include(board.sanMove("g1f3", ffish.Notation.JANGGI));
     chai.expect(board.sanMove("g1f3", ffish.Notation.XIANGQI_WXF)).to.equal("N2+3");
+    board.delete();
+  });
+
+  it("falls back to algebraic coordinates for Thai notation on large boards", function () {
+    if (!ffish.info().includes(" VLB ") && !ffish.info().includes(" HB "))
+      this.skip();
+    const fen = "15k/14R1/" + "16/".repeat(13) + "K15 w - - 0 1";
+    ffish.loadVariantConfig(
+      "[api-thai-large:chess]\nmaxFile = p\nmaxRank = 16\n" +
+      "castling = false\nallowChecks = true\nstartFen = " + fen + "\n"
+    );
+    const board = new ffish.Board("api-thai-large", fen);
+    chai.expect(board.sanMove("o15o16", ffish.Notation.THAI_SAN)).to.match(/o16/);
+    chai.expect(board.sanMove("o15o16", ffish.Notation.THAI_LAN)).to.match(/o16/);
     board.delete();
   });
 });
