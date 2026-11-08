@@ -29,7 +29,12 @@ if [[ "${mode}" == "--stdin" ]]; then
     exit 1
   fi
 
-  echo "bench stdin regression passed"
+  if [[ "${baseline_nodes}" != "${nodes}" ]]; then
+    echo "bench stdin node mismatch: baseline ${baseline_nodes}, configured ${nodes}"
+    exit 1
+  fi
+
+  echo "bench stdin regression passed (${nodes} nodes)"
   exit 0
 fi
 

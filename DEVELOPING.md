@@ -116,6 +116,17 @@ tests/protocol.sh src/stockfish-allvars
 tests/perft.sh all src/stockfish-allvars
 ```
 
+Build the named binaries with the wrapper before the detached full regression:
+
+```sh
+tests/build.sh ARCH=x86-64-modern EXE=stockfish
+tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
+tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
+```
+
+`tests/run.sh fast` runs the registered fast suites directly; `tests/fast-regression.sh` is a compatibility wrapper for it.
+
 The search and evaluation test suite requires the NNUE evaluation file. Download it with `make -C src net` before running those tests. See [AGENTS.md](AGENTS.md) for full testing instructions.
 
 ## CLI Usage

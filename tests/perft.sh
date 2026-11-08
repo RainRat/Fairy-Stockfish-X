@@ -8,8 +8,10 @@ ENGINE=${2:-}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 if [[ -z "${ENGINE}" ]]; then
-  ENGINE="${REPO_ROOT}/src/stockfish"
+  ENGINE="${REPO_ROOT}/src/stockfish-allvars"
 fi
+source "${REPO_ROOT}/tests/lib/direct-engine.sh"
+fsx_check_direct_engine "${REPO_ROOT}" "${ENGINE}" large-allvars
 
 command -v expect >/dev/null || {
   echo "perft testing requires expect" >&2

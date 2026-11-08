@@ -4,7 +4,7 @@ set -euo pipefail
 
 SUITE_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 SUITE_NAME=${1:?suite name is required}
-ENGINE=${2:-${SUITE_ROOT}/src/stockfish-large}
+ENGINE=${2:-${SUITE_ROOT}/src/stockfish-allvars}
 VARIANTS=${3:-${SUITE_ROOT}/src/variants.ini}
 FSX_CASE_MATCHED=0
 FSX_CASES_REQUIRED=0
@@ -159,6 +159,9 @@ run_config() {
     legacy explicit-custom-piece-replacements.sh 2m "${ENGINE}" "${VARIANTS}"
     if [[ -f "${SUITE_ROOT}/src/variants-incomplete.ini" ]]; then
         legacy incomplete-baselines.sh 2m "${ENGINE}" "${SUITE_ROOT}/src/variants-incomplete.ini"
+    else
+        FSX_CASE_OPTIONAL=always suite_case incomplete-baselines 5s bash -c \
+            'printf "FSX_TEST_SKIP: variants-incomplete.ini is absent\n" >&2; exit 77'
     fi
 }
 

@@ -40,53 +40,41 @@ run_is_alive() {
 engine_is_stale() {
   local engine="$1"
   ! fsx_build_artifact_is_current "$ROOT_DIR" "$engine" && return 0
-  find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+  find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mk' -o -name 'Makefile' \) \
     -newer "${engine}" -print -quit | grep -q .
 }
 
-expected_engine_profile() {
-  case "$(basename "$1")" in
-    stockfish)
-      printf 'arch=x86-64-modern;board=normal;all=no;nnue=no;debug=no;optimize=yes'
-      ;;
-    stockfish-large)
-      printf 'arch=x86-64-modern;board=large;all=no;nnue=no;debug=no;optimize=yes'
-      ;;
-    stockfish-vlb)
-      printf 'arch=x86-64-modern;board=very-large;all=yes;nnue=yes;debug=no;optimize=yes'
-      ;;
-    stockfish-allvars)
-      printf 'arch=x86-64-modern;board=large;all=yes;nnue=no;debug=no;optimize=yes'
-      ;;
-    *)
-      return 1
-      ;;
+engine_profile_has_role() {
+  local engine="$1" role="$2" profile board all nnue
+  profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$engine")
+  board="${profile#*board=}"; board="${board%%;*}"
+  all="${profile#*all=}"; all="${all%%;*}"
+  nnue="${profile#*nnue=}"; nnue="${nnue%%;*}"
+  case "${role}:${board}:${all}:${nnue}" in
+    large-allvars:large:yes:*|large-allvars:very-large:yes:*|large-allvars:huge:yes:*|very-large-allvars:very-large:yes:*|very-large-allvars:huge:yes:*|large:large:*:*|large:very-large:*:*|large:huge:*:*|normal:normal:*:*) return 0 ;;
+    very-large-nnue:very-large:yes:yes|very-large-nnue:huge:yes:yes) return 0 ;;
+    *) return 1 ;;
   esac
 }
 
-engine_profile_is_expected() {
-  local engine="$1" profile expected field
-  expected=$(expected_engine_profile "$engine") || return 0
-  profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$engine")
-  [[ -n "$profile" ]] || return 1
-
-  IFS=';' read -ra fields <<< "$expected"
-  for field in "${fields[@]}"; do
-    [[ ";${profile};" == *";${field};"* ]] || return 1
-  done
-}
-
 validate_engines() {
-  local primary="$1" candidate stale=0
+  local primary="$1" candidate stale=0 primary_profile role index=0
+  primary_profile=$(fsx_build_recorded_profile "$ROOT_DIR" "$primary")
+  if [[ ";${primary_profile};" != *";board=large;"* && ";${primary_profile};" != *";board=very-large;"* && ";${primary_profile};" != *";board=huge;"* ]] \
+      || [[ ";${primary_profile};" != *";all=yes;"* ]]; then
+    echo "primary engine must have a recorded large-board all-variant profile: ${primary}" >&2
+    return 2
+  fi
   local candidates=(
     "${primary}"
     "${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}"
     "${LARGE_ENGINE:-${ROOT_DIR}/src/stockfish-large}"
-    "${MINI_ENGINE:-${ROOT_DIR}/src/stockfish-allvars}"
     "${NORMAL_ENGINE:-${ROOT_DIR}/src/stockfish}"
   )
 
   for candidate in "${candidates[@]}"; do
+    case $index in 0) role=large-allvars ;; 1) role=very-large-nnue ;; 2) role=large ;; *) role=normal ;; esac
+    ((index += 1))
     [[ "${candidate}" == /* ]] || candidate="${ROOT_DIR}/${candidate}"
     if [[ ! -x "${candidate}" ]]; then
       if [[ "${FSX_TEST_PROFILE:-strict}" == portable && "${FSX_ALLOW_SMALL_BOARD:-0}" == 1 ]]; then
@@ -99,7 +87,7 @@ validate_engines() {
     if engine_is_stale "${candidate}"; then
       echo "stale or unverified engine: ${candidate}" >&2
       stale=1
-    elif ! engine_profile_is_expected "${candidate}"; then
+    elif ! engine_profile_has_role "${candidate}" "${role}"; then
       echo "engine profile does not match its named role: ${candidate}" >&2
       echo "rebuild it with the role-specific command below" >&2
       stale=1
@@ -219,6 +207,10 @@ status_run() {
     return
   fi
 
+  if [[ ! -f "${run_dir}/pid" ]]; then
+    echo "starting run log=$(relative_path "${log}")"
+    return
+  fi
   pid=$(<"${run_dir}/pid")
   if ! run_is_alive "${run_dir}"; then
     printf 'interrupted pid=%s elapsed=%s step="%s" log=%s\n' \
@@ -239,9 +231,33 @@ status_run() {
   fi
 }
 
+acquire_start_lock() {
+  local lock_dir="${STATE_DIR}/start.lock" owner missing_owner_wait=0
+  mkdir -p "${STATE_DIR}"
+  while ! mkdir "${lock_dir}" 2>/dev/null; do
+    if [[ -f "${lock_dir}/owner" ]]; then
+      owner=$(<"${lock_dir}/owner")
+      if [[ ! "${owner}" =~ ^[0-9]+$ ]] || ! kill -0 "${owner}" 2>/dev/null; then
+        rm -rf "${lock_dir}"
+        continue
+      fi
+    else
+      ((missing_owner_wait += 1))
+      if (( missing_owner_wait >= 50 )); then
+        rm -rf "${lock_dir}"
+        missing_owner_wait=0
+        continue
+      fi
+    fi
+    sleep 0.1
+  done
+  printf '%s\n' "$$" > "${lock_dir}/owner"
+}
+
 start_run() {
   local engine=${1:-src/stockfish-allvars} run_id run_dir pid
-  local vlb_engine large_engine mini_engine normal_engine
+  local vlb_engine large_engine normal_engine lock_dir="${STATE_DIR}/start.lock"
+  acquire_start_lock
   if [[ "${engine}" != /* ]]; then
     engine="${ROOT_DIR}/${engine}"
   fi
@@ -249,11 +265,11 @@ start_run() {
   validate_engines "${engine}"
   vlb_engine=$(absolute_engine_path "${VLB_ENGINE:-${ROOT_DIR}/src/stockfish-vlb}")
   large_engine=$(absolute_engine_path "${LARGE_ENGINE:-${ROOT_DIR}/src/stockfish-large}")
-  mini_engine=$(absolute_engine_path "${MINI_ENGINE:-${ROOT_DIR}/src/stockfish-allvars}")
   normal_engine=$(absolute_engine_path "${NORMAL_ENGINE:-${ROOT_DIR}/src/stockfish}")
 
   if run_dir=$(current_run_dir 2>/dev/null) && run_is_alive "${run_dir}"; then
     echo "regression already running (pid $(<"${run_dir}/pid"))" >&2
+    rm -rf "${lock_dir}"
     return 2
   fi
 
@@ -261,25 +277,28 @@ start_run() {
   run_id="$(date +%Y%m%d-%H%M%S)-$$"
   run_dir="${RUNS_DIR}/${run_id}"
   mkdir -p "${run_dir}"
-  printf '%s\n' "${run_dir}" > "${CURRENT_FILE}"
+  printf '%s\n' "$$" > "${run_dir}/pid"
   printf '%s\n' "${engine}" > "${run_dir}/engine"
   printf '%s\n' "${vlb_engine}" > "${run_dir}/vlb-engine"
   printf '%s\n' "${large_engine}" > "${run_dir}/large-engine"
-  printf '%s\n' "${mini_engine}" > "${run_dir}/allvars-engine"
   printf '%s\n' "${normal_engine}" > "${run_dir}/normal-engine"
   date +%s > "${run_dir}/start"
+  printf '%s\n' "${run_dir}" > "${CURRENT_FILE}.tmp.$$"
+  mv -f "${CURRENT_FILE}.tmp.$$" "${CURRENT_FILE}"
 
   if command -v setsid >/dev/null 2>&1; then
     VLB_ENGINE="${vlb_engine}" LARGE_ENGINE="${large_engine}" \
-      MINI_ENGINE="${mini_engine}" NORMAL_ENGINE="${normal_engine}" \
+      NORMAL_ENGINE="${normal_engine}" \
       setsid "${SCRIPT_PATH}" _run "${run_dir}" "${engine}" >/dev/null 2>&1 < /dev/null &
   else
     VLB_ENGINE="${vlb_engine}" LARGE_ENGINE="${large_engine}" \
-      MINI_ENGINE="${mini_engine}" NORMAL_ENGINE="${normal_engine}" \
+      NORMAL_ENGINE="${normal_engine}" \
       nohup "${SCRIPT_PATH}" _run "${run_dir}" "${engine}" >/dev/null 2>&1 < /dev/null &
   fi
   pid=$!
-  printf '%s\n' "${pid}" > "${run_dir}/pid"
+  printf '%s\n' "${pid}" > "${run_dir}/pid.tmp.$$"
+  mv -f "${run_dir}/pid.tmp.$$" "${run_dir}/pid"
+  rm -rf "${lock_dir}"
   printf 'started pid=%s log=%s\n' "${pid}" "$(relative_path "${run_dir}/regression.log")"
 }
 
@@ -305,11 +324,14 @@ wait_run() {
 
 worker_run() {
   local run_dir="$1" engine="$2" started ended rc
-  printf '%s\n' "$$" > "${run_dir}/pid"
   started=$(<"${run_dir}/start")
   set +e
-  /usr/bin/time -f "total elapsed %es" bash "${ROOT_DIR}/tests/run.sh" full "${engine}" \
-    > "${run_dir}/regression.log" 2>&1
+  local time_bin=${FSX_TIME_BIN:-/usr/bin/time}
+  if [[ -x "${time_bin}" ]]; then
+    "${time_bin}" -f "total elapsed %es" bash "${ROOT_DIR}/tests/run.sh" full "${engine}" > "${run_dir}/regression.log" 2>&1
+  else
+    bash "${ROOT_DIR}/tests/run.sh" full "${engine}" > "${run_dir}/regression.log" 2>&1
+  fi
   rc=$?
   set -e
   ended=$(date +%s)

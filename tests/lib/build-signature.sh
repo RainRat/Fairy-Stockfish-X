@@ -225,6 +225,7 @@ fsx_build_recorded_profile() {
   local signature_file
 
   signature_file=$(fsx_build_signature_file "$root_dir" "$output_file")
+  [[ -f "$signature_file" ]] || return 0
   sed -n '3s/^profile=//p' "$signature_file"
 }
 

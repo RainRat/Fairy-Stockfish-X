@@ -9,10 +9,22 @@ error()
   exit 1
 }
 trap 'error ${LINENO}' ERR
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+SCRATCH_DIR="${ROOT_DIR}/.local/build/instrumented"
+mkdir -p "${SCRATCH_DIR}"
+cleanup() { [[ -z "${tsan_supp:-}" ]] || rm -f "${tsan_supp}"; rm -f "${game_exp:-}" "${syzygy_exp:-}" "${SCRATCH_DIR}"/expect-output.*; }
+trap cleanup EXIT
+if [[ "${1:-}" == --* ]]; then
+  mode_arg=$1
+  shift
+else
+  mode_arg=normal
+fi
+ENGINE=${1:-${ROOT_DIR}/src/stockfish}
+[[ -x "${ENGINE}" ]] || { echo "engine is not executable: ${ENGINE}" >&2; exit 2; }
 
 # define suitable post and prefixes for testing options
-mode=""
-case $1 in
+case ${mode_arg} in
   --valgrind)
     echo "valgrind testing started"
     mode="valgrind"
@@ -37,7 +49,7 @@ case $1 in
     pattern="WARNING: ThreadSanitizer:"
     threads="2"
 
-    tsan_supp=$(mktemp)
+    tsan_supp=$(mktemp "${SCRATCH_DIR}/tsan-supp.XXXXXX")
     cat << EOF > "$tsan_supp"
 race:Stockfish::TTEntry::move
 race:Stockfish::TTEntry::depth
@@ -63,17 +75,17 @@ esac
 run_test_cmd() {
   local args=("$@")
   if [[ "$mode" == "valgrind" || "$mode" == "valgrind-thread" ]]; then
-    valgrind "${valgrind_args[@]}" ./stockfish "${args[@]}" >/dev/null
+    valgrind "${valgrind_args[@]}" "${ENGINE}" "${args[@]}" >/dev/null
   elif [[ "$mode" == "sanitizer-undefined" || "$mode" == "sanitizer-thread" ]]; then
     local out
-    out=$(./stockfish "${args[@]}" 2>&1)
+    out=$("${ENGINE}" "${args[@]}" 2>&1)
     if grep -q "$pattern" <<<"$out"; then
       echo "Sanitizer warning/error detected:" >&2
       grep -A50 "$pattern" <<<"$out" >&2
       return 1
     fi
   else
-    ./stockfish "${args[@]}"
+    "${ENGINE}" "${args[@]}"
   fi
 }
 
@@ -90,12 +102,13 @@ if [[ "$mode" != "valgrind" && "$mode" != "valgrind-thread" ]]; then
 fi
 
 # more general testing, following an uci protocol exchange
-game_exp=$(mktemp)
-spawn_cmd="./stockfish"
+game_exp=$(mktemp "${SCRATCH_DIR}/game.XXXXXX.exp")
+printf -v engine_q '%q' "${ENGINE}"
+spawn_cmd="${engine_q}"
 if [[ "$mode" == "valgrind" ]]; then
-  spawn_cmd="valgrind --error-exitcode=42 --errors-for-leak-kinds=all --leak-check=full ./stockfish"
+  spawn_cmd="valgrind --error-exitcode=42 --errors-for-leak-kinds=all --leak-check=full ${engine_q}"
 elif [[ "$mode" == "valgrind-thread" ]]; then
-  spawn_cmd="valgrind --fair-sched=try --error-exitcode=42 ./stockfish"
+  spawn_cmd="valgrind --fair-sched=try --error-exitcode=42 ${engine_q}"
 fi
 
 cat << EOF > "$game_exp"
@@ -136,26 +149,18 @@ cat << EOF > "$game_exp"
  exit \$value
 EOF
 
-#download TB as needed
-if [ ! -d ../tests/syzygy ]; then
-   tmp_file=$(mktemp)
-   curl -sL https://api.github.com/repos/niklasf/python-chess/tarball/9b9aa13f9f36d08aadfabff872882f4ab1494e95 -o "$tmp_file"
-   if ! tar -xOf "$tmp_file" niklasf-python-chess-9b9aa13/SOURCE.txt | grep -q 'tablebase.sesse.net/syzygy/'; then
-      echo "Unexpected python-chess tarball contents!" >&2
-      rm -f "$tmp_file"
-      exit 1
-   fi
-   tar -xzf "$tmp_file"
-   rm -f "$tmp_file"
-   mv niklasf-python-chess-9b9aa13 ../tests/syzygy
+# Syzygy data is user-provided and never downloaded or changed by this test.
+SYZYGY_DIR=${FSX_SYZYGY_DIR:-${ROOT_DIR}/tests/syzygy}
+if [[ ! -d "${SYZYGY_DIR}" ]]; then
+  echo "SKIP: Syzygy instrumented probe requires local tablebases; set FSX_SYZYGY_DIR." >&2
 fi
 
-syzygy_exp=$(mktemp)
+syzygy_exp=$(mktemp "${SCRATCH_DIR}/syzygy.XXXXXX.exp")
 cat << EOF > "$syzygy_exp"
  set timeout 600
  spawn $spawn_cmd
  send "uci\n"
- send "setoption name SyzygyPath value ../tests/syzygy/\n"
+ send "setoption name SyzygyPath value ${SYZYGY_DIR}/\n"
  expect "info string Found 35 tablebases" {} timeout {exit 1}
  send "bench 128 1 8 default depth\n"
  send "quit\n"
@@ -170,7 +175,7 @@ run_expect_test() {
   local exp="$1"
   if [[ "$mode" == "valgrind" || "$mode" == "valgrind-thread" ]]; then
     local out
-    out=$(mktemp)
+    out=$(mktemp "${SCRATCH_DIR}/expect-output.XXXXXX")
     if ! expect "$exp" >"$out" 2>&1; then
       cat "$out" >&2
       rm -f "$out"
@@ -190,15 +195,16 @@ run_expect_test() {
   fi
 }
 
-for exp in "$game_exp" "$syzygy_exp"
+if [[ -d "${SYZYGY_DIR}" ]]; then
+  instrumented_exps=("$game_exp" "$syzygy_exp")
+else
+  instrumented_exps=("$game_exp")
+fi
+for exp in "${instrumented_exps[@]}"
 do
   echo "Running expect test: $exp"
   run_expect_test "$exp"
   rm "$exp"
 done
-
-if [ -n "${tsan_supp:-}" ]; then
-  rm -f "$tsan_supp"
-fi
 
 echo "instrumented testing OK"

@@ -113,6 +113,17 @@ tests/protocol.sh src/stockfish-allvars
 tests/perft.sh all src/stockfish-allvars
 ```
 
+Build the named binaries with the wrapper before the detached full regression:
+
+```sh
+tests/build.sh ARCH=x86-64-modern EXE=stockfish
+tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
+tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
+tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
+```
+
+`tests/run.sh fast` runs the registered fast suites directly; `tests/fast-regression.sh` is a compatibility wrapper for it.
+
 Use the named binary for each broad check and report the binary actually tested. A run with a different binary does not establish whether the documented check passes. The fast suite may also use `src/stockfish-vlb` when it exists; rebuild that binary from current sources before running the suite.
 
 Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 tests/python/test_pyffish_api.py`.
@@ -168,10 +179,10 @@ For parser, movegen, legality, promotion, topology, variant-switching, or shared
 
 ```sh
 python3 tests/upstream_reference.py src/stockfish "$UPSTREAM_ENGINE"
-python3 tests/upstream_movecount_baseline.py src/stockfish "$UPSTREAM_ENGINE"
+python3 tests/upstream_movecount_baseline.py src/stockfish
 ```
 
-Only regenerate upstream baselines intentionally. Do not refresh fixtures to hide regressions.
+The movecount command checks the committed fixture; it does not compare against a live upstream engine. Pass both engine paths with `--regenerate` only when intentionally refreshing the fixture. Do not refresh fixtures to hide regressions.
 
 ## Full local regression
 Build the named binaries first. Use the regression runner for long test runs; it keeps all output in a single log file and reports estimated time remaining:

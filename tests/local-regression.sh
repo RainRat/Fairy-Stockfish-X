@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
-ENGINE=${1:-${ROOT_DIR}/src/stockfish-large}
+ENGINE=${1:-${ROOT_DIR}/src/stockfish-allvars}
 VARIANTS=${VARIANT_PATH:-${ROOT_DIR}/src/variants.ini}
 
 cd "${ROOT_DIR}"

@@ -100,7 +100,8 @@ assert_contains "$out" "^Nodes searched: "
 echo "-- Issue 3: self-return guard --"
 
 # Create a tiny 2-file cylinder variant to test wrapping on small boards
-tmp_ini=$(mktemp)
+tmp_ini=$(mktemp "${ROOT_DIR}/.local/build/topology-smoke.XXXXXX.ini")
+fsx_add_exit_cleanup "rm -f \"${tmp_ini}\""
 cat > "${tmp_ini}" <<'INI'
 [tiny-cyl:chess]
 maxFile = b

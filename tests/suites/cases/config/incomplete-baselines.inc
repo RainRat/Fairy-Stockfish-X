@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -euo pipefail
+SCRIPT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
+source "${SCRIPT_ROOT}/tests/lib/uci.sh"
 
 ENGINE=${1:-./stockfish}
 VARIANT_PATH=${2:-variants-incomplete.ini}

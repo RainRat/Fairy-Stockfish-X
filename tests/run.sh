@@ -18,13 +18,9 @@ source "${ROOT_DIR}/tests/lib/build-signature.sh"
 # engine-rules) inherit this. Override with JOBS=N.
 export JOBS="${JOBS:-$(nproc 2>/dev/null || echo 2)}"
 
-# Outer suite timeouts are backstops only: each must comfortably exceed the
-# sum of its inner case timeouts in tests/lib/suite.sh (currently 12/46/48/
-# 52/24/40/12/91/42/5 min), so a slow-but-progressing machine fails individual
-# cases on their own limits instead of tripping the suite wrapper first.
-# Keep this invariant (~1.5x inner sum) when adding cases.
+# Outer timeouts are backstops; individual case limits are in tests/lib/suite.sh.
 declare -A SUITE_TIMEOUT=(
-  [config]=1200 [movement]=4200 [royal-legality]=4500 [captures-effects]=4800
+  [config]=1800 [movement]=4200 [royal-legality]=4500 [captures-effects]=4800
   [promotion-drops]=2400 [state-transitions]=3600 [notation-protocol]=1200
   [variants-smoke]=8400 [search-evaluation]=3900 [spells]=600
 )
@@ -55,13 +51,7 @@ ALL_SUITES=(config movement royal-legality captures-effects promotion-drops stat
 FAST_SUITES=(config movement royal-legality captures-effects promotion-drops state-transitions notation-protocol variants-smoke spells)
 
 default_engine() {
-    if [[ -x "${ROOT_DIR}/src/stockfish-allvars" ]]; then
-        echo "${ROOT_DIR}/src/stockfish-allvars"
-    elif [[ -x "${ROOT_DIR}/src/stockfish-large" ]]; then
-        echo "${ROOT_DIR}/src/stockfish-large"
-    else
-        echo "${ROOT_DIR}/src/stockfish"
-    fi
+    echo "${ROOT_DIR}/src/stockfish-allvars"
 }
 
 check_named_engine_artifact() {
@@ -89,8 +79,13 @@ check_named_engine_artifact() {
 }
 
 check_named_engines() {
-    local auxiliary
+    local auxiliary suite
     check_named_engine_artifact "$1"
+    for suite in "${SUITES_TO_RUN[@]}"; do
+        check_engine "$suite" "$1"
+        check_engine_freshness "$1"
+        check_prerequisites "$suite"
+    done
     if [[ " ${SUITES_TO_RUN[*]} " == *" movement "* \
         || " ${SUITES_TO_RUN[*]} " == *" variants-smoke "* \
         || " ${SUITES_TO_RUN[*]} " == *" search-evaluation "* ]]; then
@@ -172,7 +167,7 @@ check_engine_freshness() {
     # Otherwise (direct make, copied binary, or stale wrapper artifact) fail
     # only when the sources are actually newer than the binary. Board-size
     # mixing is still caught by the family check above.
-    if find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name 'Makefile' \) \
+    if find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.mk' -o -name 'Makefile' \) \
         -newer "$engine" -print -quit 2>/dev/null | grep -q .; then
         echo "stale engine: ${engine} is older than its sources; rebuild with tests/build.sh" >&2
         return 1
@@ -280,7 +275,7 @@ prepare_python() {
     (( needs_python )) || return 0
     mkdir -p "${ROOT_DIR}/.local/build/pyffish" "${RUN_DIR}"
 
-    local pyffish_so=""
+    local pyffish_so="" force_python_build=0
     local pyffish_ext_suffix=""
     pyffish_ext_suffix=$(python3 -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX") or "")' 2>/dev/null || true)
     shopt -s nullglob
@@ -294,17 +289,23 @@ prepare_python() {
         fi
     done
 
-    if [[ -n "${pyffish_so}" ]] && [[ "${ROOT_DIR}/setup.py" -ot "${pyffish_so}" ]]; then
-        if ! find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \) -newer "${pyffish_so}" -print -quit | grep -q .; then
+    if [[ -n "${pyffish_so}" && -s "${pyffish_so}" ]] \
+        && (cd "${ROOT_DIR}" && python3 -c 'import pyffish' >/dev/null 2>&1); then
+        if [[ "${ROOT_DIR}/setup.py" -ot "${pyffish_so}" ]] \
+            && ! find "${ROOT_DIR}/src" -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \) -newer "${pyffish_so}" -print -quit | grep -q .; then
             return 0
         fi
+    else
+        force_python_build=1
     fi
 
 
     run_build() {
+        local force_args=()
+        if (( force_python_build )); then force_args+=(--force); fi
         if [[ "${VERBOSE:-0}" == 1 ]]; then
-            (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish")
-        elif (cd "${ROOT_DIR}" && python3 setup.py build_ext --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish") >"${log}" 2>&1; then
+            (cd "${ROOT_DIR}" && python3 setup.py build_ext "${force_args[@]}" --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish")
+        elif (cd "${ROOT_DIR}" && python3 setup.py build_ext "${force_args[@]}" --inplace --build-temp "${ROOT_DIR}/.local/build/pyffish") >"${log}" 2>&1; then
             echo "ok: python extension"
         else
             echo "FAILED: python extension" >&2
@@ -427,7 +428,7 @@ case "$command" in
         shift 1
         [[ $# -gt 0 ]] || usage
         engine=$(default_engine)
-        if [[ -x "${!#}" ]]; then
+        if [[ -x "${!#}" || "${!#}" == */* ]]; then
             engine=${!#}
             args=("$@")
             unset 'args[${#args[@]}-1]'

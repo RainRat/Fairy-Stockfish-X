@@ -11,12 +11,16 @@ finished binary's advertised board family. Use it when building test binaries
 so the test runner can verify that the selected executable has the expected
 profile.
 
-For the standard large-board and all-variant test binary:
+Build the named test binaries with the wrapper so each has a recorded profile:
 
 ```sh
+tests/build.sh ARCH=x86-64-modern EXE=stockfish
+tests/build.sh ARCH=x86-64-modern largeboards=yes EXE=stockfish-large
+tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes nnue=yes EXE=stockfish-vlb
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
-tests/run.sh fast src/stockfish-allvars
 ```
+
+`tests/run.sh fast src/stockfish-allvars` runs the registered fast suites. `tests/fast-regression.sh src/stockfish-allvars` is a compatibility wrapper for that command.
 
 `tests/build.sh` verifies that the build produces a working executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Variant rules are validated separately by the `config` and `variants-smoke` test suites.
 
@@ -43,11 +47,13 @@ Use the smallest suite matching the changed engine area:
 | spell chess | `tests/run.sh suite spells src/stockfish-allvars` |
 | Python signatures and return values | `python3 setup.py build_ext --inplace && python3 tests/python/test_pyffish_api.py` |
 
+`tests/run.sh fast` runs the registered fast suite. `tests/fast-regression.sh` is a compatibility entry point for the same run; it honors an explicitly supplied engine. The detached full regression requires all four named binaries documented above.
+
 The search and evaluation suite requires the NNUE network evaluation file. Download it once with `make -C src net` before running that suite.
 
 The strict test profile requires wrapper-recorded engine roles: every suite's main engine must be a large-board all-variant build; `movement` and `search-evaluation` also use a very-large-board all-variant engine, and `variants-smoke` uses large, normal, and very-large auxiliary engines. Set `FSX_TEST_PROFILE=portable` only for compatibility runs against arbitrary upstream or reduced-feature binaries. `FSX_ALLOW_SMALL_BOARD=1` explicitly permits board-role skips; those omissions appear as skip or partial-skip events. `VLB_ENGINE`, `LARGE_ENGINE`, and `NORMAL_ENGINE` override auxiliary paths in the regression runner. `FSX_ALLOW_STALE_ENGINE=1` only bypasses source-newer-than-binary checks.
 
-Other test scripts include: `perft.sh`, `instrumented.sh`, `regression.sh`, `regression-runner.sh`, upstream comparison scripts, and the JavaScript tests in `tests/js/`.
+Other test scripts include: `perft.sh`, `instrumented.sh`, `regression.sh`, `regression-runner.sh`, upstream comparison scripts, and the JavaScript tests in `tests/js/`. `instrumented.sh [mode] [engine]` accepts an engine path; its Syzygy probe runs only when local tablebases exist at `tests/syzygy` or `FSX_SYZYGY_DIR`. It does not download or modify test data.
 
 The standalone `tests/perft.sh` runner reports permitted perft-set omissions
 as `FSX_TEST_EVENT` partial-skip records and prints an
