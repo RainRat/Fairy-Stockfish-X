@@ -1410,6 +1410,7 @@ private:
   Score psq;
   mutable Move simulatedMove = MOVE_NONE;
   mutable const SimulatedMoveInfo* simulatedInfo = nullptr;
+  mutable bool checkingForcedAutoMoveLegality = false;
   mutable Move simulatedFreezeCacheMove = MOVE_NONE;
   mutable const StateInfo* simulatedFreezeCacheState = nullptr;
   mutable std::array<Bitboard, COLOR_NB> simulatedFreezeCacheFreezers = {};
@@ -3104,8 +3105,21 @@ inline bool Position::pass(Color c) const {
       return true;
   // Safety valve: a scheduled snail turn with no resolvable step passes
   // instead of playing a normal move.
-  if (c == sideToMove && has_auto_move() && auto_move_turn(c) && forced_auto_move() == MOVE_NONE)
-      return true;
+  if (c == sideToMove && has_auto_move() && auto_move_turn(c))
+  {
+      Move forced = forced_auto_move();
+      // Move generation during this legality probe may ask whether a pass is
+      // available. Suppress that nested probe to avoid checking the same step
+      // recursively through has_capture().
+      if (forced == MOVE_NONE)
+          return true;
+      if (checkingForcedAutoMoveLegality)
+          return false;
+      checkingForcedAutoMoveLegality = true;
+      const bool forcedLegal = legal(forced);
+      checkingForcedAutoMoveLegality = false;
+      return !forcedLegal;
+  }
   if (forced_jump_continuation() && st->forcedJumpSquare != SQ_NONE && st->forcedJumpHasFollowup)
   {
       Piece fp = piece_on(st->forcedJumpSquare);

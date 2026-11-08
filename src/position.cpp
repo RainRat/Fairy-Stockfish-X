@@ -4089,6 +4089,10 @@ Move Position::forced_auto_move_for(Color us) const {
   const Piece pc = piece_on(from);
   if (pc == NO_PIECE || color_of(pc) != us)
       return MOVE_NONE;
+  // Frozen pieces cannot make the selected automatic step. Treat this as a
+  // blocked turn so the normal forced-pass path can consume the ply.
+  if (freeze_squares(us) & from)
+      return MOVE_NONE;
 
   const PieceType pt = type_of(pc);
   PieceType targetPt = var->autoMoveTarget[pt];
@@ -5988,7 +5992,7 @@ bool Position::legal(Move m) const {
       Move forced = forced_auto_move();
       if (forced != MOVE_NONE)
       {
-          if (m != forced)
+          if (m != forced && !(passMove && pass(us)))
               return false;
       }
       else if (!passMove)
@@ -7273,7 +7277,8 @@ bool Position::pseudo_legal(const Move m) const {
 
   if (has_auto_move() && auto_move_turn(us))
   {
-      if (m != forced_auto_move() && !(passMove && forced_auto_move() == MOVE_NONE))
+      Move forced = forced_auto_move();
+      if (m != forced && !(passMove && pass(us)))
           return false;
   }
   else if (has_auto_move() && !passMove && !dropMove)
@@ -10526,6 +10531,21 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       }
   }
 
+  // Every played turn, including a pass, advances the owner's cycle. This
+  // matches the FEN move number used to restore the phase on a fresh load.
+  // The phase is legality-relevant, so finalize its key before repetition.
+  if (has_auto_move())
+  {
+      const Color mover = ~sideToMove;
+      const int oldPhase = auto_move_phase(var, st->autoMoveCount[mover]);
+      const int newPhase = oldPhase == var->autoMoveN ? 0 : oldPhase + 1;
+      Key diff = Zobrist::autoMovePhase[mover][oldPhase]
+               ^ Zobrist::autoMovePhase[mover][newPhase];
+      st->autoMoveCount[mover] = newPhase;
+      st->key ^= diff;
+      st->boardKey ^= diff;
+  }
+
   // Calculate the repetition info. It is the ply distance from the previous
   // occurrence of the same position, negative in the 3-fold case, or zero
   // if the position was not repeated.
@@ -10562,21 +10582,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           st->forcedJumpHasFollowup = false;
       else if (color_of(fp) == sideToMove && !has_legal_jump_continuation())
           st->forcedJumpHasFollowup = false;
-  }
-
-  // Every played turn, including a pass, advances the owner's cycle. This
-  // matches the FEN move number used to restore the phase on a fresh load.
-  // The phase is legality-relevant, so the key follows it.
-  if (has_auto_move())
-  {
-      const Color mover = ~sideToMove;
-      const int oldPhase = auto_move_phase(var, st->autoMoveCount[mover]);
-      const int newPhase = oldPhase == var->autoMoveN ? 0 : oldPhase + 1;
-      Key diff = Zobrist::autoMovePhase[mover][oldPhase]
-               ^ Zobrist::autoMovePhase[mover][newPhase];
-      st->autoMoveCount[mover] = newPhase;
-      st->key ^= diff;
-      st->boardKey ^= diff;
   }
 
 #ifndef NDEBUG

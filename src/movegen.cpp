@@ -1367,10 +1367,10 @@ namespace {
                 || (Type == QUIETS && !isCapture)
                 || Type == EVASIONS || Type == NON_EVASIONS)
                 *moveList++ = forcedAuto;
-            else if (Type == QUIET_CHECKS && pos.gives_check(forcedAuto))
+            else if (Type == QUIET_CHECKS && !isCapture && pos.gives_check(forcedAuto))
                 *moveList++ = forcedAuto;
         }
-        else if (Type != QUIET_CHECKS && pos.pass(Us))
+        if ((Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS) && pos.pass(Us))
             moveList = emit_pass_move(pos, moveList, Us);
         return moveList;
     }

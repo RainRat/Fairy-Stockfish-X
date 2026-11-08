@@ -826,7 +826,7 @@ namespace {
     Value bestValue, value, ttValue, eval, maxValue, probCutBeta;
     bool givesCheck, improving, didLMR, priorCapture;
     bool captureOrPromotion, doFullDepthSearch, moveCountPruning,
-         ttCapture, singularQuietLMR;
+         ttCapture, singularQuietLMR, forcedAutoTurn;
     Piece movedPiece;
     int moveCount, captureCount, quietCount;
 
@@ -835,6 +835,7 @@ namespace {
     ss->inCheck        = pos.evasion_checkers();
     priorCapture       = pos.captured_piece();
     Color us           = pos.side_to_move();
+    forcedAutoTurn     = pos.has_auto_move() && pos.auto_move_turn(us);
     moveCount          = captureCount = quietCount = ss->moveCount = 0;
     bestValue          = -VALUE_INFINITE;
     maxValue           = VALUE_INFINITE;
@@ -1005,7 +1006,7 @@ namespace {
     CapturePieceToHistory& captureHistory = thisThread->captureHistory;
 
     // Step 6. Static evaluation of the position
-    if (ss->inCheck)
+    if (ss->inCheck || forcedAutoTurn)
     {
         // Skip early pruning when in check
         ss->staticEval = eval = VALUE_NONE;
@@ -1078,7 +1079,7 @@ namespace {
         && !excludedMove
         &&  pos.non_pawn_material(us)
         && !pos.has_forced_jump_followup()
-        && !pos.auto_move_active()
+        && !forcedAutoTurn
         &&  pos.count<ALL_PIECES>(~us) != pos.count<PAWN>(~us)
         && !pos.flip_enclosed_pieces()
         && (ss->ply >= thisThread->nmpMinPly || us != thisThread->nmpColor))
@@ -1139,6 +1140,7 @@ namespace {
     // much above beta, we can (almost) safely prune the previous move.
     if (   !PvNode
         &&  depth > 4
+        && !forcedAutoTurn
         && !pos.see_pruning_unreliable()
         &&  abs(beta) < VALUE_TB_WIN_IN_MAX_PLY
         // if value from transposition table is lower than probCutBeta, don't attempt probCut
@@ -1316,7 +1318,8 @@ moves_loop: // When in check, search starts from here
       // Step 13. Pruning at shallow depth (~200 Elo)
       if (  !rootNode
           && (pos.non_pawn_material(us) || pos.count<ALL_PIECES>(us) == pos.count<PAWN>(us))
-          && bestValue > VALUE_TB_LOSS_IN_MAX_PLY)
+          && bestValue > VALUE_TB_LOSS_IN_MAX_PLY
+          && !forcedAutoTurn)
       {
           // Skip quiet moves if movecount exceeds our FutilityMoveCount threshold
           moveCountPruning = moveCount >= futility_move_count(improving, depth, pos);

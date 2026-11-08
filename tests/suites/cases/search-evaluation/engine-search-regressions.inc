@@ -86,6 +86,12 @@ autoMoveN = 1
 autoMoveTarget = s:k
 autoMoveSidestep = false
 doublePassEndsGame = false
+
+[automove-forced-capture-search:chess]
+customPiece1 = s:K
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
 EOF
   local out
   out=$(run_expect "$ENGINE" "$FSX_TMP_INI" <<EOF
@@ -104,6 +110,24 @@ EOF
 )
   # White's blocked snail must pass before Black's snail captures the king.
   assert_contains "$out" '^info depth 1 .* score mate 2 '
+
+  out=$(run_expect "$ENGINE" "$FSX_TMP_INI" <<EOF
+$(expect_engine_setup)
+ set variant_path [lindex \$argv 1]
+ send "uci\n"
+ expect "uciok"
+ send "setoption name VariantPath value \$variant_path\n"
+ send "setoption name UCI_Variant value automove-forced-capture-search\n"
+ send "position fen 7k/p7/5s2/4p3/3S4/8/8/K3R3 b - - 0 3\n"
+ send "go depth 4 searchmoves a7a6\n"
+ expect -re {info depth 4 .* pv a7a6 d4e5 f6e5 e1e5}
+ expect "bestmove a7a6"
+ send "quit\n"
+ expect eof
+EOF
+)
+  # The forced capture sequence includes Black's losing recapture of the snail.
+  assert_contains "$out" '^info depth 3 .* pv a7a6 d4e5 f6e5'
 }
 
 test_gating_regressions() {

@@ -114,6 +114,35 @@ void movement() {
                  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     check(!pos.clone_targets_from(WHITE, SQ_A3),
           "clone_targets_from returned targets for an empty square");
+
+    set_position(pos, states, "automove-forced-illegal",
+                 variants.get("automove-forced-illegal")->startFen.c_str());
+    Move forced = pos.forced_auto_move();
+    check(forced != MOVE_NONE && !pos.legal(forced),
+          "pseudo-royal safety did not reject the forced step exposing its ray: "
+              + pos.fen() + " move=" + UCI::move(pos, forced)
+              + " phase=" + std::to_string(pos.state()->autoMoveCount[WHITE]));
+    Move forcedPass = make<SPECIAL>(SQ_E1, SQ_E1);
+    check(pos.pass(WHITE), "illegal forced step did not permit the scheduled pass");
+    check(pos.pseudo_legal(forcedPass), "scheduled pass was not pseudo-legal");
+    MoveList<LEGAL> legalMoves(pos);
+    std::string autoLegalMoves;
+    for (const ExtMove& move : legalMoves)
+        autoLegalMoves += (autoLegalMoves.empty() ? "" : ",") + UCI::move(pos, move);
+    check(legalMoves.size() == 1 && is_pass(legalMoves.begin()->move),
+          "legal generation did not replace an illegal forced step with a pass: " + autoLegalMoves);
+
+    set_position(pos, states, "automove-quiet-capture",
+                 "8/8/5k2/4p3/3S4/8/8/4K3 w - - 0 2");
+    forced = pos.forced_auto_move();
+    check(forced != MOVE_NONE && pos.capture(forced) && pos.gives_check(forced),
+          "quiet-check automatic-movement fixture is not a checking capture");
+    check(MoveList<CAPTURES>(pos).contains(forced),
+          "forced automatic capture was omitted from capture generation");
+    check(!MoveList<QUIETS>(pos).contains(forced),
+          "forced automatic capture was included in quiet generation");
+    for (const ExtMove& move : MoveList<QUIET_CHECKS>(pos))
+        check(move.move != forced, "quiet-check generation included a forced capture");
 }
 
 void composable_rules() {
@@ -1384,12 +1413,15 @@ void state() {
 
     set_position(pos, states, "immortal-snail",
                  variants.get("immortal-snail")->startFen.c_str());
+    const Key autoInitialKey = pos.key();
     const char* autoMoves[] = {
       "e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6", "a4b5", "a5b4"
     };
+    Move autoMoveHistory[8];
     for (int ply = 0; ply < 8; ++ply)
     {
         Move autoMove = parse_move(pos, autoMoves[ply]);
+        autoMoveHistory[ply] = autoMove;
         states->emplace_back();
         pos.do_move(autoMove, states->back());
         const Color mover = Color(ply & 1);
@@ -1398,6 +1430,35 @@ void state() {
         check(pos.state()->autoMoveCount[~mover] <= 3,
               "inactive automatic-movement phase escaped its configured range");
     }
+    for (int ply = 7; ply >= 0; --ply)
+        pos.undo_move(autoMoveHistory[ply]);
+    check(pos.key() == autoInitialKey
+          && pos.state()->autoMoveCount[WHITE] == 0
+          && pos.state()->autoMoveCount[BLACK] == 0,
+          "automatic-movement phase or key was not restored by undo");
+
+    set_position(pos, states, "automove-repetition",
+                 variants.get("automove-repetition")->startFen.c_str());
+    const char* autoRepetitionMoves[] = {
+      "e1f1", "e8f8", "f1f2", "f8f7", "f2e1", "f7e8", "0000", "0000",
+      "e1f1", "e8f8", "f1f2", "f8f7", "f2e1", "f7e8", "0000", "0000",
+      "e1f1", "e8f8", "f1f2", "f8f7", "f2e1", "f7e8", "0000", "0000"
+    };
+    for (int i = 0; i < int(std::size(autoRepetitionMoves)); ++i)
+    {
+        const char* notation = autoRepetitionMoves[i];
+        Move move = parse_move(pos, notation);
+        check(pos.legal(move), std::string("automatic-movement repetition move is illegal: ") + notation);
+        states->emplace_back();
+        pos.do_move(move, states->back());
+    }
+    check(pos.state()->repetition < 0,
+          "automatic-movement threefold repetition was not recorded");
+    check(pos.state()->boardRepetition < 0,
+          "automatic-movement board threefold repetition was not recorded");
+    Value autoRepetitionResult = VALUE_NONE;
+    check(pos.is_optional_game_end(autoRepetitionResult) && autoRepetitionResult == VALUE_DRAW,
+          "automatic-movement threefold repetition was not adjudicated as a draw");
 
     set_position(pos, states, "atomic",
                  "4k3/8/8/8/8/8/1p6/R3K3 b - - 0 1");
@@ -1730,6 +1791,29 @@ void load_config(const std::string& path) {
 startFen = 8/8/8/8/8/8/8/8[PPpp] w - - 0 1
 pieceDrops = true
 symmetricDropTypes = p
+
+[automove-repetition:immortal-snail]
+customPiece2 = x:K
+autoMoveTarget = s:x
+startFen = 4k3/8/8/8/8/8/8/4K3 w - - 0 1
+
+[automove-forced-illegal:chess]
+king = -
+customPiece1 = s:K
+customPiece2 = u:K
+customPiece3 = v:K
+pseudoRoyalTypes = u v
+pseudoRoyalCount = 1
+pseudoRoyalValue = loss
+autoMoveTarget = s:v
+autoMoveN = 1
+startFen = 4r3/8/8/8/8/6v1/4S3/4U3 w - - 0 2
+
+[automove-quiet-capture:chess]
+customPiece1 = s:K
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
 
 [occupancy-rifle:chess]
 rifleCapture = true

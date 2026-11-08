@@ -1880,10 +1880,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                 std::cerr << "autoMoveTarget - Invalid syntax." << std::endl;
             return false;
         }
-        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
-            if (v->autoMoveTarget[pt] != NO_PIECE_TYPE)
-                v->autoMoveTypes |= piece_set(pt);
     }
+    // Rebuild from the final inherited target map so a child can clear an
+    // inherited target with "-" without leaving a stale auto-moving type.
+    v->autoMoveTypes = NO_PIECE_SET;
+    for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+        if (v->autoMoveTarget[pt] != NO_PIECE_TYPE)
+            v->autoMoveTypes |= piece_set(pt);
     auto it_capture_demoted_pt = config.find("captureDemotedPieceType");
     if (it_capture_demoted_pt != config.end())
     {
@@ -2763,6 +2766,8 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         bool createsAutoMover = v->captureType != MOVE_OUT || v->captureMorph
                              || v->promotionSteal || v->flipEnclosedPieces != NO_ENCLOSING
                              || v->borrowOpponentDropsWhenEmpty
+                             || bool(v->cloneMoveTypes & v->autoMoveTypes)
+                             || v->freeDrops || v->twoBoards
                              || (v->changingColorPieceTypes & v->autoMoveTypes)
                              || (v->edgeInsertTypes & v->autoMoveTypes)
                              || (v->surroundClaimPiece != NO_PIECE_TYPE
@@ -2777,7 +2782,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         if (createsAutoMover)
         {
             if (DoCheck)
-                std::cerr << "autoMove does not support rules that create or transfer auto-moving pieces." << std::endl;
+                std::cerr << "autoMove is incompatible with piece creation, cloning, freeDrops, or twoBoards rules." << std::endl;
             valid = false;
         }
     }

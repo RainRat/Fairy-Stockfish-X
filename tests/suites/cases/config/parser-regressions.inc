@@ -1315,6 +1315,33 @@ automove_bign_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains "${automove_bign_output}" "autoMoveN must not exceed 511"
 
 cat > "$FSX_TMP_INI" <<'INI'
+[test-automove-inherited:chess]
+customPiece1 = s:K
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
+
+[test-automove-cleared:test-automove-inherited]
+autoMoveTarget = s:-
+autoMoveN = 0
+INI
+automove_clear_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_not_contains "${automove_clear_output}" "autoMoveTarget and a positive autoMoveN must be specified together."
+
+for unsupported in cloneMoveTypes freeDrops twoBoards; do
+    cat > "$FSX_TMP_INI" <<INI
+[test-automove-unsupported:chess]
+customPiece1 = s:K
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = 1
+${unsupported} = $( [[ "$unsupported" == cloneMoveTypes ]] && echo s || echo true )
+INI
+    automove_unsupported_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+    assert_contains "${automove_unsupported_output}" "autoMove is incompatible with piece creation, cloning, freeDrops, or twoBoards rules."
+done
+
+cat > "$FSX_TMP_INI" <<'INI'
 [test-automove-rook:chess]
 customPiece1 = s:R
 pieceToCharTable = -
@@ -1351,7 +1378,7 @@ automove_invalid_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains_literal "${automove_invalid_output}" "autoMoveTarget requires king movement (K)"
 assert_contains "${automove_invalid_output}" "At most one auto-moving piece per side is supported."
 assert_contains "${automove_invalid_output}" "autoMoveTarget supports one auto-moving piece type per variant."
-assert_contains "${automove_invalid_output}" "autoMove does not support rules that create or transfer auto-moving pieces."
+assert_contains "${automove_invalid_output}" "autoMove is incompatible with piece creation, cloning, freeDrops, or twoBoards rules."
 
 cat > "$FSX_TMP_INI" <<'INI'
 [test-automove:chess]
