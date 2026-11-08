@@ -144,8 +144,8 @@ jobs:
         run: |
           make clean
           make -j2 ARCH=x86-64-modern build
-          ../tests/perft.sh
-          ../tests/reprosearch.sh
+          FSX_TEST_PROFILE=portable ../tests/perft.sh "" "${PWD}/stockfish"
+          FSX_TEST_PROFILE=portable ../tests/reprosearch.sh "${PWD}/stockfish"
 
       # Sanitizers
 
