@@ -122,6 +122,7 @@ fsx_harness_init() {
     [[ "$family" == normal ]] || all=yes
   fi
   bits=$(fsx_board_bits "$family")
+  FSX_HARNESS_BOARD_BITS=$bits
   FSX_HARNESS_CXX_DEFS+=("-DBOARD_BITS=$bits")
   [[ "$bits" != 128 ]] || FSX_HARNESS_CXX_DEFS+=(-DPRECOMPUTED_MAGICS)
   [[ "$all" != yes ]] || FSX_HARNESS_CXX_DEFS+=(-DALLVARS)
@@ -260,6 +261,8 @@ fsx_harness_build() {
   local -a extra_sources=("$@")
   local signature
   local extra_cxxflags=()
+  local lto_flag=-flto
+  (( FSX_HARNESS_BOARD_BITS >= 256 )) && lto_flag=""
 
   read -r -a extra_cxxflags <<<"${CXXFLAGS:-}"
 
@@ -276,7 +279,7 @@ fsx_harness_build() {
   rm -f "${output_file}"
   (
     cd "${FSX_HARNESS_ROOT_DIR}/src"
-    "${FSX_HARNESS_CXX}" "${extra_cxxflags[@]}" -std=c++17 -O2 -Wall -Wextra -flto \
+    "${FSX_HARNESS_CXX}" "${extra_cxxflags[@]}" -std=c++17 -O2 -Wall -Wextra ${lto_flag:+"${lto_flag}"} \
       -I"${FSX_HARNESS_ROOT_DIR}/src" -I"${FSX_HARNESS_ROOT_DIR}/tests/lib" \
       "${FSX_HARNESS_CXX_DEFS[@]}" "${source_file}" \
       "${extra_sources[@]}" "${FSX_HARNESS_OBJ_FILES[@]}" -pthread -o "${output_file}"

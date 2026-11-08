@@ -68,6 +68,8 @@ ifeq ($(es6),yes)
 	CXXFLAGS += -s ENVIRONMENT='web,worker,node' -s EXPORT_ES6=1 -s MODULARIZE=1
 endif
 
+override CXXFLAGS += $(BOARD_SIZE_CXXFLAGS)
+
 .PHONY: help objclean clean build deps test serve
 
 help:

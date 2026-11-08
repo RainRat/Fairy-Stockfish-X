@@ -38,10 +38,15 @@ endif
 ifneq ($(IMPLIB),)
   LDFLAGS += -Wl,--out-implib,$(IMPLIB)
 endif
-# Match the compiler target, including flags such as -m32.
-ifneq (,$(shell printf '' | $(CXX) $(CPPFLAGS) $(CXXFLAGS) -dM -E -x c++ - | sed -n '/^\#define __SIZEOF_POINTER__ 8$$/p'))
+# Match the compiler target, including flags such as -m32. Fail if the
+# compiler cannot report a supported pointer width.
+DLL_POINTER_BYTES := $(shell printf '' | $(CXX) $(CPPFLAGS) $(CXXFLAGS) -dM -E -x c++ - 2>&1 | sed -n 's/^\#define __SIZEOF_POINTER__ //p')
+ifeq ($(strip $(DLL_POINTER_BYTES)),8)
   CXXFLAGS += -DIS_64BIT
+else ifneq ($(strip $(DLL_POINTER_BYTES)),4)
+  $(error Could not determine DLL compiler pointer width (expected 4 or 8 bytes, got '$(strip $(DLL_POINTER_BYTES))'))
 endif
+override CXXFLAGS += $(BOARD_SIZE_CXXFLAGS)
 
 DLL_BUILD_DIR ?= ../.local/build/dll/$(boardbits)
 OBJS := $(addprefix $(DLL_BUILD_DIR)/,$(SRCS:.cpp=.o))

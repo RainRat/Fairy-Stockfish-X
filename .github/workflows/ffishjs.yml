@@ -65,7 +65,7 @@ jobs:
         run: npm test
       - name: Build Huge boards module
         working-directory: src
-        run: make -f Makefile_js clean && make -f Makefile_js build hugeboards=yes
+        run: make -f Makefile_js clean && make -f Makefile_js build hugeboards=yes all=yes
       - name: Run Huge boards unit tests
         working-directory: tests/js
         env:

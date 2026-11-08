@@ -52,13 +52,11 @@ for makefile in Makefile Makefile_js Makefile_dll; do
             512) capacity=hugeboards=yes ;;
             *) capacity=largeboards=no ;;
         esac
-        # Upstream semantics: command-line CXXFLAGS replace the makefile's
-        # flags, so the capacity selector is dropped along with them.
+        # Command-line optimization flags must not erase the selected capacity.
         flags=$(make --no-print-directory -s -C "$root/src" -f "$makefile" \
             -f "$out/print.mk" print-flags ARCH=x86-64 "$capacity" \
             'CXXFLAGS=-O2 -DFSX_USER_FLAGS')
-        [[ " $flags " == *' -DFSX_USER_FLAGS '* ]]
-        [[ " $flags " != *' -DBOARD_BITS='* && " $flags " != *' -std=c++17 '* ]]
+        [[ " $flags " == *' -DFSX_USER_FLAGS '* && " $flags " == *" -DBOARD_BITS=$width "* ]]
         # EXTRACXXFLAGS is the additive route: extras merge with the full
         # makefile flags, including the capacity selector.
         flags=$(make --no-print-directory -s -C "$root/src" -f "$makefile" \
@@ -68,6 +66,12 @@ for makefile in Makefile Makefile_js Makefile_dll; do
         [[ " $flags " == *' -std=c++17 '* ]]
     done
 done
+if make --no-print-directory -s -C "$root/src" -f Makefile_dll \
+    -f "$out/print.mk" -n print-board-size CXX=false >"$out/dll-pointer-probe.log" 2>&1; then
+    echo 'DLL makefile accepted an unresolvable pointer-width probe' >&2
+    exit 1
+fi
+grep -q 'Could not determine DLL compiler pointer width' "$out/dll-pointer-probe.log"
 [[ $(fsx_build_profile hugeboards=yes) == *';board=huge;'* ]]
 [[ $(fsx_build_profile hugeboards=yes) == "$(fsx_build_profile largeboards=yes verylargeboards=yes hugeboards=yes)" ]]
 ROOT_DIR="$out/profile-fixture"

@@ -52,15 +52,13 @@ jobs:
 
       - name: Test NNUE
         run: |
-          make clean
-          make -j2 ARCH=x86-64 nnue=yes debug=yes build
+          ../tests/build.sh ARCH=x86-64 nnue=yes debug=yes EXE=stockfish
           ./stockfish bench
 
       - name: Test NNUE largeboards
         run: |
-          make clean
-          make -j2 ARCH=x86-64 largeboards=yes nnue=yes debug=yes build
-          ./stockfish bench
+          ../tests/build.sh ARCH=x86-64 largeboards=yes nnue=yes debug=yes EXE=stockfish-large
+          ./stockfish-large bench
 
       - name: Build all variants
         run: |

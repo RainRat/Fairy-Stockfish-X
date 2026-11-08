@@ -22,7 +22,7 @@ tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 
 `tests/run.sh fast src/stockfish-allvars` runs the registered fast suites. `tests/fast-regression.sh src/stockfish-allvars` is a compatibility wrapper for that command.
 
-`tests/build.sh` verifies that the build produces a working executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Variant rules are validated separately by the `config` and `variants-smoke` test suites.
+`tests/build.sh` verifies that the build produces a working executable. See [AGENTS.md](../AGENTS.md) for how failed native builds preserve the prior executable and dependency file. Variant rules are validated separately by the `config` and `variants-smoke` test suites.
 
 ```sh
 tests/run.sh list
@@ -49,7 +49,9 @@ Use the smallest suite matching the changed engine area:
 
 `tests/run.sh fast` runs the registered fast suite. `tests/fast-regression.sh` is a compatibility entry point for the same run; it honors an explicitly supplied engine. The detached full regression requires all four named binaries documented above.
 
-The search and evaluation suite requires the NNUE network evaluation file. Download it once with `make -C src net` before running that suite.
+The config suite runs `tests/build-failure-paths.sh`, which injects dependency, linker, download, and checksum failures to verify that build failures are visible and preserve prior artifacts. `tests/board-size-options.sh` checks capacity selection under command-line flags, and `tests/lib/harness-build-profile.sh` checks harness build flags across board tiers.
+
+The search and evaluation suite requires the NNUE network evaluation file. Download it once with `make -C src net` before running that suite; the target requires `sha256sum` or `shasum` to verify the download.
 
 The strict test profile requires wrapper-recorded engine roles: every suite's main engine must be a large-board all-variant build; `movement` and `search-evaluation` also use a very-large-board all-variant engine, and `variants-smoke` uses large, normal, and very-large auxiliary engines. Set `FSX_TEST_PROFILE=portable` only for compatibility runs against arbitrary upstream or reduced-feature binaries. `FSX_ALLOW_SMALL_BOARD=1` explicitly permits board-role skips; those omissions appear as skip or partial-skip events. `VLB_ENGINE`, `LARGE_ENGINE`, and `NORMAL_ENGINE` override auxiliary paths in the regression runner. `FSX_ALLOW_STALE_ENGINE=1` only bypasses source-newer-than-binary checks.
 

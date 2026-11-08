@@ -152,6 +152,7 @@ native() {
 
 run_config() {
     suite_case board-size-options 1m bash "${SUITE_ROOT}/tests/board-size-options.sh"
+    suite_case build-failure-paths 1m bash "${SUITE_ROOT}/tests/build-failure-paths.sh"
     suite_case harness-build-profile 1m bash "${SUITE_ROOT}/tests/lib/harness-build-profile.sh"
     suite_case python-api-tests 3m env PYTHONPATH="${SUITE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" python3 "${SUITE_ROOT}/tests/python/test_pyffish_api.py"
     suite_case dll-api-no-royal-result 5m bash "${SUITE_ROOT}/tests/native/ffishdll-result.sh" "${ENGINE}"

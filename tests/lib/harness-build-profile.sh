@@ -91,4 +91,35 @@ fsx_harness_prepare_objects_cached "$fixture/cache" >>"$fixture/cache.log"
 fsx_harness_prepare_objects_cached "$fixture/cache" >>"$fixture/cache.log"
 [[ "$preparations" == 2 ]]
 
+# Wide-board harness links must match setup.py and omit LTO for GCC wide builds.
+cat >"${fixture}/fake-cxx" <<'SH'
+#!/usr/bin/env bash
+if [[ "$1" == --version ]]; then echo 'fake c++ 1'; exit 0; fi
+printf '%s\n' "$*" >>"${HARNESS_CXX_LOG}"
+while (($#)); do
+  if [[ "$1" == -o ]]; then shift; printf '#!/bin/sh\nexit 0\n' >"$1"; chmod +x "$1"; exit 0; fi
+  shift
+done
+exit 2
+SH
+chmod +x "${fixture}/fake-cxx"
+: >"${fixture}/src/harness.o"
+printf 'int main() { return 0; }\n' >"${fixture}/src/harness.cpp"
+export HARNESS_CXX_LOG="${fixture}/link-args.log"
+for bits in 128 256 512; do
+  family=$(fsx_board_family "$bits")
+  fsx_build_write_signature "$fixture" "$fixture/custom-avx512" fixture \
+    "arch=x86-64-modern;board=$family;all=yes;nnue=no;debug=yes;optimize=no"
+  CXX="${fixture}/fake-cxx" fsx_harness_init "$fixture/custom-avx512" "$fixture"
+  FSX_HARNESS_CXX="${fixture}/fake-cxx"
+  FSX_HARNESS_OBJ_FILES=("${fixture}/src/harness.o")
+  : >"${HARNESS_CXX_LOG}"
+  fsx_harness_build "${fixture}/src/harness.cpp" "${fixture}/probe-$bits" "LTO profile $bits"
+  if (( bits >= 256 )); then
+    ! grep -q -- '-flto' "${HARNESS_CXX_LOG}"
+  else
+    grep -q -- '-flto' "${HARNESS_CXX_LOG}"
+  fi
+done
+
 echo 'harness build profile mapping passed'

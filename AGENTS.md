@@ -36,7 +36,7 @@ tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
 tests/build.sh COMP=mingw
 ```
 
-`tests/build.sh` verifies that native builds produce a runnable, non-empty executable. The linker writes to a temporary file first and renames it on success, so a failed build never leaves a broken binary in place. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
+`tests/build.sh` verifies that native builds produce a runnable, non-empty executable. Native linking writes to a temporary file and replaces the previous executable only after a successful link; failures remove the temporary output and preserve the previous executable. Header dependencies are generated the same way and replace the previous `.depend` file only after a successful scan. `objclean` removes objects and dependencies; `objects-clean` preserves the executable for wrapper rebuilds. NNUE downloads require a checksum tool and fail if the network cannot be downloaded and verified. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
 
 Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. `tests/build.sh` tracks the build configuration and cleans objects automatically when flags change; `make clean` is only needed for direct `make -C src` builds.
 

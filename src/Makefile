@@ -647,6 +647,9 @@ ifeq ($(OS), Android)
 	LDFLAGS += -fPIE -pie
 endif
 
+# Keep board capacity mandatory after all ordinary flag additions.
+override CXXFLAGS += $(BOARD_SIZE_CXXFLAGS)
+
 ### ==========================================================================
 ### Section 4. Public Targets
 ### ==========================================================================
@@ -736,7 +739,7 @@ else
 endif
 
 
-.PHONY: help build build-objects objects profile-build strip install clean net objclean profileclean \
+.PHONY: help build build-objects objects profile-build strip install clean net objclean objects-clean profileclean \
         config-sanity icc-profile-use icc-profile-make gcc-profile-use gcc-profile-make \
         clang-profile-use clang-profile-make
 
@@ -771,45 +774,44 @@ install:
 
 # clean all
 clean: objclean profileclean
-	@rm -f .depend *~ core
+	@rm -f $(EXE) .depend *~ core
 
 # evaluation network (nnue)
 net:
 	$(eval nnuenet := $(shell grep EvalFileDefaultName evaluate.h | grep define | sed 's/.*\(nn-[a-z0-9]\{12\}.nnue\).*/\1/'))
-	@echo "Default net: $(nnuenet)"
-	$(eval nnuedownloadurl1 := https://tests.stockfishchess.org/api/nn/$(nnuenet))
-	$(eval nnuedownloadurl2 := https://github.com/official-stockfish/networks/raw/master/$(nnuenet))
-	$(eval curl_or_wget := $(shell if hash curl 2>/dev/null; then echo "curl -skL"; elif hash wget 2>/dev/null; then echo "wget -qO-"; fi))
-	@if [ "x$(curl_or_wget)" = "x" ]; then \
-	    echo "Automatic download failed: neither curl nor wget is installed. Install one of these tools or download the net manually"; exit 1; \
-        fi
-	$(eval shasum_command := $(shell if hash shasum 2>/dev/null; then echo "shasum -a 256 "; elif hash sha256sum 2>/dev/null; then echo "sha256sum "; fi))
-	@if [ "x$(shasum_command)" = "x" ]; then \
-            echo "shasum / sha256sum not found, skipping net validation"; \
-        fi
-	@for nnuedownloadurl in "$(nnuedownloadurl1)" "$(nnuedownloadurl2)"; do \
-	   if test -f "$(nnuenet)"; then \
-	      echo "$(nnuenet) available."; \
-	   else \
-	      if [ "x$(curl_or_wget)" != "x" ]; then \
-	         echo "Downloading $${nnuedownloadurl}"; $(curl_or_wget) $${nnuedownloadurl} > $(nnuenet);\
-	      fi; \
-	   fi; \
-	   if [ "x$(shasum_command)" != "x" ]; then \
-	      if [ "$(nnuenet)" != "nn-"`$(shasum_command) $(nnuenet) | cut -c1-12`".nnue" ]; then \
-	         echo "Removing failed download"; rm -f $(nnuenet); \
-	      else \
-	         echo "Network validated"; break; \
-	      fi; \
-	   fi; \
-	done
-	@if ! test -f "$(nnuenet)"; then \
-	    echo "Failed to download $(nnuenet)."; \
-	fi
+	@set -eu; \
+	net="$(nnuenet)"; expected="$${net#nn-}"; expected="$${expected%.nnue}"; \
+	tmp="$${net}.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT; \
+	if command -v sha256sum >/dev/null 2>&1; then hash_kind=sha256sum; \
+	elif command -v shasum >/dev/null 2>&1; then hash_kind=shasum; \
+	else echo "Cannot verify NNUE network: sha256sum or shasum is required." >&2; exit 1; fi; \
+	hash_file() { if [ "$$hash_kind" = sha256sum ]; then output=$$(sha256sum "$$1") || return 1; else output=$$(shasum -a 256 "$$1") || return 1; fi; printf '%s\n' "$$output" | cut -c1-12; }; \
+	if [ -f "$$net" ]; then \
+		if actual=$$(hash_file "$$net"); then :; else echo "Cannot checksum existing NNUE network $$net." >&2; exit 1; fi; \
+		if [ "$$actual" = "$$expected" ]; then echo "Network validated: $$net"; exit 0; fi; \
+		echo "Existing NNUE network $$net has an invalid checksum; trying fresh downloads." >&2; \
+	fi; \
+	if command -v curl >/dev/null 2>&1; then downloader=curl; \
+	elif command -v wget >/dev/null 2>&1; then downloader=wget; \
+	else echo "Cannot download NNUE network: curl or wget is required." >&2; exit 1; fi; \
+	for url in "https://tests.stockfishchess.org/api/$$net" "https://github.com/official-stockfish/networks/raw/master/$$net"; do \
+		echo "Downloading $$url"; rm -f "$$tmp"; \
+		if [ "$$downloader" = curl ]; then \
+			curl -fsSL "$$url" -o "$$tmp" || continue; \
+		else wget -q "$$url" -O "$$tmp" || continue; fi; \
+		if actual=$$(hash_file "$$tmp"); then :; else echo "Cannot checksum downloaded NNUE network." >&2; exit 1; fi; \
+		if [ "$$actual" = "$$expected" ]; then mv -f "$$tmp" "$$net"; echo "Network validated: $$net"; exit 0; fi; \
+		echo "Downloaded NNUE network checksum mismatch." >&2; \
+	done; \
+	echo "Failed to download and validate $$net." >&2; exit 1
 
-# clean binaries and objects
-objclean:
-	@rm -f $(EXE) *.o ./syzygy/*.o ./nnue/*.o ./nnue/features/*.o
+# Clean objects and generated header dependencies, preserving the executable.
+objects-clean:
+	@rm -f *.o ./syzygy/*.o ./nnue/*.o ./nnue/features/*.o .depend .depend.tmp.*
+
+# Clean objects and the executable.
+objclean: objects-clean
+	@rm -f $(EXE)
 
 # clean auxiliary profiling files
 profileclean:
@@ -904,9 +906,9 @@ config-sanity: $(load_net)
 	|| test "$(comp)" = "aarch64-linux-android21-clang"
 
 $(EXE): $(OBJS)
-	+tmp="$@.tmp.$$$$"; rm -f "$@"; trap 'rm -f "$$tmp"' EXIT; \
+	+tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT; \
 	$(CXX) -o "$$tmp" $(OBJS) $(LDFLAGS) && mv -f "$$tmp" "$@"; \
-	status=$$?; trap - EXIT; exit $$status
+	status=$$?; exit $$status
 
 clang-profile-make:
 	$(MAKE) ARCH=$(ARCH) COMP=$(COMP) \
@@ -946,6 +948,7 @@ icc-profile-use:
 	all
 
 .depend:
-	-@$(CXX) $(DEPENDFLAGS) -MM $(SRCS) > $@ 2> /dev/null
+	@tmp="$@.tmp.$$$$"; trap 'rm -f "$$tmp"' EXIT; \
+	$(CXX) $(DEPENDFLAGS) -MM $(SRCS) > "$$tmp" && mv -f "$$tmp" "$@"
 
 -include .depend

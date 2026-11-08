@@ -29,4 +29,4 @@ endif
 largeboards = $(if $(filter 64,$(boardbits)),no,yes)
 verylargeboards = $(if $(filter 256 512,$(boardbits)),yes,no)
 hugeboards = $(if $(filter 512,$(boardbits)),yes,no)
-CXXFLAGS += -DBOARD_BITS=$(boardbits)
+BOARD_SIZE_CXXFLAGS := -DBOARD_BITS=$(boardbits)

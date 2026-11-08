@@ -4,10 +4,11 @@ Build instructions, command-line usage, and bindings for Fairy-Stockfish-X.
 
 ## Building from Source
 
-From the repository root, run:
+From the repository root, build through the wrapper so the executable and
+shared objects have a recorded profile:
 
 ```bash
-make -C src -j build ARCH=x86-64-modern
+tests/build.sh ARCH=x86-64-modern
 ```
 
 Run `make -C src help` to see all supported CPU architectures.
@@ -24,7 +25,7 @@ Add these flags when needed:
 For example:
 
 ```bash
-make -C src -j build ARCH=x86-64-modern largeboards=yes
+tests/build.sh ARCH=x86-64-modern largeboards=yes
 ```
 
 The default build supports boards up to 8x8; `largeboards=yes` supports 12x10,
@@ -65,11 +66,10 @@ Python extension, set `CFLAGS="-O3 -DNDEBUG -DHUGEBOARDS"` and
 `python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
 object files and bindings from different tiers are incompatible.
 
-As upstream, supplying `CXXFLAGS` on the command line replaces the makefile's
-`CXXFLAGS` (including the capacity selector), so a direct `make ...
-CXXFLAGS=...` build can silently select the wrong capacity; `tests/build.sh`
-fails such builds loudly at its board-family probe. Use `EXTRACXXFLAGS` to add
-flags without replacing the makefile's. DLL objects are stored separately
+The selected `BOARD_BITS` capacity is mandatory and remains in effect when
+`CXXFLAGS` is supplied on the make command line. Use `EXTRACXXFLAGS` for
+additional compiler flags so the makefile's standard language and safety flags
+remain enabled. DLL objects are stored separately
 per capacity under `.local/build/dll`; compiler-flag and header changes rebuild
 them automatically. A link stamp also tracks the selected cached objects, so
 size switches relink the library and identical builds do no compiling or linking.
