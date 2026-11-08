@@ -1,3 +1,4 @@
-include AUTHORS Copying.txt README.md test.py
+include AUTHORS Copying.txt README.md test.py pyffish.pyi
 recursive-include tests/python *.py
 recursive-include src *.h *.cpp
+include src/variants.ini src/variants-incomplete.ini

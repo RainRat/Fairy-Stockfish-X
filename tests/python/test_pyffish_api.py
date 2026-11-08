@@ -1,5 +1,6 @@
 import unittest
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -393,6 +394,20 @@ class TestPublicAPI(unittest.TestCase):
         self.assertIn("chess", sf.variants())
         self.assertIn("shogun", sf.variants())
         self.assertIn("hostage", sf.variants())
+
+    def test_installed_stub_matches_extension_exports(self):
+        stub_path = Path(sf.__file__).resolve().parent / "pyffish.pyi"
+        self.assertTrue(stub_path.is_file(), f"typing stub not installed beside extension: {stub_path}")
+        stub_names = {
+            next(name for name in match if name)
+            for match in re.findall(
+                r"^(?:def|class)\s+([A-Za-z_]\w*)|^([A-Z][A-Z0-9_]*):",
+                stub_path.read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        }
+        extension_names = {name for name in dir(sf) if not name.startswith("_")}
+        self.assertEqual(extension_names, stub_names)
 
     def test_option_and_variant_shape_contract(self):
         self.assertIsNone(sf.set_option("UCI_Variant", "capablanca"))

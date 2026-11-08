@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
 from glob import glob
 import platform
 import io
@@ -51,16 +52,26 @@ pyffish_module = Extension(
     depends=headers,
     extra_compile_args=args)
 
+
+class build_ext_with_stub(build_ext):
+    def run(self):
+        super().run()
+        # Keep the module stub adjacent to the extension and expose it to PEP 561 stub resolvers.
+        self.copy_file("pyffish.pyi", os.path.join(self.build_lib, "pyffish.pyi"))
+        stub_package = os.path.join(self.build_lib, "pyffish-stubs")
+        self.mkpath(stub_package)
+        self.copy_file("pyffish.pyi", os.path.join(stub_package, "__init__.pyi"))
+
 setup(name="pyffish", version="0.0.88",
-      description="Fairy-Stockfish Python wrapper",
+      description="Fairy-Stockfish-X Python extension",
       long_description=long_description,
       long_description_content_type="text/markdown",
-      author="Bajusz Tamás",
-      author_email="gbtami@gmail.com",
+      author="RainRat and Fairy-Stockfish-X contributors",
       license="GPL3",
       classifiers=CLASSIFIERS,
-      url="https://github.com/gbtami/Fairy-Stockfish",
+      url="https://github.com/RainRat/Fairy-Stockfish-X",
+      project_urls={"Upstream project": "https://github.com/fairy-stockfish/Fairy-Stockfish"},
       python_requires=">=3.9",
       ext_modules=[pyffish_module],
-      data_files=[("", ["pyffish.pyi"])]
+      cmdclass={"build_ext": build_ext_with_stub}
       )
