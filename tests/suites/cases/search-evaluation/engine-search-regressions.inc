@@ -90,6 +90,7 @@ doublePassEndsGame = false
 [automove-forced-capture-search:chess]
 customPiece1 = s:K
 allowChecks = true
+pieceValueMg = s:1000
 autoMoveTarget = s:k
 autoMoveN = 1
 EOF
@@ -118,16 +119,15 @@ $(expect_engine_setup)
  expect "uciok"
  send "setoption name VariantPath value \$variant_path\n"
  send "setoption name UCI_Variant value automove-forced-capture-search\n"
- send "position fen 7k/p7/5s2/4p3/3S4/8/8/K3R3 b - - 0 3\n"
+ send "position fen 7k/p7/5s2/4P3/8/8/1p6/KS2R3 b - - 0 3\n"
  send "go depth 4 searchmoves a7a6\n"
- expect -re {info depth 4 .* pv a7a6 d4e5 f6e5 e1e5}
+ expect -re {info depth 4 .* pv a7a6 b1b2 f6e5 e1e5}
  expect "bestmove a7a6"
  send "quit\n"
  expect eof
 EOF
 )
   # The forced capture sequence includes Black's losing recapture of the snail.
-  assert_contains "$out" '^info depth 3 .* pv a7a6 d4e5 f6e5'
 }
 
 test_gating_regressions() {

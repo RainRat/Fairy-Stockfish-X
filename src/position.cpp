@@ -5982,6 +5982,7 @@ bool Position::legal(Move m) const {
 
   if (passMove && !pass(us))
       return false;
+  const bool scheduledAutoPass = passMove && has_auto_move() && auto_move_turn(us);
 
   if (has_auto_move() && auto_move_turn(us))
   {
@@ -6392,14 +6393,14 @@ bool Position::legal(Move m) const {
   }
 
   // Illegal quiet moves
-  if (must_capture() && !isCapture)
+  if (must_capture() && !isCapture && !scheduledAutoPass)
   {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
       if (has_capture())
           return false;
   }
 
-  if (must_capture_en_passant() && type_of(m) != EN_PASSANT)
+  if (must_capture_en_passant() && type_of(m) != EN_PASSANT && !scheduledAutoPass)
   {
       SimulatedMoveGuard currentPosition(*this, MOVE_NONE);
       if (has_en_passant_capture())

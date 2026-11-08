@@ -1315,6 +1315,16 @@ automove_bign_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
 assert_contains "${automove_bign_output}" "autoMoveN must not exceed 511"
 
 cat > "$FSX_TMP_INI" <<'INI'
+[test-automove-negative-n:chess]
+customPiece1 = s:K
+allowChecks = true
+autoMoveTarget = s:k
+autoMoveN = -1
+INI
+automove_negative_n_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_contains "${automove_negative_n_output}" "autoMoveTarget and a positive autoMoveN must be specified together."
+
+cat > "$FSX_TMP_INI" <<'INI'
 [test-automove-inherited:chess]
 customPiece1 = s:K
 allowChecks = true

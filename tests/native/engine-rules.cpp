@@ -132,6 +132,18 @@ void movement() {
     check(legalMoves.size() == 1 && is_pass(legalMoves.begin()->move),
           "legal generation did not replace an illegal forced step with a pass: " + autoLegalMoves);
 
+    set_position(pos, states, "automove-frozen-mustcapture",
+                 variants.get("automove-frozen-mustcapture")->startFen.c_str());
+    check(pos.forced_auto_move() == MOVE_NONE
+          && bool(pos.freeze_squares(WHITE) & square_bb(SQ_E2)),
+          "frozen automatic mover did not resolve to a scheduled pass");
+    check(pos.must_capture()
+          && (pos.attacks_from(WHITE, ROOK, SQ_A1) & square_bb(SQ_A2)),
+          "frozen auto-move fixture does not have a competing rook capture");
+    MoveList<LEGAL> frozenPassMoves(pos);
+    check(frozenPassMoves.size() == 1 && is_pass(frozenPassMoves.begin()->move),
+          "mustCapture rejected a frozen scheduled pass or allowed an ordinary move");
+
     set_position(pos, states, "automove-quiet-capture",
                  "8/8/5k2/4p3/3S4/8/8/4K3 w - - 0 2");
     forced = pos.forced_auto_move();
@@ -1814,6 +1826,16 @@ customPiece1 = s:K
 allowChecks = true
 autoMoveTarget = s:k
 autoMoveN = 1
+
+[automove-frozen-mustcapture:chess]
+customPiece1 = s:K
+customPiece2 = i:mQ
+allowChecks = true
+freezePieceTypes = i
+mustCapture = true
+autoMoveTarget = s:k
+autoMoveN = 1
+startFen = 7k/8/8/8/8/8/p2iS3/R3K3 w - - 0 2
 
 [occupancy-rifle:chess]
 rifleCapture = true
