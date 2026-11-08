@@ -162,7 +162,7 @@ extern "C" PyObject* pyffish_setOption(PyObject* self, PyObject *args) {
     }
     else
     {
-        PyErr_SetString(PyExc_ValueError, (std::string("No such option ") + name + "'").c_str());
+        PyErr_SetString(PyExc_ValueError, (std::string("No such option '") + name + "'").c_str());
         return NULL;
     }
     Py_RETURN_NONE;

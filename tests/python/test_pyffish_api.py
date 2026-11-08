@@ -396,6 +396,8 @@ class TestPublicAPI(unittest.TestCase):
 
     def test_option_and_variant_shape_contract(self):
         self.assertIsNone(sf.set_option("UCI_Variant", "capablanca"))
+        with self.assertRaisesRegex(ValueError, "No such option 'DefinitelyNotAnOption'"):
+            sf.set_option("DefinitelyNotAnOption", "value")
         self.assertFalse(sf.two_boards("chess"))
         self.assertTrue(sf.two_boards("bughouse"))
         self.assertFalse(sf.captures_to_hand("seirawan"))
@@ -533,6 +535,7 @@ class TestPublicAPI(unittest.TestCase):
         fen = sf.start_fen("chess")
         self.assertIsInstance(sf.is_capture("chess", fen, [], "e2e4"), bool)
         self.assertIsInstance(sf.get_san_moves("chess", fen, ["e2e4", "e7e5"]), list)
+        self.assertEqual(sf.get_san_moves("chess", fen, ["e2e4", "e7e5"]), ["e4", "e5"])
         self.assertIsInstance(sf.gives_check("chess", fen, ["e2e4"]), bool)
         self.assertIsInstance(sf.piece_to_partner("chess", fen, ["e2e4"]), str)
         self.assertIsInstance(sf.evaluate("chess", fen, []), int)
