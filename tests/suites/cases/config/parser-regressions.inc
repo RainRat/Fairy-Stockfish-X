@@ -1581,4 +1581,95 @@ UCI
 assert_contains "${automove_pass_loaded}" "a1a2: 1"
 assert_nodes "${automove_pass_loaded}" 1
 
+cat > "$FSX_TMP_INI" <<'INI'
+[inline-betza-comment:chess]
+customPiece1 = a:FsfW # DE
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 4k3/8/8/8/4A3/8/8/4K3 w - - 0 1
+
+[betza-parameter-no-en-passant:chess]
+customPiece1 = x:{hurdles: 1,1; pre: 1,1; post: 1,1; hurdle_types: enemy}W
+
+[wildcard-must-drop:chess]
+mustDropType = *
+
+[wildcard-priority-drop:chess]
+priorityDropTypes = *
+
+[wildcard-pawn-types:chess]
+pawnTypes = *
+
+[wildcard-promotion-pawn-types:chess]
+promotionPawnTypes = *
+
+[full-multimove-buffer:chess]
+multimoves = 32 33
+
+[multi-character-royal-symbol:chess]
+customPiece1 = K':K
+startFen = 4k3/8/8/8/8/8/8/K2K'4 w - - 0 1
+
+[invalid-scalar-trailing:chess]
+mustDropType = q p
+
+[invalid-castling-king-trailing:chess]
+castlingKingPiece = k -
+
+[invalid-empty-piece:chess]
+rook =
+
+[invalid-empty-piece-betza:chess]
+rook = r:
+
+[invalid-vector-overflow:chess]
+multimoves = 1 2147483648
+
+[duplicate-option:chess]
+promotionRegionWhite = *8
+promotionRegionWhite = *7
+
+[tuple-universal-hopper:chess]
+customPiece1 = x:{hurdles: 1,1; pre: 1,1; post: 1,1}(1,7)
+INI
+
+inline_comment_moves=$(run_uci "$ENGINE" "$FSX_TMP_INI" inline-betza-comment <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_contains "${inline_comment_moves}" "e4e5: 1"
+assert_not_contains "${inline_comment_moves}" "e4e6: 1"
+assert_not_contains "${inline_comment_moves}" "e4e2: 1"
+assert_contains "${inline_comment_moves}" "info string variant inline-betza-comment"
+
+parameter_en_passant=$(run_uci "$ENGINE" "$FSX_TMP_INI" betza-parameter-no-en-passant <<'UCI'
+vinfo
+UCI
+)
+assert_contains "${parameter_en_passant}" '"enPassantTypes":{"white":\["pawn"\],"black":\["pawn"\]}'
+
+section4_config_output=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_not_contains "${section4_config_output}" "mustDropType - Invalid piece type: *"
+assert_not_contains "${section4_config_output}" "priorityDropTypes - Invalid piece set"
+assert_not_contains "${section4_config_output}" "full-multimove-buffer' has invalid configuration"
+assert_not_contains "${section4_config_output}" "multi-character-royal-symbol' has invalid configuration"
+assert_not_contains "${section4_config_output}" "wildcard-pawn-types' has invalid configuration"
+assert_not_contains "${section4_config_output}" "wildcard-promotion-pawn-types' has invalid configuration"
+assert_contains "${section4_config_output}" "mustDropType - Invalid trailing characters."
+assert_contains "${section4_config_output}" "castlingKingPiece - Invalid trailing characters."
+assert_contains "${section4_config_output}" "rook - Invalid syntax."
+assert_contains "${section4_config_output}" "Duplicate option 'promotionRegionWhite' in variant 'duplicate-option'."
+assert_contains "${section4_config_output}" "invalid-vector-overflow' has invalid configuration"
+assert_contains "${section4_config_output}" "duplicate-option' has invalid configuration"
+assert_contains "${section4_config_output}" "Invalid Betza universal hopper direction"
+assert_contains "${section4_config_output}" "tuple-universal-hopper' has invalid configuration"
+
+hindustani_promotion=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" hindustani <<'UCI'
+position fen 4k3/1P6/8/8/8/8/8/7K w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "${hindustani_promotion}" "b7b8n: 1"
+assert_not_contains "${hindustani_promotion}" "b7b8q: 1"
+
 echo "parser regression tests passed"

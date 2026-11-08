@@ -620,11 +620,19 @@ namespace {
                     return std::find(directions.begin(), directions.end(), s) != directions.end();
                   };
                   auto add_step = [&](int dr, int df) {
+                      if (invalidPiece)
+                          return;
                       if (hasUniversalHopper) {
                           // Universal hopper rays are named-atom steps, so they must
                           // satisfy the decode_direction precondition. U is rejected
                           // above and never reaches this path.
-                          assert(std::abs(df) <= int(FILE_NB) / 2);
+                          if (std::abs(df) > int(FILE_NB) / 2)
+                          {
+                              std::cerr << "Invalid Betza universal hopper direction in '" << betza
+                                        << "': file delta exceeds half the board width." << std::endl;
+                              fail_piece();
+                              return;
+                          }
                           p->universalHopper[initial][modality][Direction(dr * FILE_NB + df)] = currentHopperProfile;
                           if (dynamicDistance && rider)
                               p->slider[initial][modality][Direction(dr * FILE_NB + df)] = DYNAMIC_SLIDER_LIMIT;

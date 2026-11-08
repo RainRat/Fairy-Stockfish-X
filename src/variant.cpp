@@ -2768,7 +2768,7 @@ Variant* Variant::conclude() {
       for (int j : multimoves)
       {
           int64_t segment = 2 * int64_t(j) - 1;
-          if (multimoveOffset + segment >= START_MULTIMOVES)
+          if (multimoveOffset + segment > START_MULTIMOVES)
               break;
           // Initialize alternating non-passing/passing moves
           for (int k = 0; k < segment; k++)
@@ -2833,6 +2833,7 @@ void VariantMap::parse_istream(std::istream& file) {
 
         // Read variant rules
         Config attribs = {};
+        std::set<std::string> keys = {};
         while (file.peek() != '[' && std::getline(file, input))
         {
             if (!input.empty() && input.back() == '\r')
@@ -2863,6 +2864,31 @@ void VariantMap::parse_istream(std::istream& file) {
                         continue;
                     }
                     const auto last = key.find_last_not_of(" \t");
+                    const std::string normalizedKey = key.substr(first, last - first + 1);
+                    if (!keys.insert(normalizedKey).second)
+                    {
+                        if (DoCheck)
+                            std::cerr << "Duplicate option '" << normalizedKey << "' in variant '" << variant << "'." << std::endl;
+                        invalidSyntax = true;
+                    }
+                    // An unquoted # preceded by whitespace starts an inline comment.
+                    // Keep # inside Betza parameters and other configuration syntax.
+                    bool quoted = false;
+                    int nesting = 0;
+                    for (size_t i = 0; i < value.size(); ++i)
+                    {
+                        if (value[i] == '"') quoted = !quoted;
+                        else if (!quoted && (value[i] == '{' || value[i] == '[' || value[i] == '(')) ++nesting;
+                        else if (!quoted && (value[i] == '}' || value[i] == ']' || value[i] == ')')) --nesting;
+                        else if (!quoted && nesting == 0 && value[i] == '#' && i > 0
+                                 && std::isspace(static_cast<unsigned char>(value[i - 1])))
+                        {
+                            value.erase(i);
+                            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())))
+                                value.pop_back();
+                            break;
+                        }
+                    }
                     if (value.find_first_not_of(" \t") == std::string::npos)
                         value.clear();
                     else
@@ -2872,7 +2898,7 @@ void VariantMap::parse_istream(std::istream& file) {
                         const auto value_last = value.find_last_not_of(" \t");
                         value.erase(value_last + 1);
                     }
-                    attribs[key.substr(first, last - first + 1)] = value;
+                    attribs[normalizedKey] = value;
                 }
             }
         }

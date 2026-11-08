@@ -167,6 +167,7 @@ run_config() {
 }
 
 run_movement() {
+    small_board_optional_legacy dai-shogi-baseline.sh 3m "${VLB_ENGINE:-${SUITE_ROOT}/src/stockfish-vlb}" "${VARIANTS}"
     native promotion
     native movement
     legacy immobility-illegal-hopper.sh 2m "${ENGINE}"

@@ -672,12 +672,15 @@ namespace {
     template <> bool set(const std::string& value, std::vector<int>& target)
     {
         std::stringstream ss(value);
-        int i;
+        std::string token;
         std::vector<int> parsed;
-        while (ss >> i)
+        while (ss >> token)
+        {
+            int i = 0;
+            if (!parse_int_strict(token, i))
+                return false;
             parsed.push_back(i);
-        if (!ss.eof())
-            return false;
+        }
         target = std::move(parsed);
         return true;
     }
@@ -1296,13 +1299,16 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
         while (ss >> token && token != "-")
         {
             sawToken = true;
-            PieceType pt = token == "*" ? ALL_PIECES : parse_piece_type_token(v, token);
-            if (pt == NO_PIECE_TYPE)
+            const bool wildcard = token == "*";
+            PieceType pt = wildcard ? ALL_PIECES : parse_piece_type_token(v, token);
+            if (pt == NO_PIECE_TYPE && !wildcard)
             {
                 valid = false;
                 break;
             }
             set(pt, parsedTarget);
+            if constexpr (std::is_same_v<T, PieceType>)
+                break;
         }
         if (DoCheck && !valid && token != "-")
             std::cerr << key << " - Invalid piece type: " << token << std::endl;
@@ -1386,12 +1392,23 @@ bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& 
             apply_color_setting(target, color, parsed);
             return;
         }
-        std::string token = read_piece_token(trim(it->second));
+        const std::string value = trim(it->second);
+        std::string token = read_piece_token(value);
         PieceType pt = NO_PIECE_TYPE;
-        if (!token.empty() && (pt = parse_piece_type_token(v, token)) != NO_PIECE_TYPE)
+        if (value == "*" || !token.empty())
         {
-            parsed = pt;
-            apply_color_setting(target, color, parsed);
+            pt = value == "*" ? lsb(v->pieceTypes) : parse_piece_type_token(v, token);
+            if (pt != NO_PIECE_TYPE)
+            {
+                parsed = pt;
+                apply_color_setting(target, color, parsed);
+            }
+            else
+            {
+                if (DoCheck)
+                    std::cerr << option << " - Invalid syntax." << std::endl;
+                ok = false;
+            }
         }
         else
         {
@@ -1422,7 +1439,7 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
         std::string name = piece_name(pt);
 
         const auto& keyValue = config.find(name);
-        if (keyValue != config.end() && !keyValue->second.empty())
+        if (keyValue != config.end())
         {
             auto [token, rest] = split_piece_entry(keyValue->second);
             const bool remove = trim(keyValue->second) == "-";
@@ -1462,8 +1479,17 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                         v->customPiece[pt - CUSTOM_PIECES] = rest;
                         for (Color c : {WHITE, BLACK})
                             v->enPassantTypes[c] &= ~piece_set(pt);
-                        // Is there an en passant flag in the Betza notation?
-                        if (v->customPiece[pt - CUSTOM_PIECES].find('e') != std::string::npos)
+                        // The en-passant marker is a Betza atom, not text in a parameter.
+                        const std::string& betza = v->customPiece[pt - CUSTOM_PIECES];
+                        bool parameter = false;
+                        bool enPassant = false;
+                        for (char c : betza)
+                        {
+                            if (c == '{' || c == '[') parameter = true;
+                            else if (c == '}' || c == ']') parameter = false;
+                            else if (!parameter && c == 'e') enPassant = true;
+                        }
+                        if (enPassant)
                         {
                             v->enPassantTypes[WHITE] |= piece_set(pt);
                             v->enPassantTypes[BLACK] |= piece_set(pt);
@@ -1481,6 +1507,12 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
                     if (DoCheck)
                         std::cerr << name << " only supports a piece letter here. Use customPieceN = "
                                   << keyValue->second << " and remap " << name << " to that letter instead." << std::endl;
+                    return false;
+                }
+                else if (!is_custom(pt) && !keyValue->second.empty() && keyValue->second.back() == ':')
+                {
+                    if (DoCheck)
+                        std::cerr << name << " - Invalid syntax." << std::endl;
                     return false;
                 }
                 else if (pt == KING)
@@ -1575,8 +1607,9 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     }
     Rank doubleStepRank = RANK_2;
     Rank doubleStepRankMin = RANK_2;
-    if (   parse_attribute<false>("doubleStepRank", doubleStepRank)
-        || parse_attribute<false>("doubleStepRankMin", doubleStepRankMin))
+    const bool hasDoubleStepRank = parse_attribute<false>("doubleStepRank", doubleStepRank);
+    const bool hasDoubleStepRankMin = parse_attribute<false>("doubleStepRankMin", doubleStepRankMin);
+    if (hasDoubleStepRank || hasDoubleStepRankMin)
     {
         for (Color c : {WHITE, BLACK})
             v->doubleStepRegion[c] =   zone_bb(c, doubleStepRankMin, v->maxRank)
@@ -2308,6 +2341,8 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("pointsGoalSimulValueByMostPoints", v->pointsGoalSimulValueByMostPoints);
     if (config.find("pointsGoalSimulValueByMostPoints") == config.end())
         parse_attribute("pointsGoalSimulValue", v->pointsGoalSimulValueByMostPoints);
+    else
+        config.find("pointsGoalSimulValue");
     if (v->payPointsToDrop)
         v->pointsCounting = true;
 
@@ -2605,17 +2640,23 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         const std::size_t pocketStart = startFen.find('[');
         const std::size_t boardEnd = std::min(startFen.find(' '),
                                               pocketStart == std::string::npos ? startFen.size() : pocketStart);
-        for (std::size_t i = 0; i < startFen.size(); ++i)
+        for (std::size_t i = 0; i < startFen.size();)
         {
             const bool inBoard = i < boardEnd;
-            const bool inPocket = pocketStart != std::string::npos && i > pocketStart
-                               && i < startFen.find(']', pocketStart);
+            const std::size_t pocketEnd = pocketStart == std::string::npos ? std::string::npos : startFen.find(']', pocketStart);
+            const bool inPocket = pocketStart != std::string::npos && i > pocketStart && i < pocketEnd;
             if (!inBoard && !inPocket)
+            {
+                ++i;
                 continue;
-            const char ch = startFen[i];
-            if (!std::isalpha(static_cast<unsigned char>(ch)))
+            }
+            if (!Variant::is_piece_id_start(startFen[i]))
+            {
+                ++i;
                 continue;
-            const auto it = v->symbolToPiece.find(std::string(1, ch));
+            }
+            const std::string symbol = FEN::read_piece_symbol(startFen, i);
+            const auto it = v->symbolToPiece.find(symbol);
             if (it == v->symbolToPiece.end())
                 continue;
             const Piece pc = it->second;
@@ -3591,44 +3632,12 @@ bool VariantParser<DoCheck>::parse_priority_drops(Variant* v) {
     if (it_pr_drop != config.end())
     {
         PieceSet parsedPriorityDrops = NO_PIECE_SET;
-        bool sawToken = false;
-        std::stringstream ss(it_pr_drop->second);
-        std::string token;
-        while (ss >> token)
-        {
-            sawToken = true;
-            if (token == "-")
-            {
-                parsedPriorityDrops = NO_PIECE_SET;
-                if (!only_trailing_space(ss))
-                {
-                    if (DoCheck)
-                        std::cerr << "priorityDropTypes - Invalid trailing characters." << std::endl;
-                    return false;
-                }
-                break;
-            }
-            PieceType pt = parse_piece_type_token(v, token);
-            if (pt == NO_PIECE_TYPE)
-            {
-                if (DoCheck)
-                    std::cerr << "priorityDropTypes - Invalid piece type: " << token << std::endl;
-                return false;
-            }
-            parsedPriorityDrops |= piece_set(pt);
-        }
-        if (sawToken && token != "-" && !only_trailing_space(ss))
-        {
-            if (DoCheck)
-                std::cerr << "priorityDropTypes - Invalid trailing characters." << std::endl;
-            return false;
-        }
-        else if (sawToken)
+        if (parse_piece_set_token_string(it_pr_drop->second, v, parsedPriorityDrops))
             v->isPriorityDrop = parsedPriorityDrops;
         else
         {
             if (DoCheck)
-                std::cerr << "priorityDropTypes - Empty value." << std::endl;
+                std::cerr << "priorityDropTypes - Invalid piece set: " << it_pr_drop->second << std::endl;
             return false;
         }
     }
@@ -3665,7 +3674,7 @@ bool VariantParser<DoCheck>::parse_multimoves(Variant* v) {
     for (int n : v->multimoves)
     {
         int64_t segment = 2 * int64_t(n) - 1;
-        if (segment <= 0 || usedPly + segment >= START_MULTIMOVES)
+        if (segment <= 0 || usedPly + segment > START_MULTIMOVES)
             break;
         usedPly += segment;
         ++usedEntries;
