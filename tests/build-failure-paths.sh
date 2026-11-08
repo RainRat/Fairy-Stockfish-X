@@ -37,6 +37,7 @@ if ! make -B -C "${OUT_DIR}/src" -f Makefile -o .depend EXE=probe OBJS=object.o 
   exit 1
 fi
 [[ -f "${OUT_DIR}/src/probe" ]]
+[[ ! -e "${OUT_DIR}/src/.depend" ]]
 printf 'object\n' >"${OUT_DIR}/src/object.o"
 printf 'previous executable contents\n' >"${OUT_DIR}/src/probe"
 touch -d '2000-01-01' "${OUT_DIR}/src/object.o"
