@@ -13,7 +13,7 @@
 </p>
 
 
-The **ffish.js** package is a WebAssembly chess variant library based on [_Fairy-Stockfish_](https://github.com/ianfab/Fairy-Stockfish).
+The **ffish.js** package is a WebAssembly chess variant library based on [Fairy-Stockfish-X](https://github.com/RainRat/Fairy-Stockfish-X), a fork of [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish).
 
 It is available as a [standard module](https://www.npmjs.com/package/ffish) and an [ES6 module](https://www.npmjs.com/package/ffish-es6), with an API modeled after [python-chess](https://python-chess.readthedocs.io/en/latest/index.html).
 
@@ -54,26 +54,11 @@ new Module().then(loadedModule => {
 
 ### Available variants
 
-Show all available variants supported by _Fairy-Stockfish_ and **ffish.js**.
+Show all variants compiled into the loaded module. Load a custom config first if you want its variants included.
 
 ```javascript
 ffish.variants()
 ```
-```
-3check 3check-crazyhouse 5check ai-wok almost amazon anti-losalamos antichess\
-armageddon asean ataxx atomic breakthrough bughouse cambodian capablanca\
-capahouse caparandom centaur cfour chancellor chaturanga chess chessgi chigorin\
-clobber clobber10 codrus coffeehouse courier crazyhouse dobutsu embassy euroshogi\
-extinction fairy fischerandom flipello flipersi gardner gemini giveaway gorogoro\
-gothic grand grandhouse hoppelpoppel horde indiangreat janggi janggicasual\
-janggihouse janggimodern janggitraditional janus jesonmor judkins karouk kinglet\
-kingofthehill knightmate koedem kyotoshogi loop losalamos losers makpong makruk\
-makrukhouse manchu micro mini minishogi minixiangqi modern newzealand nocastle\
-nocheckatomic normal orda pawnsonly peasant placement pocketknight racingkings\
-seirawan semitorpedo shako shatar shatranj shogi shogun shouse sittuyin suicide\
-supply threekings tictactoe upsidedown weak xiangqi xiangqihouse
-```
-
 ### Board object
 
 Create a new variant board from its default starting position.
@@ -214,9 +199,9 @@ fs.readFile(pgnFilePath, 'utf8', function (err,data) {
 
 ## Custom variants
 
-Fairy-Stockfish also allows defining custom variants by loading a configuration file.
+Fairy-Stockfish-X also allows defining custom variants by loading a configuration file.
 
-See e.g. the configuration for **connect4**, **tictactoe** or **janggihouse** in [variants.ini](https://github.com/ianfab/Fairy-Stockfish/blob/master/src/variants.ini).
+See the [shipped variant configuration](../../src/variants.ini), including **cfour**, **tictactoe**, and **janggihouse**.
 ```javascript
 fs = require('fs');
 let configFilePath = './variants.ini';
@@ -235,7 +220,7 @@ never replaced. `loadVariantConfig` returns the number of newly added variants.
 
 ## Additional features
 
-For examples of each available function, see [test.js](https://github.com/ianfab/Fairy-Stockfish/blob/master/tests/js/test.js).
+For examples of each available function, see [test.js](test.js).
 
 ## Build instructions
 
@@ -244,9 +229,13 @@ Built with Emscripten/Embind from C++ source code.
 * https://emscripten.org/docs/porting/connecting_cpp_and_javascript/embind.html
 
 
-To disable variants with boards larger than 8x8, add the flag `largeboards=no`.
+Build capacity tiers are selected with these flags:
 
-The pre-compiled wasm binary is built with `largeboards=yes`.
+* `largeboards=yes` supports boards up to 12x10.
+* `verylargeboards=yes` supports boards up to 16x16.
+* `hugeboards=yes` supports boards up to 22x22. Use `all=yes` for the composed move-generation stress coverage on Huge boards.
+
+The CI test builds use the tier-specific flags above. To disable variants with boards larger than 8x8, build with `largeboards=no`.
 
 Set `debug=yes` when running tests.
 

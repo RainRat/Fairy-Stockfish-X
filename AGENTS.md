@@ -100,7 +100,7 @@ d
 quit
 ```
 
-Drops use `@`, for example `P@b2`. Promotions use a trailing piece letter, not `=`.
+See [README.md](README.md#move-notation) for move notation, including drops and promotions.
 
 ## Required checks
 From the repository root:

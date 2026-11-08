@@ -12,9 +12,8 @@ echo "reprosearch testing started"
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
-# repeat two short games, separated by ucinewgame.
-# with go nodes $nodes they should result in exactly
-# the same node count for each iteration.
+# Repeat the same two-search game twice, with ucinewgame between games.
+# For a given go-nodes limit, matching searches should have equal node counts.
 for i in `seq 1 20`
 do
   nodes=$((100*3**i/2**i))

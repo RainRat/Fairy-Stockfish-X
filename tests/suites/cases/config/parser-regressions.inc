@@ -53,6 +53,14 @@ falcon = a:W
 [nnue-alias:chess]
 nnueAlias = nn-
 
+[bad-type-diagnostics:chess]
+pointsRuleCaptures = invalid
+captureToHandSide = invalid
+pushFirstColor = invalid
+pushingRemoves = invalid
+trapProtection = invalid
+changingColorTrigger = invalid
+
 [walling-seirawan:chess]
 wallingRule = duck
 seirawanGating = true
@@ -748,6 +756,12 @@ assert_contains_literal "${initial_capture_output}" "removeConnectN - Value must
 assert_contains_literal "${initial_capture_output}" "nMoveRule must be between 0 and 1073741824."
 assert_contains_literal "${initial_capture_output}" "nMoveRuleImmediate must be between 0 and 1073741824."
 assert_contains_literal "${initial_capture_output}" "connectN must be between 0 and the largest board dimension."
+assert_contains_literal "${initial_capture_output}" "pointsRuleCaptures - Invalid value invalid for type PointsRule"
+assert_contains_literal "${initial_capture_output}" "captureToHandSide - Invalid value invalid for type TransferSide"
+assert_contains_literal "${initial_capture_output}" "pushFirstColor - Invalid value invalid for type PushFirstColor"
+assert_contains_literal "${initial_capture_output}" "pushingRemoves - Invalid value invalid for type PushRemoval"
+assert_contains_literal "${initial_capture_output}" "trapProtection - Invalid value invalid for type TrapProtection"
+assert_contains_literal "${initial_capture_output}" "changingColorTrigger - Invalid value invalid for type ColorChangeTrigger"
 assert_contains_literal "${initial_capture_output}" "connectNxN must be -1, 0, or no larger than the smallest board dimension."
 assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown piece symbol: notapiece"
 assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
