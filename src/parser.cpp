@@ -2250,11 +2250,13 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
     if (v->nFoldValueAbsolute) {
         if (!v->nFoldValue.byColorSet[WHITE]) {
-            v->nFoldValue.byColor[WHITE] = v->nFoldValue.global;
+            v->nFoldValue.byColor[WHITE] = v->nFoldValue.byColorSet[BLACK]
+                                             ? -v->nFoldValue.byColor[BLACK]
+                                             : v->nFoldValue.global;
             v->nFoldValue.byColorSet[WHITE] = true;
         }
         if (!v->nFoldValue.byColorSet[BLACK]) {
-            v->nFoldValue.byColor[BLACK] = -v->nFoldValue.global;
+            v->nFoldValue.byColor[BLACK] = -v->nFoldValue.byColor[WHITE];
             v->nFoldValue.byColorSet[BLACK] = true;
         }
     }
@@ -2915,10 +2917,9 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "nFoldRuleImmediate cannot be negative." << std::endl;
         valid = false;
     }
-    // Stalemate, checkmate and repetition results feed directly into game
-    // adjudication and search scores, where VALUE_NONE has no valid meaning
-    // (it would surface as a bogus near-maximum score). Reject "none" here
-    // instead of working around it at every use site. extinctionValue and
+    // These results feed directly into game adjudication and search scores,
+    // where VALUE_NONE has no valid meaning. Reject it here instead of
+    // working around it at every use site. extinctionValue and
     // pseudoRoyalValue keep "none" as their documented "disabled" state.
     auto result_has_none = [](const ColorSetting<Value>& setting) {
         return setting.global == VALUE_NONE
@@ -2941,6 +2942,30 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     {
         if (DoCheck)
             std::cerr << "nFoldValue cannot be none." << std::endl;
+        valid = false;
+    }
+    if (v->connectValue == VALUE_NONE)
+    {
+        if (DoCheck)
+            std::cerr << "connectValue cannot be none." << std::endl;
+        valid = false;
+    }
+    if (v->pointsGoalValue == VALUE_NONE)
+    {
+        if (DoCheck)
+            std::cerr << "pointsGoalValue cannot be none." << std::endl;
+        valid = false;
+    }
+    if (v->pointsGoalSimulValueByMostPoints == VALUE_NONE)
+    {
+        if (DoCheck)
+            std::cerr << "pointsGoalSimulValueByMostPoints cannot be none." << std::endl;
+        valid = false;
+    }
+    if (v->nMoveHardLimitRuleValue == VALUE_NONE)
+    {
+        if (DoCheck)
+            std::cerr << "nMoveHardLimitRuleValue cannot be none." << std::endl;
         valid = false;
     }
     if (v->nonRoyalDrawThreshold < 0)

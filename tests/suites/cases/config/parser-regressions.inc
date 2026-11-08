@@ -658,6 +658,18 @@ nFoldValue = none
 
 [bad-stalemate-none-white:chess]
 stalemateValueWhite = none
+
+[bad-connect-none:chess]
+connectValue = none
+
+[bad-points-none:chess]
+pointsGoalValue = none
+
+[bad-points-simul-none:chess]
+pointsGoalSimulValueByMostPoints = none
+
+[bad-nmove-hard-limit-none:chess]
+nMoveHardLimitRuleValue = none
 INI
 
 cat > "${bad_hopper_minmax_ini}" <<'INI'
@@ -1011,6 +1023,10 @@ bad_none_result_output=$("${ENGINE}" check "${bad_none_result_ini}" 2>&1 || true
 assert_contains_literal "${bad_none_result_output}" "stalemateValue cannot be none."
 assert_contains_literal "${bad_none_result_output}" "checkmateValue cannot be none."
 assert_contains_literal "${bad_none_result_output}" "nFoldValue cannot be none."
+assert_contains_literal "${bad_none_result_output}" "connectValue cannot be none."
+assert_contains_literal "${bad_none_result_output}" "pointsGoalValue cannot be none."
+assert_contains_literal "${bad_none_result_output}" "pointsGoalSimulValueByMostPoints cannot be none."
+assert_contains_literal "${bad_none_result_output}" "nMoveHardLimitRuleValue cannot be none."
 assert_contains_literal "${bad_none_result_output}" "Variant 'bad-stalemate-none' has invalid configuration. Skipping."
 assert_contains_literal "${bad_none_result_output}" "Variant 'bad-checkmate-none' has invalid configuration. Skipping."
 assert_contains_literal "${bad_none_result_output}" "Variant 'bad-nfold-none' has invalid configuration. Skipping."
