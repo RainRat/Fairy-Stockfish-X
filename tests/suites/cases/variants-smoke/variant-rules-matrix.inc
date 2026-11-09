@@ -726,6 +726,35 @@ go perft 1
 EOF
 )
   assert_not_contains "$out" "Result: 1-0"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" align4 <<'EOF'
+position fen 4k3/8/8/8/8/8/PPPPPPPP/RNBQKBNR[p] b KQ - 0 1 moves P@a3 e2e3
+go perft 1
+EOF
+)
+  assert_contains "$out" "^P@b3: 1$"
+}
+
+test_knights_halma() {
+  echo "== knights-halma =="
+  local out
+  if ! variant_available "$ENGINE" knights-halma "$VARIANTS"; then
+    return 0
+  fi
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" knights-halma <<'EOF'
+position fen 4nNNN/5NNN/6NN/8/4N3/8/8/8 w - - 0 1 moves e4f6
+go perft 1
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 0$"
+
+  out=$(run_uci "$ENGINE" "$VARIANTS" knights-halma <<'EOF'
+position fen 8/8/4n3/8/3N4/8/8/8 w - - 0 1
+go perft 1
+EOF
+)
+  assert_not_contains "$out" "^d4e6:"
 }
 
 test_wrapped_connect_features() {
@@ -1026,6 +1055,7 @@ test_connect_region3
 test_hex_visual_connection_axes
 test_connect_adjudication_edges
 test_align4
+test_knights_halma
 test_wrapped_connect_features
 test_flank_chess
 test_crazy_cavalier
