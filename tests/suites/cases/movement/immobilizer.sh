@@ -38,9 +38,6 @@ cat >"$tmp_ini" <<'INI'
 checking = false
 freezePieceTypes = r
 freezeAttackedSquares = true
-
-[madrasi-freeze:attacked-freeze]
-freezeSameType = true
 INI
 
 out=$(run_uci "$ENGINE" "$tmp_ini" attacked-freeze <<'UCI'
@@ -51,10 +48,25 @@ UCI
 assert_not_contains_literal "$out" "d2" "attacked rook is immobilized"
 assert_not_contains_literal "$out" "h8" "attacked bishop is immobilized"
 
-out=$(run_uci "$ENGINE" "$tmp_ini" madrasi-freeze <<'UCI'
-position fen 3r3B/8/8/8/8/8/3R4/K6k w - - 0 1
+out=$(run_uci "$ENGINE" "$VARIANTS" madrasi <<'UCI'
+position fen 3rk2B/8/8/8/8/8/3R4/K7 w - - 0 1
 go perft 1
 UCI
 )
 assert_not_contains_literal "$out" "d2" "Madrasi immobilizes an attacked rook of the same type"
-assert_contains_literal "$out" "h8g7:" "Madrasi leaves an attacked bishop of a different type mobile"
+assert_contains_literal "$out" "h8g7:" "Madrasi leaves a different-type bishop mobile"
+
+out=$(run_uci "$ENGINE" "$VARIANTS" madrasi <<'UCI'
+position fen k7/8/4R3/8/4r3/8/8/4K3 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains_literal "$out" "e1d1:" "a frozen rook does not give check"
+
+out=$(run_uci "$ENGINE" "$VARIANTS" madrasi <<'UCI'
+position fen 7k/8/8/6N1/4n3/2N5/8/K7 w - - 0 1
+go perft 1
+UCI
+)
+assert_not_contains_literal "$out" "c3" "Madrasi immobilizes a knight attacked by the same type"
+assert_not_contains_literal "$out" "g5" "a frozen knight still paralyzes its same-type attacker"
