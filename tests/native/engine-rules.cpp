@@ -1802,6 +1802,37 @@ void board_games() {
     for (const std::string& move : moves)
         actual += (actual.empty() ? "" : ",") + move;
     check(moves == expected, "dots-and-boxes pass move set changed: " + actual);
+
+    set_position(pos, states, "yavalath", variants.get("yavalath")->startFen.c_str());
+    check(MoveList<LEGAL>(pos).size() == 61,
+          "Yavalath standard start position must have 61 legal placements");
+
+    set_position(pos, states, "yavalath",
+                 "****5/***6/**7/*8/2PP5/8*/7**/6***/5**** w - - 0 1");
+    Move three = parse_move(pos, "P@e5");
+    states->emplace_back();
+    pos.do_move(three, states->back());
+    Value result = VALUE_NONE;
+    check(pos.is_immediate_game_end(result) && result > VALUE_ZERO,
+          "Yavalath line of three without four must lose for the mover");
+    pos.undo_move(three);
+    states->pop_back();
+
+    set_position(pos, states, "yavalath",
+                 "****5/***6/**7/*8/2PPP4/8*/7**/6***/5**** b - - 0 1");
+    check(public_game_result(pos) > VALUE_ZERO,
+          "Yavalath FEN with a prior three-line did not award the win to the opponent");
+
+    set_position(pos, states, "yavalath",
+                 "****5/***6/**7/*8/2PPP4/8*/7**/6***/5**** w - - 0 1");
+    Move four = parse_move(pos, "P@f5");
+    states->emplace_back();
+    pos.do_move(four, states->back());
+    result = VALUE_NONE;
+    check(pos.is_immediate_game_end(result) && result < VALUE_ZERO,
+          "Yavalath line of four must take precedence and win for the mover");
+    pos.undo_move(four);
+    states->pop_back();
 }
 
 void load_config(const std::string& path) {

@@ -12247,6 +12247,62 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       return false;
   };
 
+  auto has_connect_n_line = [&](Color c, int targetN) {
+      Bitboard eligible = 0;
+      for (PieceSet ps = connect_piece_types(); ps;)
+      {
+          PieceType pt = pop_lsb(ps);
+          eligible |= connect_goal_by_type() ? pieces(pt) : pieces(c, pt);
+      }
+
+      if (targetN < 2 || popcount(eligible) < targetN)
+          return false;
+
+      if (!var->connectLineMasks.empty())
+      {
+          for (size_t i = 0; i < var->connectLineMasks.size(); ++i)
+              if (var->connectLines[i].size() == size_t(targetN)
+                  && (eligible & var->connectLineMasks[i]) == var->connectLineMasks[i])
+                  return true;
+          return false;
+      }
+
+      if (topology_wraps())
+      {
+          const int maxSteps = popcount(board_bb());
+          for (Direction d : var->connectDirections)
+          {
+              Bitboard starts = eligible;
+              while (starts)
+              {
+                  Square start = pop_lsb(starts), cur = start;
+                  int steps = 1;
+                  while (steps < targetN && steps < maxSteps)
+                  {
+                      Square next = SQ_NONE;
+                      if (!wrapped_step(cur, d, next) || next == start || !(eligible & square_bb(next)))
+                          break;
+                      cur = next;
+                      ++steps;
+                  }
+                  if (steps >= targetN)
+                      return true;
+              }
+          }
+          return false;
+      }
+
+      for (Direction d : var->connectDirections)
+      {
+          Bitboard line = eligible;
+          for (int i = 1; i < targetN && line; ++i)
+              line &= shift(d, line);
+          if (line)
+              return true;
+      }
+      return false;
+  };
+
   auto check_connection_adjudications = [&](Color c) {
       Bitboard eligible = 0;
       for (PieceSet ps = connect_piece_types(); ps;)
@@ -12258,62 +12314,7 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       // Connect-n
       int targetN = connect_n() == -1 ? popcount(eligible) : connect_n();
       if (var->materialCounting != CONNECT_N_COUNT && (connect_n() != 0) && (targetN >= 2) && (popcount(eligible) >= targetN))
-      {
-          if (!var->connectLineMasks.empty())
-          {
-              for (size_t i = 0; i < var->connectLineMasks.size(); ++i)
-              {
-                  if (var->connectLines[i].size() != size_t(targetN))
-                      continue;
-                  Bitboard mask = var->connectLineMasks[i];
-                  if ((eligible & mask) == mask)
-                      return true;
-              }
-          }
-          else
-          {
-              if (topology_wraps())
-              {
-                  const int maxSteps = popcount(board_bb());
-
-                  for (Direction d : var->connectDirections)
-                  {
-                      Bitboard starts = eligible;
-                      while (starts)
-                      {
-                          Square s = pop_lsb(starts);
-                          Square cur = s;
-                          int steps = 1;
-                          while (steps < targetN && steps < maxSteps)
-                          {
-                              Square next = SQ_NONE;
-                              if (!wrapped_step(cur, d, next) || next == s)
-                                  break;
-                              if (!(eligible & square_bb(next)))
-                                  break;
-                              cur = next;
-                              ++steps;
-                          }
-                          if (steps >= targetN)
-                              return true;
-                      }
-                  }
-              }
-              else
-              {
-                  Bitboard b;
-
-                  for (Direction d : var->connectDirections)
-                  {
-                      b = eligible;
-                      for (int i = 1; i < targetN && b; i++)
-                          b &= shift(d, b);
-                      if (b)
-                          return true;
-                  }
-              }
-          }
-      }
+          return has_connect_n_line(c, targetN);
 
       auto connected_regions = [&](Bitboard region1, Bitboard region2, Bitboard region3 = 0) {
           Bitboard region1Pieces = region1 & eligible;
@@ -12588,6 +12589,13 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
   }
 
   bool prevMoverConnected = connection_met(~sideToMove);
+  if (var->connectNForfeit
+      && has_connect_n_line(~sideToMove, var->connectNForfeit)
+      && !has_connect_n_line(~sideToMove, connect_n()))
+  {
+      result = convert_mate_value(VALUE_MATE, ply);
+      return true;
+  }
   // Without mechanics that complete the opponent's connection (see
   // Variant::connectionMoverOnly), only the mover's side can have changed,
   // except at the initial position, which has no mover.

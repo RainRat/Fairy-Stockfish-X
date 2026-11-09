@@ -2327,6 +2327,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("flagPieceSafe", v->flagPieceSafe);
     parse_attribute("checkCounting", v->checkCounting);
     parse_attribute("connectN", v->connectN);
+    parse_attribute("connectNForfeit", v->connectNForfeit);
     parse_attribute("connectPieceTypes", v->connectPieceTypes, v);
     parse_attribute("connectGoalByType", v->connectGoalByType);
     parse_color_setting("connectPieceGoal", v->connectPieceGoal);
@@ -3017,6 +3018,15 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             std::cerr << "connectN must be between 0 and the largest board dimension." << std::endl;
         valid = false;
     }
+    if (v->connectNForfeit != 0
+        && (v->connectNForfeit < 2
+            || v->connectNForfeit >= v->connectN
+            || v->connectNForfeit > std::max(boardFiles, boardRanks)))
+    {
+        if (DoCheck)
+            std::cerr << "connectNForfeit must be at least 2 and less than connectN." << std::endl;
+        valid = false;
+    }
     if (v->connectNxN < -1 || v->connectNxN > std::min(boardFiles, boardRanks))
     {
         if (DoCheck)
@@ -3383,7 +3393,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
                 std::cerr << "removeConnectN is incompatible with (pseudo/anti-)royal pieces." << std::endl;
             valid = false;
         }
-        if (v->connectN || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup
+        if (v->connectN || v->connectNForfeit || v->connect3D || v->connect4D || v->connectNxN || v->collinearN || v->connectGroup
             || v->connectRegion1[WHITE] || v->connectRegion1[BLACK]
             || !v->connectPieceGoal[WHITE].empty() || !v->connectPieceGoal[BLACK].empty())
         {

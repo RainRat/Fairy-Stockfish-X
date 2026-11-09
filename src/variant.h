@@ -556,6 +556,7 @@ struct Variant {
   bool flagPieceSafe = false;
   bool checkCounting = false;
   int connectN = 0;
+  int connectNForfeit = 0;
   PieceSet connectPieceTypes = ~NO_PIECE_SET;
   bool connectGoalByType = false;
   ColorSetting<std::string> connectPieceGoal = ColorSetting<std::string>("");

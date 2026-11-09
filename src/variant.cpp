@@ -2569,6 +2569,7 @@ Variant* Variant::conclude() {
                     && !checkCounting
                     && !makpongRule
                     && !connectN
+                    && !connectNForfeit
                     && !blastOnCapture
                     && !petrifyOnCaptureTypes
                     && captureType == MOVE_OUT
@@ -2675,7 +2676,7 @@ Variant* Variant::conclude() {
     // connectPieceTypesTrimmed is separated so that connectPieceTypes is left unchanged for inheritance.
     if ( !(connectRegion1[WHITE] || connectRegion1[BLACK] || connectRegion2[WHITE] || connectRegion2[BLACK]
         || connectRegion3[WHITE] || connectRegion3[BLACK]
-        || connectN || connectNxN || collinearN || connectGroup) )
+        || connectN || connectNForfeit || connectNxN || collinearN || connectGroup) )
     {
           connectPieceTypesTrimmed = NO_PIECE_SET;
     }
@@ -2703,6 +2704,7 @@ Variant* Variant::conclude() {
     }
 
     hasConnectionAdjudication = connectN != 0
+                              || connectNForfeit != 0
                               || connectNxN != 0
                               || collinearN != 0
                               || connectGroup != 0
@@ -2726,7 +2728,7 @@ Variant* Variant::conclude() {
     bool opponentConnectionMovable = hasPushing;
     for (PieceSet ps = pieceTypes; ps && !opponentConnectionMovable; )
         opponentConnectionMovable = pullingStrength[pop_lsb(ps)] > 0;
-    connectionMoverOnly = connectN != -1 && connectNxN != -1
+    connectionMoverOnly = connectN != -1 && connectNForfeit != -1 && connectNxN != -1
                        && collinearN != -1 && connectGroup != -1
                        && !opponentConnectionMovable
                        && adjacentSwapMoveTypes == NO_PIECE_SET
@@ -2740,6 +2742,7 @@ Variant* Variant::conclude() {
                                   || pointsGoal > 0
                                   || captureDemotion
                                   || connectN != 0
+                                  || connectNForfeit != 0
                                   || connectNxN != 0
                                   || collinearN != 0
                                   || connectGroup != 0
