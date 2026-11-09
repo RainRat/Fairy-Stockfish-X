@@ -35,6 +35,21 @@ connectHorizontal = true
 connectVertical = false
 connectDiagonal = false
 startFen = 4k3/8/8/4K3/8/8/8/PPPP4 b - - 0 1
+
+[connect6-test]
+maxRank = 7
+maxFile = 7
+pieceToCharTable = -
+king = -
+immobile = p
+startFen = 7/7/7/7/7/7/7[] b - - 0 1
+pieceDrops = true
+freeDrops = true
+connectN = 6
+multimoves = 1 2 2
+stalemateValue = draw
+immobilityIllegal = false
+nMoveRule = 0
 INI
 tmp_ini="${FSX_TMP_INI}"
 
@@ -60,6 +75,27 @@ go perft 1
 UCI
 )
 assert_nodes "$out" 0
+
+out=$(run_uci "$ENGINE" "$tmp_ini" connect6-test <<'UCI'
+position startpos
+d
+UCI
+)
+assert_contains_literal "$out" "Fen: 7/7/7/7/7/7/7 b - - 0 1" "Connect6 starts with Black"
+
+out=$(run_uci "$ENGINE" "$tmp_ini" connect6-test <<'UCI'
+position startpos
+go perft 1
+UCI
+)
+assert_nodes "$out" 49
+
+out=$(run_uci "$ENGINE" "$tmp_ini" connect6-test <<'UCI'
+position startpos
+go perft 4
+UCI
+)
+assert_nodes "$out" 110544
 
 # Lines-of-action edge adjacency: h1 must not wrap-connect to a2. With only
 # those two knights on the board, a wrap bug would see white as already
