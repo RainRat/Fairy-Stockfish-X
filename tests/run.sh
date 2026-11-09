@@ -418,11 +418,7 @@ case "$command" in
         else
             export FSX_QUIET_VARIANT_LOAD_SUMMARIES=1
         fi
-        if [[ "$command" == full ]]; then
-            run_fast_parallel "$engine" "$VARIANTS" "$command"
-        else
-            run_fast_parallel "$engine" "$VARIANTS" "$command"
-        fi
+        run_fast_parallel "$engine" "$VARIANTS" "$command"
         ;;
     suite)
         shift 1
