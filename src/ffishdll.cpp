@@ -4,7 +4,6 @@
 */
 
 #include <algorithm>
-#include <atomic>
 #include <cstring>
 #include <deque>
 #include <memory>
@@ -105,8 +104,6 @@ private:
   bool is960;
 
 public:
-  static std::atomic<bool> sfInitialized;
-
   Board() : Board("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", false) {}
   Board(std::string uciVariant) : Board(uciVariant, "", false) {}
   Board(std::string uciVariant, std::string fen) : Board(uciVariant, fen, false) {}
@@ -443,7 +440,6 @@ private:
 
   void init(std::string uciVariant, std::string fen, bool is960Flag) {
     ensure_stockfish_initialized();
-    Board::sfInitialized.store(true, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     v = get_variant(uciVariant);
     if (!v)
@@ -461,8 +457,6 @@ private:
   }
 };
 
-std::atomic<bool> Board::sfInitialized{false};
-
 namespace ffish {
 
 std::string info() { return engine_info(); }
@@ -474,7 +468,6 @@ bool set_option(std::string name, T value) {
   if (!Options.count(name))
     return false;
   Options[name] = value;
-  Board::sfInitialized.store(false, std::memory_order_relaxed);
   return true;
 }
 
@@ -497,7 +490,6 @@ int try_load_variant_config(std::string variantInitContent) {
   const size_t before = variants.size();
   variants.parse_istream<false>(ss);
   Options["UCI_Variant"].set_combo(variants.get_keys());
-  Board::sfInitialized.store(true, std::memory_order_relaxed);
   // Existing variant names are skipped, never replaced.
   return int(variants.size() - before);
 }
@@ -559,7 +551,6 @@ typedef void* fsf_board;
 
 FSF_API void fsf_init() {
   ensure_stockfish_initialized();
-  Board::sfInitialized.store(true, std::memory_order_relaxed);
 }
 
 FSF_API fsf_board fsf_new_board(const char* variant, const char* fen, bool is960) {

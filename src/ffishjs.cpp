@@ -18,8 +18,11 @@
 
 #include <emscripten.h>
 #include <emscripten/bind.h>
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -101,8 +104,6 @@ private:
   bool is960;
 
 public:
-  static std::atomic<bool> sfInitialized;
-
   Board():
     Board("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" , false) {
   }
@@ -156,8 +157,7 @@ public:
     return push_san(sanMove, NOTATION_SAN);
   }
 
-  // TODO: This is a naive implementation which compares all legal SAN moves with the requested string.
-  // If the SAN move wasn't found the position remains unchanged. Alternatively, implement a direct conversion.
+  // Leave the position unchanged if the SAN move doesn't match a legal move.
   bool push_san(std::string sanMove, Notation notation) {
     Move foundMove = MOVE_NONE;
     for (const ExtMove& move : MoveList<LEGAL>(pos)) {
@@ -514,7 +514,6 @@ private:
 
   void init(std::string uciVariant, std::string fen, bool is960) {
     ensure_stockfish_initialized();
-    Board::sfInitialized.store(true, std::memory_order_relaxed);
     std::string error;
     {
       std::lock_guard<std::mutex> lock(variant_state_mutex);
@@ -540,8 +539,6 @@ private:
   }
 };
 
-std::atomic<bool> Board::sfInitialized{false};
-
 namespace ffish {
   // returns the version of the Fairy-Stockfish binary
   std::string info() {
@@ -557,7 +554,6 @@ namespace ffish {
       found = Options.count(name);
       if (found) {
         Options[name] = value;
-        Board::sfInitialized.store(false, std::memory_order_relaxed);
       }
     }
     if (!found)
@@ -566,7 +562,6 @@ namespace ffish {
 
   std::string available_variants() {
     ensure_stockfish_initialized();
-    Board::sfInitialized.store(true, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(variant_state_mutex);
     std::string availableVariants;
     for (std::string variant : variants.get_keys()) {
@@ -590,7 +585,6 @@ namespace ffish {
     const size_t before = variants.size();
     variants.parse_istream<false>(ss);
     Options["UCI_Variant"].set_combo(variants.get_keys());
-    Board::sfInitialized.store(true, std::memory_order_relaxed);
     // Existing variant names are skipped, never replaced.
     return int(variants.size() - before);
   }

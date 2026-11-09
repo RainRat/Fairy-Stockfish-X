@@ -1354,16 +1354,6 @@ inline void xor_points_bucket(Key& k, Color c, int points) {
 // turns), so it contributes to the position key exactly like any other
 // modal rule state. The parser caps autoMoveN, so the phase always indexes
 // the table exactly.
-inline int auto_move_phase(const Variant* var, int phase) {
-  assert(0 <= phase && phase <= var->autoMoveN);
-  (void)var;
-  return phase;
-}
-
-inline void xor_auto_move_phase(Key& k, const Variant* var, Color c, int count) {
-  k ^= Zobrist::autoMovePhase[c][auto_move_phase(var, count)];
-}
-
 inline int non_negative_points(int points) {
   return std::max(points, 0);
 }
@@ -2708,8 +2698,10 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
           si->key ^= Zobrist::checks[c][si->checksRemaining[c]];
 
   if (has_auto_move())
-      for (Color c : {WHITE, BLACK})
-          xor_auto_move_phase(si->key, var, c, si->autoMoveCount[c]);
+      for (Color c : {WHITE, BLACK}) {
+          assert(0 <= si->autoMoveCount[c] && si->autoMoveCount[c] <= var->autoMoveN);
+          si->key ^= Zobrist::autoMovePhase[c][si->autoMoveCount[c]];
+      }
 
   if (var->pointsCounting)
       for (Color c : {WHITE, BLACK})
@@ -10534,7 +10526,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   if (has_auto_move())
   {
       const Color mover = ~sideToMove;
-      const int oldPhase = auto_move_phase(var, st->autoMoveCount[mover]);
+      const int oldPhase = st->autoMoveCount[mover];
+      assert(0 <= oldPhase && oldPhase <= var->autoMoveN);
       const int newPhase = oldPhase == var->autoMoveN ? 0 : oldPhase + 1;
       Key diff = Zobrist::autoMovePhase[mover][oldPhase]
                ^ Zobrist::autoMovePhase[mover][newPhase];
@@ -11229,38 +11222,6 @@ void Position::undo_null_move() {
 
   st = st->previous;
   sideToMove = ~sideToMove;
-}
-
-
-/// Position::key_after() computes the new hash key after the given move. Needed
-/// for speculative prefetch. It doesn't recognize special moves like castling,
-/// en passant and promotions.
-
-Key Position::key_after(Move m) const {
-
-  Square from = from_sq(m);
-  Square to = to_sq(m);
-  Piece pc = moved_piece(m);
-  Piece captured = piece_on(to);
-  Key k = st->key ^ Zobrist::side;
-
-  if (captured)
-  {
-      k ^= Zobrist::psq[captured][to];
-      Piece removedPiece = reserve_transfer_piece(*this, sideToMove, captured, is_promoted(to), unpromoted_piece_on(to),
-                                                  drop_loop(), var->captureToHandSide,
-                                                  main_promotion_pawn_type(color_of(captured)));
-      simulate_capture_transfer(k, removedPiece, false);
-  }
-  if (is_drop_move(m))
-  {
-      PieceType exchanged = exchange_piece(m);
-      Color dropColor = drop_hand_color(sideToMove, in_hand_piece_type(m));
-      apply_drop_hash_delta(k, m, pc, dropColor, exchanged);
-      return k;
-  }
-
-  return k ^ Zobrist::psq[pc][to] ^ Zobrist::psq[pc][from];
 }
 
 
