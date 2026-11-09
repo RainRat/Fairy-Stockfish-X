@@ -84,6 +84,20 @@ def check_drop(name, pieces, move, legal=True, terminal=False, points="", size=1
         return re.findall(r"^Fen: (.+)$", output, re.M)[-1]
 
 
+if "pente" in available:
+    output = run("pente", "position startpos\nd\ngo perft 1\nd")
+    start = re.findall(r"^Fen: (.+)$", output, re.M)
+    root_moves = re.findall(r"^(P@[a-s]\d+): (\d+)$", output, re.M)
+    assert len(start) == 2 and start[0].split()[0] == fen(19, {(9, 9): "p"}).split()[0], output
+    assert start[0].split()[1] == "w" and start[0] == start[1], output
+    assert len(root_moves) == 360 and "P@j10" not in dict(root_moves), output
+    captured = check_drop("pente", {(2, 9): "p", (3, 9): "p", (4, 9): "P"},
+                          "P@b10", points=" {0 0}")
+    assert captured.split()[0] == fen(19, {(1, 9): "P", (4, 9): "P"}).split()[0], captured
+    assert captured.endswith("{2 0}"), captured
+    print("pente center opening, placement, pair capture and points passed", flush=True)
+
+
 check_drop("gomoku-19x19", {(x, 18): "P" for x in range(14, 18)}, "P@s19", terminal=True)
 check_drop("hex-19x19", {(x, 18): "P" for x in range(18)}, "P@s19", terminal=True)
 check_drop("hex-19x19", {(18, y): "p" for y in range(18)}, "P@s19", terminal=True, turn="b")

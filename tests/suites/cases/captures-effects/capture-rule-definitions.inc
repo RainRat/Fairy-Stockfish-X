@@ -48,6 +48,78 @@ UCI
   rm -f "${tmp_ini}"
 }
 
+test_pente_pair_captures() {
+  load_inline_variants <<'INI'
+[pente-test]
+maxRank = 9
+maxFile = 9
+pieceToCharTable = -
+king = -
+immobile = p
+pieceDrops = true
+mustDrop = true
+freeDrops = true
+castling = false
+startFen = 9/9/9/9/9/9/9/9/9[] w - - 0 1 {0 0}
+surroundCaptureOpposite = true
+surroundCaptureCount = 2
+pointsCounting = true
+pointsRuleCaptures = us
+piecePoints = p:1
+pointsGoal = 10
+connectN = 5
+nMoveRule = 0
+INI
+
+  local out
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" pente-test <<'UCI'
+position fen 9/9/9/9/9/2ppP4/9/9/9 w - - 0 1 {0 0} moves P@b4
+d
+UCI
+  )
+  assert_contains_literal "$out" "1P2P4/9/9/9 b - - 0 1 {2 0}"
+
+  # One placement can capture pairs in both directions on the same line.
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" pente-test <<'UCI'
+position fen 9/9/9/9/1Ppp1ppP1/9/9/9/9 w - - 0 1 {0 0} moves P@e5
+d
+UCI
+  )
+  assert_contains_literal "$out" "1P2P2P1/9/9/9/9 b - - 0 1 {4 0}"
+
+  # Captures also work on a diagonal.
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" pente-test <<'UCI'
+position fen 9/9/4P4/3p5/2p6/9/9/9/9 w - - 0 1 {0 0} moves P@b4
+d
+UCI
+  )
+  assert_contains_literal "$out" "4P4/9/9/1P7/9/9/9 b - - 0 1 {2 0}"
+
+  # Three consecutive enemy stones are not a capturable pair.
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" pente-test <<'UCI'
+position fen 9/9/9/9/9/2pppP3/9/9/9 w - - 0 1 {0 0} moves P@b4
+d
+UCI
+  )
+  assert_contains_literal "$out" "1PpppP3/9/9/9 b - - 0 1 {0 0}"
+
+  # A stone placed between two enemy stones is not captured by them.
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" pente-test <<'UCI'
+position fen 9/9/9/9/9/1p1p5/9/9/9 w - - 0 1 {0 0} moves P@c4
+d
+UCI
+  )
+  assert_contains_literal "$out" "1pPp5/9/9/9 b - - 0 1 {0 0}"
+
+  # Capturing a second pair reaches the ten-stone capture win.
+  out=$(run_uci "$ENGINE" "$FSX_TMP_INI" pente-test <<'UCI'
+position fen 9/9/9/9/9/2ppP4/9/9/9 w - - 0 1 {8 0} moves P@b4
+go depth 1
+UCI
+  )
+  assert_contains_literal "$out" "score mate 0"
+}
+
 test_dos94_rotation_search_filter() {
   local out
   out=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" dos-laser-chess-1994 <<'UCI'
@@ -834,6 +906,7 @@ EOF_UCI
 }
 
 test_changing_color_locality
+test_pente_pair_captures
 test_flip_regressions
 test_potion_check_regressions
 test_multiple_flag_pieces

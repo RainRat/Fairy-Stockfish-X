@@ -2004,6 +2004,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     }
     parse_attribute("removeConnectNByType", v->removeConnectNByType);
     parse_attribute("surroundCaptureOpposite", v->surroundCaptureOpposite);
+    parse_attribute("surroundCaptureCount", v->surroundCaptureCount);
+    if (v->surroundCaptureCount < 1 || v->surroundCaptureCount > int(SQUARE_NB)) {
+        if (DoCheck)
+            std::cerr << "surroundCaptureCount - Value must be in range [1, " << int(SQUARE_NB) << "]." << std::endl;
+        return false;
+    }
     parse_attribute("surroundCaptureIntervene", v->surroundCaptureIntervene);
     parse_attribute("surroundCaptureEdge", v->surroundCaptureEdge);
     parse_attribute("surroundCaptureMaxRegion", v->surroundCaptureMaxRegion);

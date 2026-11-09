@@ -1313,6 +1313,35 @@ describe('Huge-board placement variants', function () {
     }
   });
 
+  it('plays Pente with its center opening, pair captures and five-in-a-row win', function () {
+    const pente = new ffish.Board('pente');
+    try {
+      const start = pente.fen();
+      chai.expect(start.split(' ')[0]).to.equal(fen({'9,9': 'p'}).split(' ')[0]);
+      chai.expect(start.split(' ')[1]).to.equal('w');
+      chai.expect(pente.legalMoves().split(' ').length).to.equal(360);
+      chai.expect(pente.legalMoves().split(' ')).not.to.include('P@j10');
+    } finally { pente.delete(); }
+
+    const capture = new ffish.Board('pente', fen({'2,9': 'p', '3,9': 'p', '4,9': 'P'}, 'w', ' {0 0}'));
+    try {
+      chai.expect(capture.push('P@b10')).to.equal(true);
+      chai.expect(capture.fen().split(' ')[0]).to.equal(fen({'1,9': 'P', '4,9': 'P'}).split(' ')[0]);
+      chai.expect(capture.fen()).to.match(/\{2 0\}$/);
+      chai.expect(capture.result()).to.equal('*');
+    } finally { capture.delete(); }
+
+    const five = {};
+    for (let x = 0; x < 4; ++x) five[`${x},0`] = 'P';
+    const line = new ffish.Board('pente', fen(five));
+    try {
+      chai.expect(line.push('P@e1')).to.equal(true);
+      chai.expect(line.result()).to.equal('1-0');
+      line.pop();
+      chai.expect(line.result()).to.equal('*');
+    } finally { line.delete(); }
+  });
+
   it('adjudicates high-rank Gomoku and Hex connections', function () {
     for (const [variant, first, size, turn] of [['gomoku-19x19', 14, 19, 'w'],
       ['hex-19x19', 0, 19, 'w'], ['hex-19x19', 0, 19, 'b'],

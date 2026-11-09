@@ -220,6 +220,7 @@ struct Variant {
   int removeConnectN = 0;
   bool removeConnectNByType = false;
   bool surroundCaptureOpposite = false;
+  int surroundCaptureCount = 1;
   bool surroundCaptureIntervene = false;
   bool surroundCaptureEdge = false;
   Bitboard surroundCaptureMaxRegion = 0;

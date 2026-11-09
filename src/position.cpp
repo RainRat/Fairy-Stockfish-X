@@ -4280,10 +4280,25 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
               if (surround_capture_edge())
                   mask |= s;
           }
-          else
+          else if (surround_capture_opposite())
           {
-              if (surround_capture_opposite() && ((usPieces & oppSquare & occupied) || (oppSquare == moverSq) || (surround_capture_hostile_region() & oppSquare)))
-                  mask |= s;
+              Bitboard captured = 0;
+              Square end = s;
+              for (int i = 0; i < var->surroundCaptureCount; ++i)
+              {
+                  if (!is_ok(end) || !(end & themPieces & occupied))
+                  {
+                      captured = 0;
+                      break;
+                  }
+                  captured |= square_bb(end);
+                  end += mod_d;
+              }
+
+              if (captured && is_ok(end)
+                  && ((usPieces & end & occupied) || end == moverSq
+                      || (surround_capture_hostile_region() & end)))
+                  mask |= captured;
           }
       }
   }
