@@ -1639,6 +1639,44 @@ void adjudication() {
     StateListPtr states;
     Value result = VALUE_NONE;
 
+    Variant pushing;
+    pushing.connectN = 3;
+    pushing.pushingStrength[ROOK] = 1;
+    pushing.conclude();
+    check(pushing.hasPushing && !pushing.simpleSimulationBase && !pushing.simpleLegality
+          && !pushing.connectionMoverOnly,
+          "conclude did not derive active pushing and connection flags");
+    pushing.conclude();
+    check(pushing.hasPushing && !pushing.simpleSimulationBase && !pushing.simpleLegality
+          && !pushing.connectionMoverOnly,
+          "repeated conclude changed active pushing flags");
+    pushing.pushingStrength[ROOK] = 0;
+    pushing.conclude();
+    check(!pushing.hasPushing && pushing.simpleSimulationBase && pushing.simpleLegality
+          && pushing.connectionMoverOnly,
+          "conclude did not clear pushing flags after strength was removed");
+    pushing.pieceTypes = piece_set(PAWN);
+    pushing.pushingStrength[QUEEN] = 1;
+    pushing.hasPushing = true; // Simulate the parser's former all-piece derivation.
+    pushing.conclude();
+    check(!pushing.hasPushing && pushing.connectionMoverOnly,
+          "inactive piece strength incorrectly enabled pushing behavior");
+
+    set_position(pos, states, "push-connect",
+                 "6/6/6/Rr1rr1/6 w - - 0 1");
+    check(!variants.get("push-connect")->connectionMoverOnly,
+          "pushing connection variant incorrectly uses mover-only adjudication");
+    Move push = parse_move(pos, "a2b2");
+    check(pos.legal(push), "push completing the opponent's connection is illegal");
+    states->emplace_back();
+    pos.do_move(push, states->back());
+    check(pos.piece_on(SQ_C2) == make_piece(BLACK, ROOK)
+          && pos.piece_on(SQ_D2) == make_piece(BLACK, ROOK)
+          && pos.piece_on(SQ_E2) == make_piece(BLACK, ROOK),
+          "push did not move the opponent's pieces into a connection");
+    check(pos.is_immediate_game_end(result) && result > VALUE_ZERO,
+          "push completing the opponent's connection was not awarded to that opponent");
+
     set_position(pos, states, "snort", "8/8/8/7p/7P/8/8/8 w - - 0 1");
     expect_nonterminal(pos, "snort start position");
     check(!has_insufficient_material(WHITE, pos) && !has_insufficient_material(BLACK, pos),
@@ -2499,6 +2537,16 @@ laserEmitters = piece:x
 customPiece2 = y:K
 orientedPieceTypes = x y
 laserEmitters = piece:y
+
+[push-connect:fairy]
+maxFile = f
+maxRank = 5
+castling = false
+checking = false
+rook = r
+pushingStrength = r:5
+connectN = 3
+startFen = 6/6/6/Rr1rr1/6 w - - 0 1
 )INI");
     variants.parse_istream<false>(inline_config);
 }

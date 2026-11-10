@@ -2323,9 +2323,9 @@ Variant* Variant::conclude() {
     for (PieceSet ps = pieceTypes; ps && !hasPulling; )
         hasPulling = pullingStrength[pop_lsb(ps)] > 0;
 
-    bool hasActivePushing = false;
-    for (PieceSet ps = pieceTypes; ps && !hasActivePushing; )
-        hasActivePushing = pushingStrength[pop_lsb(ps)] > 0;
+    hasPushing = false;
+    for (PieceSet ps = pieceTypes; ps && !hasPushing; )
+        hasPushing = pushingStrength[pop_lsb(ps)] > 0;
 
     auto hasSelfCapture = [this](Color c) {
         if (selfCaptureTypes.has_override(c))
@@ -2609,7 +2609,7 @@ Variant* Variant::conclude() {
                                  && !blastOnSelfDestruct
                                  && !hasSelfCapture(c)
                                  && !rifleCapture
-                                 && !hasActivePushing
+                                 && !hasPushing
                                  && !hasPulling
                                  && !adjacentSwapMoveTypes
                                  && !captureMorph

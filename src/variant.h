@@ -269,7 +269,7 @@ struct Variant {
   ColorSetting<bool> mustCaptureEnPassant = ColorSetting<bool>(false);
   bool rifleCapture = false;
   int pushingStrength[PIECE_TYPE_NB] = {};
-  bool hasPushing = false;
+  bool hasPushing = false; // derived by conclude() from active piece types
   int pullingStrength[PIECE_TYPE_NB] = {};
   DirectionPairSpec twoStepMoves[PIECE_TYPE_NB] = {};
   // Color-independent: Black masks are the point reflection of White masks,

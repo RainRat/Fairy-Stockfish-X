@@ -27,6 +27,20 @@ using namespace Stockfish;
 
 static PyObject* PyFFishError;
 
+static bool add_module_object(PyObject* module, const char* name, PyObject* value) {
+    if (!value)
+        return false;
+    if (PyModule_AddObject(module, name, value) < 0) {
+        Py_DECREF(value); // PyModule_AddObject steals the reference only on success.
+        return false;
+    }
+    return true;
+}
+
+static bool add_module_int(PyObject* module, const char* name, long value) {
+    return add_module_object(module, name, PyLong_FromLong(value));
+}
+
 inline Value normalize_public_mate_score(const Position& pos, Value result) {
     Value internalMate = pos.checkmate_value();
     if (std::abs(result) == 30000)
@@ -721,60 +735,68 @@ static PyModuleDef pyffishmodule = {
 };
 
 PyMODINIT_FUNC PyInit_pyffish() {
-    PyObject* module;
-
-    module = PyModule_Create(&pyffishmodule);
-    if (module == NULL) {
+    PyObject* module = PyModule_Create(&pyffishmodule);
+    if (!module)
         return NULL;
-    }
-    PyFFishError = PyErr_NewException("pyffish.error", NULL, NULL);
-    Py_INCREF(PyFFishError);
-    PyModule_AddObject(module, "error", PyFFishError);
+    auto fail = [&]() {
+        Py_CLEAR(PyFFishError);
+        Py_DECREF(module);
+        return static_cast<PyObject*>(NULL);
+    };
 
-    // values
-    PyModule_AddObject(module, "VALUE_MATE", PyLong_FromLong(VALUE_MATE));
-    PyModule_AddObject(module, "VALUE_DRAW", PyLong_FromLong(VALUE_DRAW));
-    PyModule_AddObject(module, "VALUE_NONE", PyLong_FromLong(VALUE_NONE));
-    PyModule_AddObject(module, "VALUE_INFINITE", PyLong_FromLong(VALUE_INFINITE));
-    PyModule_AddObject(module, "VALUE_KNOWN_WIN", PyLong_FromLong(VALUE_KNOWN_WIN));
-    PyModule_AddObject(module, "VALUE_MATE_IN_MAX_PLY", PyLong_FromLong(VALUE_MATE_IN_MAX_PLY));
-    PyModule_AddObject(module, "VALUE_MATED_IN_MAX_PLY", PyLong_FromLong(VALUE_MATED_IN_MAX_PLY));
-    PyModule_AddObject(module, "VALUE_TB_WIN_IN_MAX_PLY", PyLong_FromLong(VALUE_TB_WIN_IN_MAX_PLY));
-    PyModule_AddObject(module, "VALUE_TB_LOSS_IN_MAX_PLY", PyLong_FromLong(VALUE_TB_LOSS_IN_MAX_PLY));
+    PyObject* error = PyErr_NewException("pyffish.error", NULL, NULL);
+    if (!add_module_object(module, "error", error))
+        return fail();
+    Py_INCREF(error);
+    PyFFishError = error;
 
-    // notations
-    PyModule_AddObject(module, "NOTATION_DEFAULT", PyLong_FromLong(NOTATION_DEFAULT));
-    PyModule_AddObject(module, "NOTATION_SAN", PyLong_FromLong(NOTATION_SAN));
-    PyModule_AddObject(module, "NOTATION_LAN", PyLong_FromLong(NOTATION_LAN));
-    PyModule_AddObject(module, "NOTATION_SHOGI_HOSKING", PyLong_FromLong(NOTATION_SHOGI_HOSKING));
-    PyModule_AddObject(module, "NOTATION_SHOGI_HODGES", PyLong_FromLong(NOTATION_SHOGI_HODGES));
-    PyModule_AddObject(module, "NOTATION_SHOGI_HODGES_NUMBER", PyLong_FromLong(NOTATION_SHOGI_HODGES_NUMBER));
-    PyModule_AddObject(module, "NOTATION_JANGGI", PyLong_FromLong(NOTATION_JANGGI));
-    PyModule_AddObject(module, "NOTATION_XIANGQI_WXF", PyLong_FromLong(NOTATION_XIANGQI_WXF));
-    PyModule_AddObject(module, "NOTATION_THAI_SAN", PyLong_FromLong(NOTATION_THAI_SAN));
-    PyModule_AddObject(module, "NOTATION_THAI_LAN", PyLong_FromLong(NOTATION_THAI_LAN));
-
-    // validation
-    PyModule_AddObject(module, "FEN_INVALID_AUTOMOVE_COUNT", PyLong_FromLong(FEN::FEN_INVALID_AUTOMOVE_COUNT));
-    PyModule_AddObject(module, "FEN_INVALID_VARIANT", PyLong_FromLong(FEN::FEN_INVALID_VARIANT));
-    PyModule_AddObject(module, "FEN_INVALID_MOVE", PyLong_FromLong(FEN::FEN_INVALID_MOVE));
-    PyModule_AddObject(module, "FEN_INVALID_POINTS_INFO", PyLong_FromLong(FEN::FEN_INVALID_POINTS_INFO));
-    PyModule_AddObject(module, "FEN_INVALID_COUNTING_RULE", PyLong_FromLong(FEN::FEN_INVALID_COUNTING_RULE));
-    PyModule_AddObject(module, "FEN_INVALID_CHECK_COUNT", PyLong_FromLong(FEN::FEN_INVALID_CHECK_COUNT));
-    PyModule_AddObject(module, "FEN_INVALID_PROMOTED_PIECE", PyLong_FromLong(FEN::FEN_INVALID_PROMOTED_PIECE));
-    PyModule_AddObject(module, "FEN_INVALID_NB_PARTS", PyLong_FromLong(FEN::FEN_INVALID_NB_PARTS));
-    PyModule_AddObject(module, "FEN_INVALID_CHAR", PyLong_FromLong(FEN::FEN_INVALID_CHAR));
-    PyModule_AddObject(module, "FEN_TOUCHING_KINGS", PyLong_FromLong(FEN::FEN_TOUCHING_KINGS));
-    PyModule_AddObject(module, "FEN_INVALID_BOARD_GEOMETRY", PyLong_FromLong(FEN::FEN_INVALID_BOARD_GEOMETRY));
-    PyModule_AddObject(module, "FEN_INVALID_POCKET_INFO", PyLong_FromLong(FEN::FEN_INVALID_POCKET_INFO));
-    PyModule_AddObject(module, "FEN_INVALID_SIDE_TO_MOVE", PyLong_FromLong(FEN::FEN_INVALID_SIDE_TO_MOVE));
-    PyModule_AddObject(module, "FEN_INVALID_CASTLING_INFO", PyLong_FromLong(FEN::FEN_INVALID_CASTLING_INFO));
-    PyModule_AddObject(module, "FEN_INVALID_EN_PASSANT_SQ", PyLong_FromLong(FEN::FEN_INVALID_EN_PASSANT_SQ));
-    PyModule_AddObject(module, "FEN_INVALID_NUMBER_OF_KINGS", PyLong_FromLong(FEN::FEN_INVALID_NUMBER_OF_KINGS));
-    PyModule_AddObject(module, "FEN_INVALID_HALF_MOVE_COUNTER", PyLong_FromLong(FEN::FEN_INVALID_HALF_MOVE_COUNTER));
-    PyModule_AddObject(module, "FEN_INVALID_MOVE_COUNTER", PyLong_FromLong(FEN::FEN_INVALID_MOVE_COUNTER));
-    PyModule_AddObject(module, "FEN_EMPTY", PyLong_FromLong(FEN::FEN_EMPTY));
-    PyModule_AddObject(module, "FEN_OK", PyLong_FromLong(FEN::FEN_OK));
+    static const struct {
+        const char* name;
+        long value;
+    } constants[] = {
+        {"VALUE_MATE", VALUE_MATE},
+        {"VALUE_DRAW", VALUE_DRAW},
+        {"VALUE_NONE", VALUE_NONE},
+        {"VALUE_INFINITE", VALUE_INFINITE},
+        {"VALUE_KNOWN_WIN", VALUE_KNOWN_WIN},
+        {"VALUE_MATE_IN_MAX_PLY", VALUE_MATE_IN_MAX_PLY},
+        {"VALUE_MATED_IN_MAX_PLY", VALUE_MATED_IN_MAX_PLY},
+        {"VALUE_TB_WIN_IN_MAX_PLY", VALUE_TB_WIN_IN_MAX_PLY},
+        {"VALUE_TB_LOSS_IN_MAX_PLY", VALUE_TB_LOSS_IN_MAX_PLY},
+        {"NOTATION_DEFAULT", NOTATION_DEFAULT},
+        {"NOTATION_SAN", NOTATION_SAN},
+        {"NOTATION_LAN", NOTATION_LAN},
+        {"NOTATION_SHOGI_HOSKING", NOTATION_SHOGI_HOSKING},
+        {"NOTATION_SHOGI_HODGES", NOTATION_SHOGI_HODGES},
+        {"NOTATION_SHOGI_HODGES_NUMBER", NOTATION_SHOGI_HODGES_NUMBER},
+        {"NOTATION_JANGGI", NOTATION_JANGGI},
+        {"NOTATION_XIANGQI_WXF", NOTATION_XIANGQI_WXF},
+        {"NOTATION_THAI_SAN", NOTATION_THAI_SAN},
+        {"NOTATION_THAI_LAN", NOTATION_THAI_LAN},
+        {"FEN_INVALID_AUTOMOVE_COUNT", FEN::FEN_INVALID_AUTOMOVE_COUNT},
+        {"FEN_INVALID_VARIANT", FEN::FEN_INVALID_VARIANT},
+        {"FEN_INVALID_MOVE", FEN::FEN_INVALID_MOVE},
+        {"FEN_INVALID_POINTS_INFO", FEN::FEN_INVALID_POINTS_INFO},
+        {"FEN_INVALID_COUNTING_RULE", FEN::FEN_INVALID_COUNTING_RULE},
+        {"FEN_INVALID_CHECK_COUNT", FEN::FEN_INVALID_CHECK_COUNT},
+        {"FEN_INVALID_PROMOTED_PIECE", FEN::FEN_INVALID_PROMOTED_PIECE},
+        {"FEN_INVALID_NB_PARTS", FEN::FEN_INVALID_NB_PARTS},
+        {"FEN_INVALID_CHAR", FEN::FEN_INVALID_CHAR},
+        {"FEN_TOUCHING_KINGS", FEN::FEN_TOUCHING_KINGS},
+        {"FEN_INVALID_BOARD_GEOMETRY", FEN::FEN_INVALID_BOARD_GEOMETRY},
+        {"FEN_INVALID_POCKET_INFO", FEN::FEN_INVALID_POCKET_INFO},
+        {"FEN_INVALID_SIDE_TO_MOVE", FEN::FEN_INVALID_SIDE_TO_MOVE},
+        {"FEN_INVALID_CASTLING_INFO", FEN::FEN_INVALID_CASTLING_INFO},
+        {"FEN_INVALID_EN_PASSANT_SQ", FEN::FEN_INVALID_EN_PASSANT_SQ},
+        {"FEN_INVALID_NUMBER_OF_KINGS", FEN::FEN_INVALID_NUMBER_OF_KINGS},
+        {"FEN_INVALID_HALF_MOVE_COUNTER", FEN::FEN_INVALID_HALF_MOVE_COUNTER},
+        {"FEN_INVALID_MOVE_COUNTER", FEN::FEN_INVALID_MOVE_COUNTER},
+        {"FEN_EMPTY", FEN::FEN_EMPTY},
+        {"FEN_OK", FEN::FEN_OK},
+    };
+    for (const auto& constant : constants)
+        if (!add_module_int(module, constant.name, constant.value))
+            return fail();
 
     // initialize stockfish
     pieceMap.init();
