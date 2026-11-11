@@ -197,9 +197,9 @@ print_list() {
 run_one() {
     local suite="$1" engine="$2" variants="$3" log_dir="${4:-}" log="" label="$1"
     [[ -n "${FSX_CASE_FILTER:-}" ]] && label="${suite}/${FSX_CASE_FILTER}"
-    check_engine "$suite" "$engine"
-    check_engine_freshness "$engine"
-    check_prerequisites "$suite"
+    check_engine "$suite" "$engine" || return 1
+    check_engine_freshness "$engine" || return 1
+    check_prerequisites "$suite" || return 1
     local -x FSX_ENGINE_FAMILY="$(fsx_engine_family "$ROOT_DIR" "$engine")"
     export FSX_EXPECTED_BOARD="$(fsx_board_limits "${SUITE_FAMILY[$suite]}")"
     if [[ -n "$log_dir" ]]; then
