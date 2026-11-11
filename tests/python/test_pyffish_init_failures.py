@@ -44,6 +44,11 @@ def main():
     if not sys.platform.startswith("linux"):
         print("pyffish initialization fault-injection checks skipped (requires Linux LD_PRELOAD)")
         return
+    if not sysconfig.get_config_var("Py_ENABLE_SHARED"):
+        # A statically linked interpreter exports its own Py* symbols, which take
+        # precedence over LD_PRELOAD, so the shim cannot interpose the C API calls.
+        print("pyffish initialization fault-injection checks skipped (requires a shared libpython)")
+        return
     build_dir = ROOT / ".local" / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="pyffish-init-", dir=build_dir) as temp:
