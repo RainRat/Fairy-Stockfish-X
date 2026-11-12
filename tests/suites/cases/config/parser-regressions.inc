@@ -1064,6 +1064,7 @@ assert_contains_literal "${bad_none_result_output}" "Variant 'bad-stalemate-none
 bad_extinction_overlap_output=$("${ENGINE}" check "${bad_extinction_overlap_ini}" 2>&1 || true)
 assert_contains_literal "${bad_extinction_overlap_output}" "extinctionPieceTypes overlaps pseudoRoyalTypes with a different result."
 assert_contains_literal "${bad_extinction_overlap_output}" "Variant 'bad-extinction-pseudo-overlap' has invalid configuration. Skipping."
+assert_contains_literal "${bad_extinction_overlap_output}" "Parsing variant: extinction-pseudo-same"
 assert_not_contains_literal "${bad_extinction_overlap_output}" "Variant 'extinction-pseudo-same' has invalid configuration. Skipping."
 
 bad_hopper_minmax_output=$(run_uci "$ENGINE" "$bad_hopper_minmax_ini" "bad-hopper-minmax" </dev/null 2>&1 || true)
