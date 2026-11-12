@@ -423,10 +423,11 @@ unknown_option_ini=$(mktemp)
 bad_royal_betza_ini=$(mktemp)
 bad_unmatched_closer_ini=$(mktemp)
 bad_none_result_ini=$(mktemp)
+bad_extinction_overlap_ini=$(mktemp)
 royal_blast_ini=$(mktemp)
 nonking_ini=$(mktemp)
 wrapped_support_ini=$(mktemp)
-fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_leading_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${bad_hook_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${bad_none_result_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
+fsx_add_exit_cleanup 'rm -f "${tmp_ini}" "${bad_betza_ini}" "${bad_hopper_brace_ini}" "${bad_rider_range_ini}" "${bad_leading_range_ini}" "${bad_rank_wildcard_ini}" "${twochar_hint_ini}" "${bad_hopper_type_ini}" "${bad_hopper_numeric_ini}" "${capture_allowed_only_ini}" "${dropnomate_alias_ini}" "${bad_rider_range_val_ini}" "${bad_tuple_atom_ini}" "${bad_hook_ini}" "${unsupported_bent_rose_modifier_ini}" "${bad_ini_syntax_option_ini}" "${bad_check_counting_ini}" "${bad_hopper_minmax_ini}" "${bad_hopper_entry_ini}" "${bad_piece_value_ini}" "${unknown_option_ini}" "${bad_royal_betza_ini}" "${bad_unmatched_closer_ini}" "${bad_none_result_ini}" "${bad_extinction_overlap_ini}" "${royal_blast_ini}" "${nonking_ini}" "${wrapped_support_ini}"'
 
 cat > "${bad_betza_ini}" <<'INI'
 [custom-piece-missing-betza:chess]
@@ -715,6 +716,20 @@ customPiece1 = a:}
 
 [bad-rider-close:chess]
 customPiece1 = a:]
+INI
+
+cat > "${bad_extinction_overlap_ini}" <<'INI'
+[bad-extinction-pseudo-overlap:chess]
+extinctionValue = loss
+extinctionPieceTypes = p
+pseudoRoyalTypes = p
+pseudoRoyalValue = win
+
+[extinction-pseudo-same:chess]
+extinctionValue = loss
+extinctionPieceTypes = p
+pseudoRoyalTypes = p
+pseudoRoyalValue = loss
 INI
 
 cat > "${dropnomate_alias_ini}" <<'INI'
@@ -1045,6 +1060,11 @@ assert_contains_literal "${bad_none_result_output}" "Variant 'bad-stalemate-none
 assert_contains_literal "${bad_none_result_output}" "Variant 'bad-checkmate-none' has invalid configuration. Skipping."
 assert_contains_literal "${bad_none_result_output}" "Variant 'bad-nfold-none' has invalid configuration. Skipping."
 assert_contains_literal "${bad_none_result_output}" "Variant 'bad-stalemate-none-white' has invalid configuration. Skipping."
+
+bad_extinction_overlap_output=$("${ENGINE}" check "${bad_extinction_overlap_ini}" 2>&1 || true)
+assert_contains_literal "${bad_extinction_overlap_output}" "extinctionPieceTypes overlaps pseudoRoyalTypes with a different result."
+assert_contains_literal "${bad_extinction_overlap_output}" "Variant 'bad-extinction-pseudo-overlap' has invalid configuration. Skipping."
+assert_not_contains_literal "${bad_extinction_overlap_output}" "Variant 'extinction-pseudo-same' has invalid configuration. Skipping."
 
 bad_hopper_minmax_output=$(run_uci "$ENGINE" "$bad_hopper_minmax_ini" "bad-hopper-minmax" </dev/null 2>&1 || true)
 assert_contains_literal "${bad_hopper_minmax_output}" "Invalid hopper range (min > max)"
