@@ -434,6 +434,7 @@ inline bool has_insufficient_material(Color c, const Position& pos) {
 
     // Other win rules
     if (   pos.captures_to_hand()
+        || pos.free_drops()
         || pos.enclosing_drop()
         || pos.count_in_hand(c, ALL_PIECES)
         || (pos.extinction_value() != VALUE_NONE && (pos.extinction_piece_types(c) & ~pos.pseudo_royal_types()))

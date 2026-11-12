@@ -569,6 +569,24 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(optional, (False, sf.VALUE_NONE))
         self.assertIsInstance(sf.has_insufficient_material("chess", fen, []), tuple)
 
+    def test_free_drops_disable_insufficient_material(self):
+        # Free drops mean material can always be replenished, so an empty
+        # board or bare kings are never insufficient material (cf. snort).
+        sf.load_variant_config(
+            "[freedrop-api-material:chess]\n"
+            "pieceDrops = true\n"
+            "freeDrops = true\n"
+            "castling = false\n"
+        )
+        self.assertEqual(sf.has_insufficient_material("go9", sf.start_fen("go9"), []),
+                         (False, False))
+        bare_kings = "4k3/8/8/8/8/8/8/4K3 w - - 0 1"
+        self.assertEqual(sf.has_insufficient_material("freedrop-api-material", bare_kings, []),
+                         (False, False))
+        self.assertEqual(sf.game_result("freedrop-api-material", bare_kings, []), sf.VALUE_NONE)
+        self.assertEqual(sf.has_insufficient_material("chess", bare_kings, []),
+                         (True, True))
+
     def test_two_leg_pieces_disable_insufficient_material_shortcut(self):
         sf.load_variant_config(
             "[lion-api-adjudication:chess]\n"

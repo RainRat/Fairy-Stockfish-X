@@ -225,7 +225,14 @@ Entry* probe(const Position& pos) {
   Key key = pos.pawn_key();
   Entry* e = pos.this_thread()->pawnsTable[key];
 
-  if (e->key == key && !pos.pieces(SHOGI_PAWN))
+  // King shelter also depends on SHOGI_PAWN and SOLDIER
+  // (is_on_semiopen_file), which are not part of the pawn key, so entries
+  // cannot be shared across positions that differ in those pieces. Recompute
+  // whenever any are present. Including them in the key instead (upstream
+  // #1044's approach) would preserve cache hits but requires touching every
+  // pawnKey update site; keep the conservative bypass until that is done
+  // with a recompute-parity harness.
+  if (e->key == key && !pos.pieces(SHOGI_PAWN) && !pos.pieces(SOLDIER))
       return e;
 
   e->key = key;

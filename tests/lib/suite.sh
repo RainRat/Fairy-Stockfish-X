@@ -290,6 +290,7 @@ run_search_evaluation() {
     legacy freeze-evaluation-cache.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy standard-lazy-parity.sh 1m "${ENGINE}" "${VARIANTS}"
     legacy eval-geometry-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
+    legacy eval-pawnkey-stability.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy asymmetric-extinction-evaluation.sh 3m "${ENGINE}"
     legacy checkers-evaluation.sh 2m "${ENGINE}" "${VARIANTS}"
     small_board_optional_legacy nnue-variant-dimension-guard.sh 2m "${VLB_ENGINE:-${SUITE_ROOT}/src/stockfish-vlb}"
