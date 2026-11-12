@@ -2312,12 +2312,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_color_setting("extinctionPieceCount", v->extinctionPieceCount);
     parse_color_setting("extinctionOpponentPieceCount", v->extinctionOpponentPieceCount);
 
-    // Backward compatibility for legacy extinctionPseudoRoyal configs.
-    if (v->extinctionPseudoRoyal && !v->pseudoRoyalTypes)
-    {
-        v->pseudoRoyalTypes = v->extinctionPieceTypes;
-        v->pseudoRoyalCount = v->extinctionPieceCount + 1;
-    }
+    // Legacy extinctionPseudoRoyal folding lives solely in Variant::conclude(),
+    // which runs for parser-created variants (via check_consistency below) and
+    // built-in variants (via VariantMap::add) alike.
     if (!parse_color_setting_piece("flagPiece", v->flagPieceTypes, v)) return false;
     if (!parse_color_setting_piece("flagPieceTypes", v->flagPieceTypes, v)) return false;
     parse_color_setting("flagRegion", v->flagRegion);
