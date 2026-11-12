@@ -776,6 +776,25 @@ Game read_game_pgn(std::string pgn) {
         if (pgn[curIdx] == '*')
           return game;
 
+        // Standard result tokens terminate movetext just like '*'. Without
+        // this, a trailing "1-0" fell into the move-number skip below, and a
+        // later '.' on the same line (e.g. inside a comment) mis-skipped
+        // into a bogus move that failed parsing and discarded the game.
+        {
+          auto at_result_token = [&](const char* token, size_t len) {
+              if (pgn.compare(curIdx, len, token) != 0)
+                  return false;
+              size_t end = curIdx + len;
+              return end >= pgn.size() || end >= lineEnd
+                  || std::isspace(static_cast<unsigned char>(pgn[end]))
+                  || pgn[end] == '*' || pgn[end] == '{' || pgn[end] == '('
+                  || pgn[end] == ')' || pgn[end] == ';' || pgn[end] == '.';
+          };
+          if (at_result_token("1-0", 3) || at_result_token("0-1", 3)
+              || at_result_token("1/2-1/2", 7))
+              return game;
+        }
+
         if (pgn[curIdx] == ';')
           break;
 

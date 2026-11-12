@@ -581,19 +581,32 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
           {
               fen = pos.fen();
               const std::size_t bracket = fen.find(']');
-              if (bracket != std::string::npos)
+              if (bracket == std::string::npos)
+                  // The variant/position serializes no pocket section (e.g.
+                  // no drops), so the holding cannot be represented. Report
+                  // instead of silently keeping a position that disagrees
+                  // with the GUI.
+                  sync_cout << "Error (bad holding): current position has no pocket section." << sync_endl;
+              else
+              {
                   fen.insert(bracket, 1,
                              std::toupper(static_cast<unsigned char>(color)) == 'B'
                                  ? char(std::tolower(static_cast<unsigned char>(pieceType)))
                                  : char(std::toupper(static_cast<unsigned char>(pieceType))));
+                  setboard(fen);
+              }
           }
           else
           {
               std::transform(black_holdings.begin(), black_holdings.end(), black_holdings.begin(),
                              [](unsigned char c) { return char(std::tolower(c)); });
               fen = pos.fen(false, false, 0, white_holdings + black_holdings);
+              if (   (!white_holdings.empty() || !black_holdings.empty())
+                  && fen.find(']') == std::string::npos)
+                  sync_cout << "Error (bad holding): current position has no pocket section." << sync_endl;
+              else
+                  setboard(fen);
           }
-          setboard(fen);
       }
       // restart search
       if (moveAfterSearch)

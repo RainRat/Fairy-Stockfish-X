@@ -330,6 +330,10 @@ void MainThread::search() {
 
   if (optionalRootEnd && !noRootMove && !ponder)
   {
+      // The root position is already optionally terminal (a claimable draw
+      // or optional win). Claim the result instead of sending a move: in
+      // XBoard a bare result adjudicates without a move, which matches the
+      // "send move only when not at game end" flow below.
       RootTerminal terminal = compute_root_terminal(rootPos);
       if (terminal.value >= bestThread->rootMoves[0].score)
       {

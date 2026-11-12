@@ -160,12 +160,16 @@ Common engine commands:
 
 Public FEN entry points validate variant-aware input before loading it. Native
 UCI rejects an invalid `position` command with an `info string` diagnostic and
-does not search a valid prefix of an invalid move list. Python raises
-`ValueError` for invalid FEN and moves. JavaScript board creation and
-`setFen()` throw on invalid FEN. The C API returns `nullptr` from
+then exits with failure instead of continuing: a malformed position command is
+treated as a fatal protocol error, following official Stockfish's strict
+command behavior. It does not search a valid prefix of an invalid move list.
+Python raises `ValueError` for invalid FEN and moves. JavaScript board creation
+and `setFen()` throw on invalid FEN. The C API returns `nullptr` from
 `fsf_new_board()` and `false` from `fsf_set_fen()` for invalid input. Native
 XBoard rejects invalid `setboard` FEN and retains its previous position; an
-illegal XBoard move is reported and skipped.
+illegal XBoard move is reported and skipped. Native XBoard likewise reports
+`Error (bad holding)` and keeps its position when a holding update cannot be
+represented (no pocket section).
 
 Strict FEN checks use the selected variant's board, piece, pocket, promotion,
 castling, and rule-specific fields. They do not impose orthodox chess rules on

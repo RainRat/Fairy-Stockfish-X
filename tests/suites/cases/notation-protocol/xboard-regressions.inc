@@ -143,5 +143,59 @@ $(expect_engine_setup xboard)
 EOF
 )
 echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w"
+echo "${out}" | grep -q "Error (bad holding)"
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant chess\n"
+   send "setboard 4k3/8/8/8/8/8/8/4K3 w - - 0 1\n"
+   send "holding \\[R\\] \\[r\\] bQ\n"
+   expect "Error (bad holding)"
+   send "d\n"
+   expect "Fen: 4k3/8/8/8/8/8/8/4K3 w"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Error (bad holding)"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 w"
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant chess\n"
+   send "setboard 4k3/8/8/8/8/8/8/4K3 w - - 0 1\n"
+   send "holding \\[R\\] \\[r\\]\n"
+   expect "Error (bad holding)"
+   send "d\n"
+   expect "Fen: 4k3/8/8/8/8/8/8/4K3 w"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Error (bad holding)"
+echo "${out}" | grep -q "Fen: 4k3/8/8/8/8/8/8/4K3 w"
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant crazyhouse\n"
+   send "setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[\\] w KQkq - 0 1\n"
+   send "holding \\[Q\\] \\[\\] wP\n"
+   send "d\n"
+   expect -exact "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w"
+if echo "${out}" | grep -q "Error (bad holding)"; then
+  echo "${out}"
+  false
+fi
 
 echo "xboard regression tests passed"

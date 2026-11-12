@@ -64,7 +64,15 @@ void TTEntry::save(Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev) 
 
 void TranspositionTable::resize(size_t mbSize) {
 
+  // Stop any active search on every thread before freeing the table:
+  // helper threads may otherwise probe or write while it is replaced.
+  // This mirrors the UCI setoption stop-and-wait contract (UCI::setoption
+  // stops and waits for the main and helper threads before applying the
+  // option). XBoard memory/option commands and binding set_option calls do
+  // not provide that contract themselves.
+  Threads.stop = true;
   Threads.main()->wait_for_search_finished();
+  Threads.wait_for_search_finished();
 
   aligned_large_pages_free(table);
   table = nullptr;
