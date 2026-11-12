@@ -1641,6 +1641,18 @@ inline bool Position::promotion_allowed(Color c, PieceType pt) const {
       return false;
   if ((var->promotionRequireInHand || var->promotionConsumeInHand) && count_in_hand(c, pt) <= 0)
       return false;
+  // Single-royal policy (mirrors the startFen check): outside extinction or
+  // pseudo-royal coverage, a promotion must not field two actual royals.
+  // Board counts only; no shipped path accumulates pocket royals mid-game.
+  if (var->extinctionValue.get(c) == VALUE_NONE && !var->pseudoRoyalTypes)
+  {
+      const bool distinctKingType = var->kingType != NO_PIECE_TYPE && var->kingType != KING;
+      const int kingsAfter = count(c, KING) + (pt == KING ? 1 : 0);
+      const int kingTypesAfter = !distinctKingType ? kingsAfter
+                               : count(c, var->kingType) + (pt == var->kingType ? 1 : 0);
+      if (kingsAfter > 1 || (kingsAfter == 0 && kingTypesAfter > 1))
+          return false;
+  }
   return true;
 }
 

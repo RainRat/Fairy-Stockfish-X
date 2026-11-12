@@ -193,6 +193,7 @@ run_royal_legality() {
     native adjudication
     native extinction-color
     legacy no-royal-capture.sh 2m "${ENGINE}"
+    legacy racing-royal-capture.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy royal-variant-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy chu-lion-rules.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy pseudoroyal-capture-illegal.sh 2m "${ENGINE}" "${VARIANTS}"
@@ -206,6 +207,7 @@ run_royal_legality() {
     legacy simul-priority.sh 2m "${ENGINE}"
     legacy kings-or-lemmings.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy stationary-castling.sh 2m "${ENGINE}" "${VARIANTS}"
+    legacy custom-royal-castling.sh 2m "${ENGINE}" "${VARIANTS}"
 }
 
 run_captures_effects() {
@@ -230,6 +232,7 @@ run_promotion_drops() {
     legacy capture-promotion-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy drop-regressions.sh 3m "${ENGINE}"
     legacy piece-promotion-gating.sh 3m "${ENGINE}"
+    legacy royal-promotion-ban.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy chained-piece-promotion.sh 2m "${ENGINE}"
     legacy promotion-require-in-prison.sh 2m "${ENGINE}"
     legacy shogi-pawn-drop-mate-split.sh 2m "${ENGINE}"

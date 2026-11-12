@@ -6252,11 +6252,15 @@ bool Position::legal_without_mate_only_probe(Move m) const {
 
   const bool moverIsRoyal = hasRoyal && from == royalSquare;
 
-  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  // Physical kings stay uncapturable whenever royal check legality is
+  // enforced. checking=false only forbids giving check ("you may not give
+  // check", not "kings are non-royal"); allowChecks alone governs whether
+  // kings may remain in check or be captured.
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
   // A two-leg move can capture a royal on the bend: apply the same
   // uncapturable-king rule to the intermediate victim.
-  if (is_two_leg(m) && !allow_checks() && checking_permitted())
+  if (is_two_leg(m) && !allow_checks())
   {
       Square viaForKing = via_sq(m);
       if (viaForKing != to && (pieces(them) & viaForKing) && type_of(piece_on(viaForKing)) == KING)
@@ -6914,6 +6918,7 @@ bool Position::legal_without_mate_only_probe(Move m) const {
       // Spell Chess uses a COMMONER as castling king while still requiring
       // king-like castling safety checks.
       bool royalLikeCastler = type_of(piece_on(from)) == KING
+                           || type_of(piece_on(from)) == royal_piece_type(us)
                            || (potions_enabled() && type_of(piece_on(from)) == castling_king_piece(us));
       if (!royalLikeCastler)
           return !violates_same_player_board_repetition(m);
@@ -7507,9 +7512,11 @@ bool Position::pseudo_legal(const Move m) const {
   if ((anti_royal_self_capture_only() && (anti_royal_types() & piece_set(type_of(pc)))) && (pieces(them) & to) && !is_self_destruct(m))
       return false;
 
-  if (!allow_checks() && checking_permitted() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
+  // See legal(): kings stay uncapturable whenever royal check legality is
+  // enforced; allowChecks alone governs capturability.
+  if (!allow_checks() && (pieces(them) & to) && type_of(piece_on(to)) == KING)
       return false;
-  if (is_two_leg(m) && !allow_checks() && checking_permitted())
+  if (is_two_leg(m) && !allow_checks())
   {
       Square viaForKing = via_sq(m);
       if (viaForKing != to && (pieces(them) & viaForKing) && type_of(piece_on(viaForKing)) == KING)
