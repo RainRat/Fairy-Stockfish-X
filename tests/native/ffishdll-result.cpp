@@ -212,6 +212,34 @@ int main() {
               "DLL optional draw took precedence over stalemate loss");
         fsf_free_board(board);
 
+        // Boards share global piece/attack tables; using a board refreshes
+        // them for its own variant, so interleaved boards must not corrupt
+        // each other (custom knight moves vanished after a plain chess
+        // board existed). Mirrors the ffishjs cross-board regression test.
+        check(fsf_try_load_variant_config(
+                  "[dll-crossknight:chess]\n"
+                  "customPiece1 = n:K\n") == 1,
+              "failed to register cross-board knight variant");
+        {
+            const char* knightFen = "4k3/8/8/8/8/1N6/8/4K3 w - - 0 1";
+            fsf_board custom = fsf_new_board("dll-crossknight", knightFen, false);
+            check(custom != nullptr, "DLL failed to create custom-knight board");
+            const std::string before = take_string(fsf_legal_moves(custom));
+            check(before.find("b3c4") != std::string::npos
+                      && before.find("b3a5") == std::string::npos,
+                  "custom knight did not move like a king");
+            fsf_board chessBoard = fsf_new_board("chess", knightFen, false);
+            check(chessBoard != nullptr, "DLL failed to create chess board");
+            const std::string chessMoves = take_string(fsf_legal_moves(chessBoard));
+            check(chessMoves.find("b3a5") != std::string::npos
+                      && chessMoves.find("b3c4") == std::string::npos,
+                  "chess knight moves corrupted by custom-knight board");
+            check(take_string(fsf_legal_moves(custom)) == before,
+                  "custom-knight moves corrupted by chess board creation");
+            fsf_free_board(chessBoard);
+            fsf_free_board(custom);
+        }
+
         std::atomic<bool> start{false};
         std::atomic<bool> failed{false};
         auto wait_for_start = [&] {

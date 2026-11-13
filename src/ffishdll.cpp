@@ -111,6 +111,7 @@ public:
   bool valid() const { return v != nullptr; }
 
   std::string legal_moves() {
+    sync_tables();
     std::string moves;
     for (const ExtMove& move : MoveList<LEGAL>(pos)) {
       moves += UCI::move(pos, move);
@@ -121,6 +122,7 @@ public:
   }
 
   std::string legal_moves_san() {
+    sync_tables();
     std::string movesSan;
     for (const ExtMove& move : MoveList<LEGAL>(pos)) {
       movesSan += SAN::move_to_san(pos, move, NOTATION_SAN);
@@ -130,9 +132,13 @@ public:
     return movesSan;
   }
 
-  int number_legal_moves() const { return MoveList<LEGAL>(pos).size(); }
+  int number_legal_moves() const {
+    sync_tables();
+    return MoveList<LEGAL>(pos).size();
+  }
 
   bool push(std::string uciMove) {
+    sync_tables();
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
       return false;
@@ -143,6 +149,7 @@ public:
   bool push_san(std::string sanMove) { return push_san(sanMove, NOTATION_SAN); }
 
   bool push_san(std::string sanMove, Notation notation) {
+    sync_tables();
     Move foundMove = MOVE_NONE;
     for (const ExtMove& move : MoveList<LEGAL>(pos)) {
       if (sanMove == SAN::move_to_san(pos, move, notation)) {
@@ -157,6 +164,7 @@ public:
   }
 
   bool pop() {
+    sync_tables();
     if (moveStack.empty() || states->size() <= 1)
       return false;
     pos.undo_move(moveStack.back());
@@ -170,9 +178,18 @@ public:
 
   bool is_960() const { return is960; }
 
-  std::string fen() const { return pos.fen(); }
-  std::string fen(bool showPromoted) const { return pos.fen(false, showPromoted); }
-  std::string fen(bool showPromoted, int countStarted) const { return pos.fen(false, showPromoted, countStarted); }
+  std::string fen() const {
+    sync_tables();
+    return pos.fen();
+  }
+  std::string fen(bool showPromoted) const {
+    sync_tables();
+    return pos.fen(false, showPromoted);
+  }
+  std::string fen(bool showPromoted, int countStarted) const {
+    sync_tables();
+    return pos.fen(false, showPromoted, countStarted);
+  }
 
   bool set_fen(std::string fenStr) {
     if (FEN::validate_fen(fenStr, v, is960) != FEN::FEN_OK)
@@ -187,6 +204,7 @@ public:
   std::string san_move(std::string uciMove) { return san_move(uciMove, NOTATION_SAN); }
 
   std::string san_move(std::string uciMove, Notation notation) {
+    sync_tables();
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
       return "";
@@ -194,6 +212,7 @@ public:
   }
 
   std::string variation_san(std::string uciMoves, Notation notation, bool moveNumbers) {
+    sync_tables();
     std::stringstream ss(uciMoves);
     std::vector<Move> moves;
     std::string variationSan;
@@ -248,22 +267,37 @@ public:
     return variationSan;
   }
 
-  bool turn() const { return !pos.side_to_move(); }
-  int fullmove_number() const { return pos.game_ply() / 2 + 1; }
-  int halfmove_clock() const { return pos.rule50_count(); }
-  int game_ply() const { return pos.game_ply(); }
+  bool turn() const {
+    sync_tables();
+    return !pos.side_to_move();
+  }
+  int fullmove_number() const {
+    sync_tables();
+    return pos.game_ply() / 2 + 1;
+  }
+  int halfmove_clock() const {
+    sync_tables();
+    return pos.rule50_count();
+  }
+  int game_ply() const {
+    sync_tables();
+    return pos.game_ply();
+  }
 
   bool has_insufficient_material(bool turnColor) const {
+    sync_tables();
     return Stockfish::has_insufficient_material(turnColor ? WHITE : BLACK, pos);
   }
 
   bool is_insufficient_material() const {
+    sync_tables();
     if (pos.count<KING>() == 0 && pos.king_type() == NO_PIECE_TYPE && !pos.pseudo_royal_types() && !pos.anti_royal_types())
       return false;
     return Stockfish::has_insufficient_material(WHITE, pos) && Stockfish::has_insufficient_material(BLACK, pos);
   }
 
   bool is_game_over(bool claim_draw) const {
+    sync_tables();
     Value result;
     if (pos.is_immediate_game_end(result))
       return true;
@@ -275,6 +309,7 @@ public:
   }
 
   std::string result(bool claim_draw) const {
+    sync_tables();
     Value res;
     bool gameEnd = pos.is_immediate_game_end(res);
     if (!gameEnd && is_insufficient_material()) {
@@ -302,6 +337,7 @@ public:
   }
 
   std::string checked_pieces() const {
+    sync_tables();
     Bitboard checked = Stockfish::checked(pos);
     std::string squares;
     while (checked) {
@@ -314,6 +350,7 @@ public:
   }
 
   std::string evasion_checked_pieces() const {
+    sync_tables();
     Bitboard checked = Stockfish::evasion_checked(pos);
     std::string squares;
     while (checked) {
@@ -325,16 +362,27 @@ public:
     return squares;
   }
 
-  bool is_check() const { return Stockfish::checked(pos); }
-  bool is_real_check() const { return pos.evasion_checkers(); }
-  bool is_bikjang() const { return pos.bikjang(); }
+  bool is_check() const {
+    sync_tables();
+    return Stockfish::checked(pos);
+  }
+  bool is_real_check() const {
+    sync_tables();
+    return pos.evasion_checkers();
+  }
+  bool is_bikjang() const {
+    sync_tables();
+    return pos.bikjang();
+  }
   bool is_capture(std::string uciMove) const {
+    sync_tables();
     bool result = false;
     try_is_capture(uciMove, result);
     return result;
   }
 
   bool try_is_capture(std::string uciMove, bool& result) const {
+    sync_tables();
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
       return false;
@@ -343,6 +391,7 @@ public:
   }
 
   std::string move_stack() const {
+    sync_tables();
     std::string moves;
     for (const auto& uci : moveStackUCI) {
       moves += uci;
@@ -391,6 +440,7 @@ public:
   }
 
   std::string pocket(bool color) {
+    sync_tables();
     const Color c = Color(!color);
     std::string pocketStr;
     for (PieceType pt = KING; pt >= PAWN; --pt)
@@ -400,6 +450,7 @@ public:
   }
 
   std::string to_string() {
+    sync_tables();
     std::string stringBoard;
     for (Rank r = pos.max_rank(); r >= RANK_1; --r) {
       for (File f = FILE_A; f <= pos.max_file(); ++f) {
@@ -415,6 +466,7 @@ public:
   }
 
   std::string to_verbose_string() {
+    sync_tables();
     std::stringstream ss;
     operator<<(ss, pos);
     return ss.str();
@@ -429,6 +481,15 @@ public:
   }
 
 private:
+  // Rebuild global piece/attack tables for this board's variant (see the
+  // ffishjs twin). Table writes serialize with each other through the mutex;
+  // concurrent readers from other boards block briefly and then observe
+  // tables for their own variant, which sync_tables() re-establishes first.
+  void sync_tables() const {
+    std::lock_guard<std::mutex> lock(variant_state_mutex);
+    UCI::init_variant(v);
+  }
+
   void resetStates() { states = StateListPtr(new std::deque<StateInfo>(1)); }
 
   void do_move(Move move, const std::string& uciMove) {

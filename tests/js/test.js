@@ -1406,3 +1406,25 @@ describe('Huge-board placement variants', function () {
     } finally { nogo.delete(); }
   });
 });
+
+describe('cross-board global table stability', function () {
+  it('keeps per-variant tables correct across interleaved boards', function () {
+    // Boards share global piece/attack tables; using a board must refresh
+    // them for its own variant, or a later board silently corrupts earlier
+    // ones (custom knight moves vanished after a plain chess board existed).
+    ffish.loadVariantConfig('[js-crossknight:chess]\ncustomPiece1 = n:K\n');
+    const fen = '4k3/8/8/8/8/1N6/8/4K3 w - - 0 1';
+    const custom = new ffish.Board('js-crossknight', fen);
+    try {
+      const before = custom.legalMoves();
+      chai.expect(before.split(' ')).to.include('b3c4');
+      chai.expect(before.split(' ')).to.not.include('b3a5');
+      const chess = new ffish.Board('chess', fen);
+      try {
+        chai.expect(chess.legalMoves().split(' ')).to.include('b3a5');
+        chai.expect(chess.legalMoves().split(' ')).to.not.include('b3c4');
+        chai.expect(custom.legalMoves()).to.equal(before);
+      } finally { chess.delete(); }
+    } finally { custom.delete(); }
+  });
+});
