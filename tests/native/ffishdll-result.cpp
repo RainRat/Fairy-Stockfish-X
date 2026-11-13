@@ -236,6 +236,18 @@ int main() {
                   "chess knight moves corrupted by custom-knight board");
             check(take_string(fsf_legal_moves(custom)) == before,
                   "custom-knight moves corrupted by chess board creation");
+
+            // set_fen must rebuild cached checkers/state with the board's
+            // own tables: with chess tables current, the custom knight's
+            // check would be cached as a non-check. Re-stale the tables
+            // with a chess query first (the equality check above re-synced
+            // the custom tables).
+            check(take_string(fsf_legal_moves(chessBoard)) == chessMoves,
+                  "chess moves changed across board interleaving");
+            check(fsf_set_fen(custom, "4k3/8/8/8/2K5/1n6/8/8 w - - 0 1"),
+                  "DLL rejected a valid custom-knight FEN");
+            check(fsf_is_real_check(custom),
+                  "custom knight on b3 checking the king on c4 was cached as non-check");
             fsf_free_board(chessBoard);
             fsf_free_board(custom);
         }
@@ -246,6 +258,42 @@ int main() {
             while (!start.load(std::memory_order_acquire))
                 std::this_thread::yield();
         };
+        // Concurrent move generation on two pre-created boards of variants
+        // whose knight movements differ must observe each board's own
+        // tables: refresh and consumption are serialized by the mutex.
+        {
+            const char* knightFen = "4k3/8/8/8/8/1N6/8/4K3 w - - 0 1";
+            fsf_board customBoard = fsf_new_board("dll-crossknight", knightFen, false);
+            fsf_board chessBoard = fsf_new_board("chess", knightFen, false);
+            check(customBoard != nullptr && chessBoard != nullptr,
+                  "DLL failed to pre-create boards for the concurrency test");
+            std::thread customReader([&] {
+                wait_for_start();
+                for (int i = 0; i < 200; ++i) {
+                    const std::string moves = take_string(fsf_legal_moves(customBoard));
+                    if (moves.find("b3c4") == std::string::npos
+                        || moves.find("b3a5") != std::string::npos)
+                        failed.store(true, std::memory_order_relaxed);
+                }
+            });
+            std::thread chessReader([&] {
+                wait_for_start();
+                for (int i = 0; i < 200; ++i) {
+                    const std::string moves = take_string(fsf_legal_moves(chessBoard));
+                    if (moves.find("b3a5") == std::string::npos
+                        || moves.find("b3c4") != std::string::npos)
+                        failed.store(true, std::memory_order_relaxed);
+                }
+            });
+            start.store(true, std::memory_order_release);
+            customReader.join();
+            chessReader.join();
+            check(!failed.load(std::memory_order_relaxed),
+                  "concurrent move generation observed another board's tables");
+            fsf_free_board(chessBoard);
+            fsf_free_board(customBoard);
+            start.store(false, std::memory_order_release);
+        }
         std::thread optionSetter([&] {
             wait_for_start();
             for (int i = 0; i < 200; ++i)

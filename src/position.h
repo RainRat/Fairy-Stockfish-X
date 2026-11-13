@@ -49,6 +49,14 @@ constexpr int MAX_PUSH_SNAPSHOT = 32;
 
 extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
 
+// Piece-square Zobrist keys (defined in position.cpp). Exposed for probe
+// sites that fold piece placement into a hash identity without routing
+// through the incremental key update paths (e.g. Pawns::probe folding
+// SHOGI_PAWN/SOLDIER into the pawn-table key).
+namespace Zobrist {
+extern Key psq[PIECE_NB][SQUARE_NB];
+}
+
 struct SpellContext {
   Bitboard freezeExtra = Bitboard(0);
   Bitboard jumpRemoved = Bitboard(0);

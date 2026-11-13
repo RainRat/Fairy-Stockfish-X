@@ -44,7 +44,7 @@ void initialize_stockfish() {
 }
 
 std::once_flag stockfish_init_flag;
-std::mutex variant_state_mutex;
+std::recursive_mutex variant_state_mutex;
 
 inline void ensure_stockfish_initialized() {
   std::call_once(stockfish_init_flag, []() { initialize_stockfish(); });
@@ -108,9 +108,13 @@ public:
   Board(std::string uciVariant) : Board(uciVariant, "", false) {}
   Board(std::string uciVariant, std::string fen) : Board(uciVariant, fen, false) {}
   Board(std::string uciVariant, std::string fen, bool is960) { init(uciVariant, fen, is960); }
-  bool valid() const { return v != nullptr; }
+  bool valid() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
+    return v != nullptr;
+  }
 
   std::string legal_moves() {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     std::string moves;
     for (const ExtMove& move : MoveList<LEGAL>(pos)) {
@@ -122,6 +126,7 @@ public:
   }
 
   std::string legal_moves_san() {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     std::string movesSan;
     for (const ExtMove& move : MoveList<LEGAL>(pos)) {
@@ -133,11 +138,13 @@ public:
   }
 
   int number_legal_moves() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return MoveList<LEGAL>(pos).size();
   }
 
   bool push(std::string uciMove) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
@@ -146,9 +153,13 @@ public:
     return true;
   }
 
-  bool push_san(std::string sanMove) { return push_san(sanMove, NOTATION_SAN); }
+  bool push_san(std::string sanMove) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
+    return push_san(sanMove, NOTATION_SAN);
+  }
 
   bool push_san(std::string sanMove, Notation notation) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     Move foundMove = MOVE_NONE;
     for (const ExtMove& move : MoveList<LEGAL>(pos)) {
@@ -164,6 +175,7 @@ public:
   }
 
   bool pop() {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     if (moveStack.empty() || states->size() <= 1)
       return false;
@@ -174,24 +186,35 @@ public:
     return true;
   }
 
-  void reset() { set_fen(v->startFen); }
+  void reset() {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
+    set_fen(v->startFen);
+  }
 
-  bool is_960() const { return is960; }
+  bool is_960() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
+    return is960;
+  }
 
   std::string fen() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.fen();
   }
   std::string fen(bool showPromoted) const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.fen(false, showPromoted);
   }
   std::string fen(bool showPromoted, int countStarted) const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.fen(false, showPromoted, countStarted);
   }
 
   bool set_fen(std::string fenStr) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
+    sync_tables();
     if (FEN::validate_fen(fenStr, v, is960) != FEN::FEN_OK)
       return false;
     resetStates();
@@ -201,9 +224,13 @@ public:
     return true;
   }
 
-  std::string san_move(std::string uciMove) { return san_move(uciMove, NOTATION_SAN); }
+  std::string san_move(std::string uciMove) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
+    return san_move(uciMove, NOTATION_SAN);
+  }
 
   std::string san_move(std::string uciMove, Notation notation) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
@@ -212,6 +239,7 @@ public:
   }
 
   std::string variation_san(std::string uciMoves, Notation notation, bool moveNumbers) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     std::stringstream ss(uciMoves);
     std::vector<Move> moves;
@@ -268,28 +296,34 @@ public:
   }
 
   bool turn() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return !pos.side_to_move();
   }
   int fullmove_number() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.game_ply() / 2 + 1;
   }
   int halfmove_clock() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.rule50_count();
   }
   int game_ply() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.game_ply();
   }
 
   bool has_insufficient_material(bool turnColor) const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return Stockfish::has_insufficient_material(turnColor ? WHITE : BLACK, pos);
   }
 
   bool is_insufficient_material() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     if (pos.count<KING>() == 0 && pos.king_type() == NO_PIECE_TYPE && !pos.pseudo_royal_types() && !pos.anti_royal_types())
       return false;
@@ -297,6 +331,7 @@ public:
   }
 
   bool is_game_over(bool claim_draw) const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     Value result;
     if (pos.is_immediate_game_end(result))
@@ -309,6 +344,7 @@ public:
   }
 
   std::string result(bool claim_draw) const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     Value res;
     bool gameEnd = pos.is_immediate_game_end(res);
@@ -337,6 +373,7 @@ public:
   }
 
   std::string checked_pieces() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     Bitboard checked = Stockfish::checked(pos);
     std::string squares;
@@ -350,6 +387,7 @@ public:
   }
 
   std::string evasion_checked_pieces() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     Bitboard checked = Stockfish::evasion_checked(pos);
     std::string squares;
@@ -363,18 +401,22 @@ public:
   }
 
   bool is_check() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return Stockfish::checked(pos);
   }
   bool is_real_check() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.evasion_checkers();
   }
   bool is_bikjang() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     return pos.bikjang();
   }
   bool is_capture(std::string uciMove) const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     bool result = false;
     try_is_capture(uciMove, result);
@@ -382,6 +424,7 @@ public:
   }
 
   bool try_is_capture(std::string uciMove, bool& result) const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     const Move move = UCI::to_move(pos, uciMove);
     if (is_move_none<true>(move, uciMove, pos))
@@ -391,6 +434,7 @@ public:
   }
 
   std::string move_stack() const {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     std::string moves;
     for (const auto& uci : moveStackUCI) {
@@ -402,11 +446,13 @@ public:
   }
 
   void push_moves(std::string uciMoves) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     int applied;
     push_moves_checked(uciMoves, applied);
   }
 
   bool push_moves_checked(std::string uciMoves, int& applied) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     applied = 0;
     std::stringstream ss(uciMoves);
     std::string uciMove;
@@ -421,11 +467,13 @@ public:
   }
 
   void push_san_moves(std::string sanMoves, Notation notation = NOTATION_SAN) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     int applied;
     push_san_moves_checked(sanMoves, notation, applied);
   }
 
   bool push_san_moves_checked(std::string sanMoves, Notation notation, int& applied) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     applied = 0;
     std::stringstream ss(sanMoves);
     std::string sanMove;
@@ -440,6 +488,7 @@ public:
   }
 
   std::string pocket(bool color) {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     const Color c = Color(!color);
     std::string pocketStr;
@@ -450,6 +499,7 @@ public:
   }
 
   std::string to_string() {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     std::string stringBoard;
     for (Rank r = pos.max_rank(); r >= RANK_1; --r) {
@@ -466,6 +516,7 @@ public:
   }
 
   std::string to_verbose_string() {
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     sync_tables();
     std::stringstream ss;
     operator<<(ss, pos);
@@ -473,7 +524,7 @@ public:
   }
 
   std::string variant() {
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     for (auto it = variants.begin(); it != variants.end(); ++it)
       if (it->second == v)
         return it->first;
@@ -482,11 +533,16 @@ public:
 
 private:
   // Rebuild global piece/attack tables for this board's variant (see the
-  // ffishjs twin). Table writes serialize with each other through the mutex;
-  // concurrent readers from other boards block briefly and then observe
-  // tables for their own variant, which sync_tables() re-establishes first.
+  // ffishjs twin). Every public Board method holds variant_state_mutex for
+  // its whole body, so refresh and table consumption are atomic against
+  // other threads' boards: a thread cannot rewrite the tables (or free
+  // PieceInfo via PieceMap::clear_all) while another thread generates
+  // moves. The mutex is recursive because Board methods delegate to each
+  // other (reset->set_fen, is_game_over/result->is_insufficient_material,
+  // variation_san->fullmove_number, is_capture->try_is_capture,
+  // push_*->push). Private helpers below run under the caller's lock.
   void sync_tables() const {
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     UCI::init_variant(v);
   }
 
@@ -501,7 +557,7 @@ private:
 
   void init(std::string uciVariant, std::string fen, bool is960Flag) {
     ensure_stockfish_initialized();
-    std::lock_guard<std::mutex> lock(variant_state_mutex);
+    std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     v = get_variant(uciVariant);
     if (!v)
       return;
@@ -525,7 +581,7 @@ std::string info() { return engine_info(); }
 template <typename T>
 bool set_option(std::string name, T value) {
   ensure_stockfish_initialized();
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   if (!Options.count(name))
     return false;
   Options[name] = value;
@@ -535,7 +591,7 @@ bool set_option(std::string name, T value) {
 std::string available_variants() {
   ensure_stockfish_initialized();
   std::string available;
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   for (const std::string& variant : variants.get_keys()) {
     available += variant;
     available += DELIM;
@@ -547,7 +603,7 @@ std::string available_variants() {
 int try_load_variant_config(std::string variantInitContent) {
   std::stringstream ss(variantInitContent);
   ensure_stockfish_initialized();
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   const size_t before = variants.size();
   variants.parse_istream<false>(ss);
   Options["UCI_Variant"].set_combo(variants.get_keys());
@@ -561,21 +617,21 @@ void load_variant_config(std::string variantInitContent) {
 
 bool captures_to_hand(std::string uciVariant) {
   ensure_stockfish_initialized();
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   return v && v->captureType != MOVE_OUT;
 }
 
 std::string starting_fen(std::string uciVariant) {
   ensure_stockfish_initialized();
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   return v ? v->startFen : "";
 }
 
 int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
   ensure_stockfish_initialized();
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   if (!v)
       return FEN::FEN_INVALID_VARIANT;
@@ -584,7 +640,7 @@ int validate_fen(std::string fen, std::string uciVariant, bool chess960) {
 
 int validate_position(std::string fen, std::string uciVariant, std::string uciMoves, bool chess960) {
   ensure_stockfish_initialized();
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   const Variant* v = get_variant(uciVariant);
   if (!v)
       return FEN::FEN_INVALID_VARIANT;
@@ -705,7 +761,7 @@ FSF_API const char* fsf_board_variant(fsf_board b) { return to_cstr(b ? static_c
 FSF_API const char* fsf_available_variants() { return to_cstr(ffish::available_variants()); }
 FSF_API const char* fsf_variant_info(const char* variant) {
   ensure_stockfish_initialized();
-  std::lock_guard<std::mutex> lock(variant_state_mutex);
+  std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
   return to_cstr(variant_info_json(variant ? variant : ""));
 }
 FSF_API void fsf_load_variant_config(const char* content) {
