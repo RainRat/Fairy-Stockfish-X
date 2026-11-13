@@ -55,6 +55,10 @@ extern Square JumpMidpoint[SQUARE_NB][SQUARE_NB];
 // SHOGI_PAWN/SOLDIER into the pawn-table key).
 namespace Zobrist {
 extern Key psq[PIECE_NB][SQUARE_NB];
+// Separators folded into the pawn-table probe key for state that affects
+// the cached score but is not part of the pawn key (per-color "no
+// non-pawn pieces" doubling flag).
+extern Key pawnBare[COLOR_NB];
 }
 
 struct SpellContext {

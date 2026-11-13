@@ -900,6 +900,7 @@ namespace Zobrist {
   Key lionTrade[SQUARE_NB];
   Key castling[CASTLING_RIGHT_NB];
   Key side, noPawns;
+  Key pawnBare[COLOR_NB];
   Key inHand[PIECE_NB][SQUARE_NB];
   Key inPrison[PIECE_NB][SQUARE_NB];
   Key checks[COLOR_NB][CHECKS_NB];
@@ -1584,6 +1585,9 @@ void Position::init() {
 
   Zobrist::side = rng.rand<Key>();
   Zobrist::noPawns = rng.rand<Key>();
+
+  for (Color c : {WHITE, BLACK})
+      Zobrist::pawnBare[c] = rng.rand<Key>();
 
   for (Color c : {WHITE, BLACK})
       for (int n = 0; n < CHECKS_NB; ++n)

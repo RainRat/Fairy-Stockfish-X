@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Pawn-hash entries must not leak king shelter across positions that differ
-# only in SHOGI_PAWN/SOLDIER placement (upstream #1044). The key covers
-# ordinary pawns; shelter also reads the other two types, so entries must
-# not be shared when they are present. This test evaluates B after A in one
-# session (shared cache) and B alone in a fresh session, and requires the
-# same King safety line both times.
+# Pawn-hash entries must not leak unevaluated state across positions sharing
+# the pawn key (upstream #1044). The key covers ordinary pawns, but king
+# shelter also reads SHOGI_PAWN/SOLDIER and the cached score doubles when a
+# side has only pawns, so the probe key must include those pieces' placement
+# and a per-color bare flag. This test evaluates B after A in one session
+# (shared cache) and B alone in a fresh session, and requires the same
+# evaluated row both times.
 
 set -euo pipefail
 
@@ -20,17 +21,13 @@ FENB='rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P3P1P/1C5C1/9/RNBAKABNR w - - 0 1'
 FENC='rnbkaabnr/9/1c5c1/4P4/9/9/9/1C5C1/9/RNBAKABNR w - - 0 1'
 FEND='rnbkaabnr/9/1c5c1/9/9/9/9/1C5C1/9/RNBAKABNR w - - 0 1'
 
-king_safety_last() {
-  grep -i 'king safety' | tail -n 1 | tr -s ' '
-}
-
 check_pair() {
-  local first="$1" second="$2" label="$3"
+  local first="$1" second="$2" label="$3" variant="${4:-xiangqi}" row_pat="${5:-king safety}"
   local sequential fresh sequential_b fresh_b
   sequential=$(cat <<CMDS | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANTS}
-setoption name UCI_Variant value xiangqi
+setoption name UCI_Variant value ${variant}
 setoption name Use NNUE value false
 position fen ${first}
 eval
@@ -39,26 +36,26 @@ eval
 quit
 CMDS
 )
-  if grep -q "unknown variant 'xiangqi'" <<<"${sequential}"; then
-    fsx_test_note_skip "xiangqi is unavailable in this engine build"
+  if grep -q "unknown variant '${variant}'" <<<"${sequential}"; then
+    fsx_test_note_skip "${variant} is unavailable in this engine build"
     exit 0
   fi
-  sequential_b=$(king_safety_last <<<"${sequential}")
+  sequential_b=$(grep -i "${row_pat}" <<<"${sequential}" | tail -n 1 | tr -s ' ')
 
   fresh=$(cat <<CMDS | "${ENGINE}"
 uci
 setoption name VariantPath value ${VARIANTS}
-setoption name UCI_Variant value xiangqi
+setoption name UCI_Variant value ${variant}
 setoption name Use NNUE value false
 position fen ${second}
 eval
 quit
 CMDS
 )
-  fresh_b=$(king_safety_last <<<"${fresh}")
+  fresh_b=$(grep -i "${row_pat}" <<<"${fresh}" | tail -n 1 | tr -s ' ')
 
   if [[ -z "${sequential_b}" || -z "${fresh_b}" ]]; then
-    echo "eval pawn key stability test produced no King safety line (${label})" >&2
+    echo "eval pawn key stability test produced no '${row_pat}' line (${label})" >&2
     exit 1
   fi
   if [[ "${sequential_b}" != "${fresh_b}" ]]; then
@@ -69,5 +66,13 @@ CMDS
 
 check_pair "${FENA}" "${FENB}" "soldier-placement"
 check_pair "${FENC}" "${FEND}" "soldier-disappears"
+
+# The cached "pawns only" doubling depends on non-pawn absence, which the
+# pawn key also omits. White drops from pawns+knight to pawns only with an
+# identical pawn skeleton; the bare position must not reuse the undoubled
+# entry (horde white has no king, so the bare condition is reachable).
+check_pair 'r3k3/8/8/8/4N3/8/PPPPPPPP/8 w - - 0 1' \
+          'r3k3/8/8/8/8/8/PPPPPPPP/8 w - - 0 1' \
+          "pawns-only-doubling" "horde" "| *pawns |"
 
 echo "eval pawn key stability tests passed"

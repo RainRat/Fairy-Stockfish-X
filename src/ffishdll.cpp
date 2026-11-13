@@ -44,6 +44,13 @@ void initialize_stockfish() {
 }
 
 std::once_flag stockfish_init_flag;
+// Process-wide lock for global variant state (piece maps, attack tables,
+// variant registry). Every public Board method holds it for its whole body
+// so a table refresh and the consumption of those tables are atomic against
+// other threads' boards. Throughput note: this serializes all Board calls,
+// including same-variant boards that would never trigger a rebuild. That is
+// the simplest safe discipline; do not narrow the lock scope (e.g. locking
+// only the refresh) without re-proving cross-variant exclusion.
 std::recursive_mutex variant_state_mutex;
 
 inline void ensure_stockfish_initialized() {
@@ -541,6 +548,8 @@ private:
   // other (reset->set_fen, is_game_over/result->is_insufficient_material,
   // variation_san->fullmove_number, is_capture->try_is_capture,
   // push_*->push). Private helpers below run under the caller's lock.
+  // sync_tables() re-locks defensively: harmless under the recursive mutex,
+  // and keeps the refresh safe if a future caller forgets the outer lock.
   void sync_tables() const {
     std::lock_guard<std::recursive_mutex> lock(variant_state_mutex);
     UCI::init_variant(v);

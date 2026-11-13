@@ -537,7 +537,8 @@ private:
   // new variant configs) would otherwise leave stale tables behind for this
   // board. Cheap when already current (UCI::init_variant caches the variant).
   // Single-threaded wasm build: no locking needed here; the ffishdll twin
-  // takes variant_state_mutex in its own sync_tables().
+  // instead holds its process-wide recursive mutex for the whole body of
+  // every public Board method (refresh plus consumption must be atomic).
   void sync_tables() const { UCI::init_variant(v); }
 
   void resetStates() {

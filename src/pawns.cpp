@@ -227,12 +227,18 @@ Entry* probe(const Position& pos) {
   // cannot be shared across positions that differ in those pieces. Fold
   // their placement into the probe key (upstream #1044). Probe-local, so no
   // pawnKey update site needs to change; positions without those pieces
-  // keep the exact historical key and share entries as before.
+  // keep the exact historical key and share entries as before. Likewise the
+  // "pawns only" doubling in evaluate<Us>() depends on non-pawn absence,
+  // which the pawn key also omits: fold a per-color bare flag so bare and
+  // non-bare pawn layouts never share an entry.
   Key key = pos.pawn_key();
   for (PieceType pt : { SHOGI_PAWN, SOLDIER })
       for (Color c : { WHITE, BLACK })
           for (Bitboard b = pos.pieces(c, pt); b; )
               key ^= Zobrist::psq[make_piece(c, pt)][pop_lsb(b)];
+  for (Color c : { WHITE, BLACK })
+      if (pos.count<ALL_PIECES>(c) == pos.count<PAWN>(c))
+          key ^= Zobrist::pawnBare[c];
 
   Entry* e = pos.this_thread()->pawnsTable[key];
 
