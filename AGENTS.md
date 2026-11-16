@@ -1,13 +1,13 @@
 # AGENTS.md — Fairy-Stockfish-X Guide
 
-Fairy-Stockfish-X is a Fairy-Stockfish fork for testing experimental chess variants. Prefer `src/variants.ini` settings over one-off C++ variant hacks.
+Fairy-Stockfish-X is a Fairy-Stockfish fork for testing experimental chess variants. Prefer settings in `src/variants.ini` over C++ code for a single variant.
 
 ## Goals
 * Prefer configurable rules that compose across variants.
 * Keep changes small, local, portable, and compatible with existing `.ini` files.
 * Preserve engine invariants before adding new behavior.
 * Avoid extra dependencies, noisy abstractions, and hot-loop checks for impossible states.
-* If behavior is unclear, prefer documented rules, then the intuitive rule, then the natural existing code path.
+* If behavior is unclear, use the documented rules. If none exist, use the intuitive rule. If that is unclear, follow the existing code path.
 
 ## Where changes go
 * Variant definitions: `src/variants.ini`
@@ -16,7 +16,7 @@ Fairy-Stockfish-X is a Fairy-Stockfish fork for testing experimental chess varia
 * Move generation/gating: `movegen.cpp`
 * Betza and movement: `piece.cpp`, `piece.h`, `bitboard.cpp`
 * Tests: `tests/`, especially `tests/run.sh`, `tests/suites/`, and `tests/python/`
-* Add settings end-to-end: `.ini` → parser → `Variant` field → `Position` getter → gameplay logic → tests → `variants.ini` docs.
+* Add each setting through every layer: `.ini` → parser → `Variant` field → `Position` getter → gameplay logic → tests → `variants.ini` docs.
 * Keep upstream Fairy-Stockfish keys working when replacing or generalizing a setting. FSX-only experimental keys may make a clean break before the first stable release.
 
 ## Variant config compatibility
@@ -36,9 +36,9 @@ tests/build.sh ARCH=x86-64-modern debug=yes optimize=no
 tests/build.sh COMP=mingw
 ```
 
-`tests/build.sh` verifies that native builds produce a runnable, non-empty executable. Native linking writes to a temporary file and replaces the previous executable only after a successful link; failures remove the temporary output and preserve the previous executable. Header dependencies are generated the same way and replace the previous `.depend` file only after a successful scan. `objclean` removes objects and dependencies; `objects-clean` preserves the executable for wrapper rebuilds. NNUE downloads require a checksum tool and fail if the network cannot be downloaded and verified. Validate `src/variants.ini` separately with the config and variants-smoke checks below.
+`tests/build.sh` checks that each native build produces a non-empty executable that can run. The linker writes to a temporary file. It replaces the previous executable only after a successful link. If linking fails, the wrapper removes the temporary file and keeps the previous executable. It also replaces `.depend` only after it scans the headers successfully. `objclean` removes object and dependency files. `objects-clean` keeps the executable for wrapper rebuilds. NNUE downloads need a checksum tool. The build fails if it cannot download and verify the network. Check `src/variants.ini` separately with the config and variants-smoke checks below.
 
-Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. `tests/build.sh` tracks the build configuration and cleans objects automatically when flags change; `make clean` is only needed for direct `make -C src` builds.
+Use `largeboards=yes` for standard large-board variants. Use `verylargeboards=yes` for boards larger than 12x10. `tests/build.sh` records the build configuration and removes old object files when flags change. Run `make clean` only when you build directly with `make -C src`.
 
 Use `hugeboards=yes` (Huge boards / HB) for boards above 16x16, up to 22x22.
 The example adds `all=yes` because the expansion coverage stresses composed
@@ -68,16 +68,18 @@ expected by `tests/regression-runner.sh`; omitting it fails the profile check.
 
 Build these named test binaries with the wrapper so the test runner can verify their build profiles.
 
-The very-large-board regressions resolve `stockfish-vlb` (via `VLB_ENGINE`
-or a sibling of the suite engine) and the VLB overlap-parity check resolves
-a normal-board `stockfish` (via `NORMAL_ENGINE` or a sibling); both fail
-loudly when the binary is missing. Set `FSX_ALLOW_SMALL_BOARD=1` only for
-intentional small-board runs where board-size skips are expected.
-Set `FSX_ALLOW_STALE_ENGINE=1` only to bypass the sources-newer-than-binary
-staleness check (never for results you intend to keep). It does not bypass
-wrapper verification or profile checks for named regression engines.
-`FSX_ENGINE_FAMILY` selects the board-family check for custom binary names;
-it does not satisfy the strict wrapper-recorded engine-role check. Use
+The very-large-board regression uses `stockfish-vlb`, found through
+`VLB_ENGINE` or next to the suite engine. The VLB overlap-parity check uses a
+normal-board `stockfish`, found through `NORMAL_ENGINE` or next to the suite
+engine. Both checks report an error if the binary is missing. Set
+`FSX_ALLOW_SMALL_BOARD=1` only when you intend to run on a small board and
+expect size-related skips.
+Set `FSX_ALLOW_STALE_ENGINE=1` only to skip the check for source files that
+are newer than the binary. Do not use it for results you intend to keep. This
+setting does not skip wrapper verification or profile checks for named
+regression engines.
+`FSX_ENGINE_FAMILY` selects the board-family check for custom binary names.
+It does not meet the strict engine-role check, which uses wrapper records. Use
 `FSX_TEST_PROFILE=portable` for intentional runs against unrecorded or
 reduced-feature binaries (see `tests/README.md`).
 
@@ -124,7 +126,7 @@ tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 
 `tests/run.sh fast` runs the registered fast suites directly; `tests/fast-regression.sh` is a compatibility wrapper for it.
 
-Use the named binary for each broad check and report the binary actually tested. A run with a different binary does not establish whether the documented check passes. The fast suite may also use `src/stockfish-vlb` when it exists; rebuild that binary from current sources before running the suite.
+Use the named binary for each broad check and report which binary you tested. A run with another binary does not show whether the documented check passes. The fast suite may also use `src/stockfish-vlb` if it exists. Rebuild it from the current sources before you run the suite.
 
 Run large-board tests against a `largeboards=yes` binary. For Python-facing changes, run `python3 setup.py build_ext --inplace` and `python3 tests/python/test_pyffish_api.py`.
 
@@ -155,7 +157,7 @@ cd ../tests/js
 npm test
 ```
 
-For very-large-board JavaScript/ffish work, build the ffish artifacts explicitly with very-large-board support:
+For JavaScript or ffish changes that affect very large boards, build the ffish files with very-large-board support:
 
 ```sh
 cd src
@@ -173,7 +175,7 @@ npm run sync-fsx-browser-stack
 npm run debug-build
 ```
 
-When diagnosing browser adjudication or move-generation bugs, compare native FSX/pyffish behavior against browser ffish before changing Fairyground UI logic. If native FSX and FSX-built ffish return legal moves and `result="*"`, the bug is likely in artifact provenance or browser wiring, not adjudication policy.
+When you investigate browser game-result or move-generation bugs, compare native FSX/pyffish behavior with browser ffish before changing Fairyground UI logic. If native FSX and FSX-built ffish return legal moves and `result="*"`, the cause is likely in the built files or browser integration.
 
 For parser, movegen, legality, promotion, topology, variant-switching, or shared-state changes, run upstream checks when available:
 
@@ -195,12 +197,12 @@ tests/regression-runner.sh wait
 
 `status` reports test progress and estimated time remaining. `wait` monitors the background process and prints the final result. On failure, it prints the relevant log output. `tests/regression-runner.sh log` shows recent log output. The runner checks for up-to-date binaries before starting; rebuild the binary if prompted.
 
-The fast and full suites preserve signature-based artifacts under `.local/build`. Do not delete that folder for normal reruns. Tests run quietly on success and print captured output only on failure. Specialized C++ harnesses rebuild their required objects when run directly. The fast suite prepares those objects once and shares them between harnesses. Set `VERBOSE=1` with `tests/run.sh` to print full test output while tests run.
+The fast and full suites keep build files under `.local/build`. Do not delete that folder for normal reruns. Tests print output only when they fail. If you run a specialized C++ harness directly, it rebuilds the objects it needs. The fast suite builds those objects once and shares them among the harnesses. Set `VERBOSE=1` with `tests/run.sh` to print all test output.
 
 ## CI Mapping
 * `Stockfish`: native engine build, perft, search, and sanitizer-style checks.
 * `fairy`: variant configuration, focused regression, protocol, and variant perft checks.
-* `ffishjs`: wasm build from `src/Makefile_js` plus `tests/js` `npm test`.
+* `ffishjs`: WebAssembly build from `src/Makefile_js` plus `npm test` in `tests/js`.
 * `Wheels`: Python package/wheel builds; run Python binding checks for Python-facing changes.
 * `Release`: packaging/release build smoke checks.
 

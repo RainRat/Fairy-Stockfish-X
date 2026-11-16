@@ -4,18 +4,18 @@ Build instructions, command-line usage, and bindings for Fairy-Stockfish-X.
 
 ## Building from Source
 
-From the repository root, build through the wrapper so the executable and
-shared objects have a recorded profile:
+From the repository root, use the build wrapper. It records a profile for the
+executable and shared objects:
 
 ```bash
 tests/build.sh ARCH=x86-64-modern
 ```
 
-Run `make -C src help` to see all supported CPU architectures.
+Run `make -C src help` to list the supported CPU architectures.
 
 ### Build Options
 
-Add these flags when needed:
+Use these flags when you need them:
 
 - `largeboards=yes` for boards up to 12x10 (e.g. Shogi, Xiangqi).
 - `verylargeboards=yes` for boards up to 16x16.
@@ -28,27 +28,28 @@ For example:
 tests/build.sh ARCH=x86-64-modern largeboards=yes
 ```
 
-The default build supports boards up to 8x8; `largeboards=yes` supports 12x10,
+The default build supports boards up to 8x8. `largeboards=yes` supports 12x10,
 `verylargeboards=yes` supports 16x16, and `hugeboards=yes` supports 22x22.
-Explicit Boolean options must agree with each other. Very-large and huge builds
-share multiword operations and generic rider geometry. Magic tables and PEXT
-are disabled for both. Huge builds use wider evaluation scores for dense
+Boolean options for board size must agree. Very-large and huge builds
+share multiword operations and generic rider geometry. Both disable magic
+tables and PEXT. Huge builds use wider evaluation scores for dense
 positions. Composed movegen on 22x22 can need tens of thousands of move
 entries, so the huge test build uses `all=yes` for
 the larger move lists; the base huge buffer already covers drop variants at
 that size.
-Keep the very-large tier for existing variants: the huge executable has larger
-geometry and search-history tables even when it searches a smaller board.
+Keep the very-large tier for existing variants. The huge executable uses more
+memory for geometry and search-history tables, even when it searches a smaller board.
 
-Swapped-order GCC 11.4 measurements against the pre-change very-large build found
+GCC 11.4 measurements, with the test order swapped, compared this build with the
+earlier very-large build. They found
 Chu Shogi +0.3%, Dai Shogi -2.2%, and 16x16 Hex -4.2% in nodes per second,
 with matching node totals. This PR retains the shared arithmetic at that
 measured cost; shift-unrolling and bit-clearing experiments slowed other games.
 Recovering that cost requires further measured optimization.
 
-Make builds select capacity through the Boolean options. Direct compiler builds
-still accept `-DLARGEBOARDS`, `-DVERY_LARGE_BOARDS`, or `-DHUGEBOARDS`.
-Conflicting capacity macros fail at compile time.
+Use the Boolean options to select capacity in make builds. Direct compiler builds
+also accept `-DLARGEBOARDS`, `-DVERY_LARGE_BOARDS`, or `-DHUGEBOARDS`.
+The compiler rejects conflicting capacity macros.
 
 ```bash
 tests/build.sh ARCH=x86-64-modern hugeboards=yes all=yes EXE=stockfish-huge
@@ -59,32 +60,32 @@ bash tests/multiword-bitboard.sh
 ```
 
 The Boolean options also work with `src/Makefile_js` and
-`src/Makefile_dll`. The engine banner includes `HB`; recorded build profiles
-use `board=huge` (named like `normal`/`large`/`very-large`). For the
+`src/Makefile_dll`. The engine banner includes `HB`. Recorded build profiles
+use `board=huge`, like `normal`, `large`, and `very-large`. For the
 Python extension, set `CFLAGS="-O3 -DNDEBUG -DHUGEBOARDS"` and
 `CXXFLAGS="-O3 -DNDEBUG -DHUGEBOARDS"`, then run
 `python3 setup.py build_ext --inplace --force`. Rebuild when switching capacity;
-object files and bindings from different tiers are incompatible.
+object files and bindings from different tiers do not work together.
 
-The selected `BOARD_BITS` capacity is mandatory and remains in effect when
-`CXXFLAGS` is supplied on the make command line. Use `EXTRACXXFLAGS` for
-additional compiler flags so the makefile's standard language and safety flags
-remain enabled. DLL objects are stored separately
-per capacity under `.local/build/dll`; compiler-flag and header changes rebuild
-them automatically. A link stamp also tracks the selected cached objects, so
-size switches relink the library and identical builds do no compiling or linking.
+The selected `BOARD_BITS` capacity stays active when you set `CXXFLAGS` on the
+make command line. Use `EXTRACXXFLAGS` to add compiler flags and keep the
+makefile's standard language and safety flags enabled. DLL objects are stored in
+separate folders for each capacity under `.local/build/dll`. Compiler-flag and
+header changes rebuild them. A link stamp tracks the cached objects, so a
+capacity change relinks the library and an identical build skips compilation
+and linking.
 `bash tests/dll-board-size.sh` checks size switches, compiler flags, header
 dependencies, and unchanged builds.
 
-`bash tests/huge-movegen.sh` runs independent combined-route, free-drop, and
-arrow-wall tests against both move generation and move picking under ASan and
-UBSan. It includes cases above `MAX_MOVES` without increasing the existing
+`bash tests/huge-movegen.sh` runs combined-route, free-drop, and arrow-wall
+tests under ASan and UBSan. It checks both move generation and move picking.
+Some cases exceed `MAX_MOVES`; the test does not increase the existing
 overflow capacities. The Windows MSVC workflow checks both multiword widths,
 table and hardware popcount, and engine builds.
 CI runs the full ASan/UBSan stress build with GCC. Both GCC and Clang run the
 Huge debug engine checks and the independent UBSan arithmetic tests.
 
-A huge-board build currently uses about 74 MiB for fixed geometry tables and
+A huge-board build uses about 74 MiB for fixed geometry tables and
 roughly 673 MiB resident memory at native startup without embedded NNUE, with
 one thread and a 16 MiB hash table. Most of the per-thread allocation is
 continuation history (about 458 MiB per thread). This allocation also applies
@@ -95,7 +96,7 @@ WebAssembly starts with 128 MiB and can grow to 1 GiB, with an 8 MiB stack for
 SAN and rule probes. Boards above
 22x22 and complete rules for historical large shogi games require separate work.
 
-The shipped huge-board placement variants are `gomoku-19x19`, `hex-19x19`,
+The included huge-board placement variants are `gomoku-19x19`, `hex-19x19`,
 `hex-22x22`, `go19`, `capture-go19`, `nogo19`, and `suicide-go19`.
 Gomoku uses freestyle five-in-a-row rules. Hex inherits the existing
 `openingSwapDrop` surrogate. Ordinary and suicide Go retain the existing
@@ -106,7 +107,7 @@ are deferred to a possible future PR.
 
 ### Required Checks
 
-The standard local checks are:
+Run these standard checks locally:
 
 ```bash
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
@@ -125,13 +126,13 @@ tests/build.sh ARCH=x86-64-modern largeboards=yes verylargeboards=yes all=yes nn
 tests/build.sh ARCH=x86-64-modern largeboards=yes all=yes EXE=stockfish-allvars
 ```
 
-`tests/run.sh fast` runs the registered fast suites directly; `tests/fast-regression.sh` is a compatibility wrapper for it.
+`tests/run.sh fast` runs the registered fast suites. `tests/fast-regression.sh` is a compatibility wrapper for the same command.
 
 The search and evaluation test suite requires the NNUE evaluation file. Download it with `make -C src net` before running those tests. See [AGENTS.md](AGENTS.md) for full testing instructions.
 
 ## CLI Usage
 
-After building, run the engine from the repository root:
+After you build the engine, run it from the repository root:
 
 ```bash
 src/stockfish
@@ -158,11 +159,11 @@ Common engine commands:
 
 ## Invalid input handling
 
-Public FEN entry points validate variant-aware input before loading it. Native
-UCI rejects an invalid `position` command with an `info string` diagnostic and
-then exits with failure instead of continuing: a malformed position command is
-treated as a fatal protocol error, following official Stockfish's strict
-command behavior. It does not search a valid prefix of an invalid move list.
+Public FEN entry points check input against the selected variant before loading
+it. Native UCI rejects an invalid `position` command with an `info string`
+diagnostic, then exits with an error. Like official Stockfish, it treats a bad
+position command as a fatal protocol error. It does not search the valid part
+of an invalid move list.
 Python raises `ValueError` for invalid FEN and moves. JavaScript board creation
 and `setFen()` throw on invalid FEN. The C API returns `nullptr` from
 `fsf_new_board()` and `false` from `fsf_set_fen()` for invalid input. Native

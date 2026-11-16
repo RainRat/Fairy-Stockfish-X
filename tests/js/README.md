@@ -13,9 +13,9 @@
 </p>
 
 
-The **ffish.js** package is a WebAssembly chess variant library based on [Fairy-Stockfish-X](https://github.com/RainRat/Fairy-Stockfish-X), a fork of [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish).
+The **ffish.js** package is a WebAssembly library for chess variants. It is based on [Fairy-Stockfish-X](https://github.com/RainRat/Fairy-Stockfish-X), a fork of [Fairy-Stockfish](https://github.com/fairy-stockfish/Fairy-Stockfish).
 
-It is available as a [standard module](https://www.npmjs.com/package/ffish) and an [ES6 module](https://www.npmjs.com/package/ffish-es6), with an API modeled after [python-chess](https://python-chess.readthedocs.io/en/latest/index.html).
+It is available as a [standard module](https://www.npmjs.com/package/ffish) and an [ES6 module](https://www.npmjs.com/package/ffish-es6). Its API is modeled after [python-chess](https://python-chess.readthedocs.io/en/latest/index.html).
 
 ## Install instructions
 
@@ -54,15 +54,15 @@ new Module().then(loadedModule => {
 
 ### Available variants
 
-Show all variants compiled into the loaded module. Load a custom config first if you want its variants included.
+Show all variants included in the loaded module. Load a custom config first to include its variants.
 
 ```javascript
 ffish.variants()
 ```
 ### Board object
 
-Create a new variant board from its default starting position.
-The `onRuntimeInitialized` callback runs once the WebAssembly module has finished loading:
+Create a board for a variant in its default starting position.
+The `onRuntimeInitialized` callback runs after the WebAssembly module loads:
 
 ```javascript
 ffish['onRuntimeInitialized'] = () => {
@@ -81,7 +81,7 @@ else {
 }
 ```
 
-Alternatively, you can initialize a board with a custom FEN directly:
+You can also create a board with a custom FEN:
 ```javascript
 let board2 = new ffish.Board("chess", "rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3");
 ```
@@ -105,7 +105,7 @@ P P P P . P P P
 R N B Q K B N R
 ```
 
-or a detailed board with coordinates using `.toVerboseString()`:
+To show a board with coordinates, use `.toVerboseString()`:
 
 ```javascript
 let board = new ffish.Board("chess", "rnb1kbnr/ppp1pppp/8/3q4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3");
@@ -139,12 +139,12 @@ Checkers:
 
 ## Move generation and application
 
-Add a new move:
+Add a move:
 ```javascript
 board.push("g2g4");
 ```
 
-Special variant moves use suffix characters in the coordinate string:
+Some variants use suffix characters in the coordinate string for special moves:
 
 - clone moves: `e2e4c`
 - swap moves: `d4e4s`
@@ -163,14 +163,14 @@ for (var i = 0; i < legalMovesSan.length; i++) {
 
 ## Memory management
 
-Emscripten does not automatically clean up C++ objects. Call `.delete()` on `Board` and `Game` objects when finished to free WebAssembly memory.
+Emscripten does not clean up C++ objects automatically. Call `.delete()` on `Board` and `Game` objects when you finish with them to free WebAssembly memory.
 ```javascript
 board.delete();
 ```
 
 ## PGN parsing
 
-Parse a PGN game string from a file. Call `game.delete()` and `board.delete()` when done to free WebAssembly memory.
+Parse a PGN game string from a file. When you finish, call `game.delete()` and `board.delete()` to free WebAssembly memory.
 
 ```javascript
 fs = require('fs');
@@ -199,7 +199,7 @@ fs.readFile(pgnFilePath, 'utf8', function (err,data) {
 
 ## Custom variants
 
-Fairy-Stockfish-X also allows defining custom variants by loading a configuration file.
+You can also define custom variants by loading a configuration file.
 
 See the [shipped variant configuration](../../src/variants.ini), including **cfour**, **tictactoe**, and **janggihouse**.
 ```javascript
@@ -215,8 +215,8 @@ let configFilePath = './variants.ini';
  });
 ```
 
-Loading is add-only: sections naming an already existing variant are skipped,
-never replaced. `loadVariantConfig` returns the number of newly added variants.
+Loading only adds variants. It skips sections for variants that already exist
+and does not replace them. `loadVariantConfig` returns the number of new variants.
 
 ## Additional features
 
@@ -224,18 +224,18 @@ For examples of each available function, see [test.js](test.js).
 
 ## Build instructions
 
-Built with Emscripten/Embind from C++ source code.
+The module is built from C++ source code with Emscripten and Embind.
 
 * https://emscripten.org/docs/porting/connecting_cpp_and_javascript/embind.html
 
 
-Build capacity tiers are selected with these flags:
+Select the build capacity with these flags:
 
 * `largeboards=yes` supports boards up to 12x10.
 * `verylargeboards=yes` supports boards up to 16x16.
 * `hugeboards=yes` supports boards up to 22x22. Use `all=yes` for the composed move-generation stress coverage on Huge boards.
 
-The CI test builds use the tier-specific flags above. To disable variants with boards larger than 8x8, build with `largeboards=no`.
+CI uses the flags above for each build tier. To disable variants with boards larger than 8x8, build with `largeboards=no`.
 
 Set `debug=yes` when running tests.
 
@@ -249,7 +249,7 @@ make -f Makefile_js build
 
 ### Compile as ES6/ES2015 module
 
-For environments such as [Vue.js](https://vuejs.org/) or modern bundlers, use the ES6 module build:
+Use the ES6 module build with tools such as [Vue.js](https://vuejs.org/) and modern bundlers:
 
 ```bash
 cd src
