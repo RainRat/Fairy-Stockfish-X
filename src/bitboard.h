@@ -440,6 +440,7 @@ constexpr Bitboard king_flank(File f) {
 constexpr Bitboard shift(Direction D, Bitboard b) {
   return  D == NORTH      ?  b                       << NORTH      : D == SOUTH      ?  b             >> NORTH
         : D == NORTH+NORTH?  b                       <<(2 * NORTH) : D == SOUTH+SOUTH?  b             >> (2 * NORTH)
+        : D == 3 * NORTH  ?  b                       <<(3 * NORTH) : D == 3 * SOUTH  ?  b             >> (3 * NORTH)
         : D == EAST       ? (b & ~file_bb(FILE_MAX)) << EAST       : D == WEST       ? (b & ~FileABB) >> EAST
         : D == NORTH_EAST ? (b & ~file_bb(FILE_MAX)) << NORTH_EAST : D == NORTH_WEST ? (b & ~FileABB) << NORTH_WEST
         : D == SOUTH_EAST ? (b & ~file_bb(FILE_MAX)) >> NORTH_WEST : D == SOUTH_WEST ? (b & ~FileABB) >> NORTH_EAST

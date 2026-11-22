@@ -30,4 +30,16 @@ nFoldValueAbsolute = true
         std::cerr << "absolute n-fold values were not mirrored by color\n";
         return 1;
     }
+
+    // Built-in minishogi must fold nFoldValueAbsolute the same way as
+    // INI variants: the side to move at the repetition wins because the
+    // opponent made the repetition.
+    const Variant* minishogi = variants.get("minishogi");
+    if (!minishogi
+        || minishogi->nFoldValue.get(WHITE) != VALUE_MATE
+        || minishogi->nFoldValue.get(BLACK) != -VALUE_MATE)
+    {
+        std::cerr << "built-in minishogi n-fold absolute values were not mirrored by color\n";
+        return 1;
+    }
 }

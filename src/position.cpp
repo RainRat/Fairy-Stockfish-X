@@ -3026,7 +3026,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
   // Disambiguation for chess960 "king" square
   if (chess960 && can_castle(WHITE_CASTLING) && popcount(pieces(WHITE, castling_king_piece(WHITE)) & rank_bb(castling_rank(WHITE))) > 1)
-      ss << char('A' + castling_king_square(WHITE));
+      ss << char('A' + file_of(castling_king_square(WHITE)));
 
   if (can_castle(WHITE_OO))
       ss << (chess960 ? char('A' + file_of(castling_rook_square(WHITE_OO ))) : 'K');
@@ -3045,7 +3045,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
 
   // Disambiguation for chess960 "king" square
   if (chess960 && can_castle(BLACK_CASTLING) && popcount(pieces(BLACK, castling_king_piece(BLACK)) & rank_bb(castling_rank(BLACK))) > 1)
-      ss << char('a' + castling_king_square(BLACK));
+      ss << char('a' + file_of(castling_king_square(BLACK)));
 
   if (can_castle(BLACK_OO))
       ss << (chess960 ? char('a' + file_of(castling_rook_square(BLACK_OO ))) : 'k');
@@ -3053,7 +3053,7 @@ string Position::fen(bool sfen, bool showPromoted, int countStarted, std::string
   if (can_castle(BLACK_OOO))
       ss << (chess960 ? char('a' + file_of(castling_rook_square(BLACK_OOO))) : 'q');
 
-  if (gating() && gates(BLACK) && (!seirawan_gating() || count_in_hand(BLACK, ALL_PIECES) > 0 || captures_to_hand()))
+  if (gating() && !commit_gates() && gates(BLACK) && (!seirawan_gating() || count_in_hand(BLACK, ALL_PIECES) > 0 || captures_to_hand()))
       for (File f = FILE_A; f <= max_file(); ++f)
           if (   (gates(BLACK) & file_bb(f))
               // skip gating flags redundant with castling flags
@@ -11267,7 +11267,8 @@ void Position::do_null_move(StateInfo& newSt) {
 
 void Position::undo_null_move() {
 
-  assert(!evasion_checkers());
+  // No evasion-checkers assert: search legitimately undoes a null move
+  // from an evasion state (see search.cpp null-move pruning guard).
 
   st = st->previous;
   sideToMove = ~sideToMove;
@@ -11290,7 +11291,10 @@ Value Position::blast_see(Move m) const {
   // treat the move as delivering immediate mate. This prevents the static
   // evaluation from underestimating winning blast captures.
   Bitboard enemyRoyal = st->pseudoRoyals & pieces(~us);
-  enemyRoyal |= pieces(~us, king_type());
+  // king_type() == NO_PIECE_TYPE == ALL_PIECES would select every enemy
+  // piece as royal, so only include the king type when one is configured.
+  if (king_type() != NO_PIECE_TYPE)
+      enemyRoyal |= pieces(~us, king_type());
   if (blast & enemyRoyal)
       return -checkmate_value();
 
@@ -13060,6 +13064,9 @@ bool Position::see_pruning_unreliable() const {
 #ifndef NDEBUG
   const bool reference = points_counting()
                       || points_goal() > 0
+                      || var->captureDemotion
+                      || var->twoStepPieceTypes
+                      || var->hookPieceTypes
                       || var->freezePieceTypes
                       || var->trapRegion
                       || extinction_value(WHITE) != VALUE_NONE
@@ -13258,7 +13265,9 @@ void Position::flip() {
       if (is_ok(ep))
       {
           f += char('a' + file_of(ep));
-          f += std::to_string(relative_rank(~side_to_move(), ep, max_rank()) + 1);
+          // Flip always mirrors ranks; using ~side_to_move() would leave
+          // the EP square unmirrored when Black is to move.
+          f += std::to_string(relative_rank(BLACK, ep, max_rank()) + 1);
       }
       else
           f += "-";

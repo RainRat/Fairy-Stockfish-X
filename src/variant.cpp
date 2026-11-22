@@ -1810,14 +1810,17 @@ namespace {
         v->castlingKingsideFile = FILE_I;
         v->castlingQueensideFile = FILE_E;
         v->castlingRank = RANK_2;
-        v->promotionRegion[WHITE] = Rank9BB | Rank10BB;
+        // 12x12 board: White promotes on the top two ranks (11-12) and
+        // Black pawns start on rank 10, so their double/triple step region
+        // is Rank10 (not the 10-rank Omicron values).
+        v->promotionRegion[WHITE] = Rank11BB | Rank12BB;
         v->promotionRegion[BLACK] = Rank2BB | Rank1BB;
         v->promotionPieceTypes[WHITE] = piece_set(CUSTOM_PIECE_2) | CUSTOM_PIECE_1 | QUEEN | ROOK | BISHOP | KNIGHT;
         v->promotionPieceTypes[BLACK] = v->promotionPieceTypes[WHITE];
         v->doubleStepRegion[WHITE] = Rank3BB;
-        v->doubleStepRegion[BLACK] = Rank8BB;
+        v->doubleStepRegion[BLACK] = Rank10BB;
         v->tripleStepRegion[WHITE] = Rank3BB;
-        v->tripleStepRegion[BLACK] = Rank8BB;
+        v->tripleStepRegion[BLACK] = Rank10BB;
         return v;
     }
 #endif
@@ -2251,12 +2254,6 @@ Variant* Variant::conclude() {
         }
         hookMoves[pt].directions.conclude();
     }
-
-    // Two-leg captures defeat single-victim SEE: force move-sensitive
-    // pruning so search consults the per-move check.
-    if ((twoStepPieceTypes || hookPieceTypes)
-        && seePruningPolicy == SeePruningPolicy::RELIABLE)
-        seePruningPolicy = SeePruningPolicy::MOVE_SENSITIVE;
 
     // Compatibility shim: legacy mutuallyImmuneTypes means same-type captures are forbidden.
     for (PieceSet ps = mutuallyImmuneTypes; ps; )
@@ -2738,6 +2735,26 @@ Variant* Variant::conclude() {
                        && !connectGoalByType
                        && changingColorTrigger == ColorChangeTrigger::NEVER;
 
+    // Absolute n-fold values attribute the repetition result to the color
+    // that made the repetition (the side not to move) rather than to the
+    // side to move. Mirror the value by color; conclude() runs for built-in
+    // variants too, so e.g. minishogi folds the same way as INI variants.
+    if (nFoldValueAbsolute)
+    {
+        if (!nFoldValue.byColorSet[WHITE])
+        {
+            nFoldValue.byColor[WHITE] = nFoldValue.byColorSet[BLACK]
+                                      ? -nFoldValue.byColor[BLACK]
+                                      : -nFoldValue.global;
+            nFoldValue.byColorSet[WHITE] = true;
+        }
+        if (!nFoldValue.byColorSet[BLACK])
+        {
+            nFoldValue.byColor[BLACK] = -nFoldValue.byColor[WHITE];
+            nFoldValue.byColorSet[BLACK] = true;
+        }
+    }
+
     const bool alwaysUnreliableSee = pointsCounting
                                   || pointsGoal > 0
                                   || captureDemotion
@@ -2752,10 +2769,14 @@ Variant* Variant::conclude() {
                                   || !connectPieceGoalTypes[BLACK].empty();
     const bool moveSensitiveSee = freezePieceTypes
                                || trapRegion
+                               || twoStepPieceTypes
+                               || hookPieceTypes
                                || extinctionValue[WHITE] != VALUE_NONE
                                || extinctionValue[BLACK] != VALUE_NONE
                                || flagRegion[WHITE] || flagRegion[BLACK]
                                || castlingWins;
+    // Two-leg captures (twoStepMoves/hookMoves) defeat single-victim SEE:
+    // they force move-sensitive pruning so search consults the per-move check.
     seePruningPolicy = alwaysUnreliableSee ? SeePruningPolicy::ALWAYS_UNRELIABLE
                      : moveSensitiveSee    ? SeePruningPolicy::MOVE_SENSITIVE
                                            : SeePruningPolicy::RELIABLE;

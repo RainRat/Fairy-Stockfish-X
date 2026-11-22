@@ -403,7 +403,15 @@ struct Bitboard {
         Bitboard result;
         for (int i = 0; i < 128; ++i)
             if (((*this >> i) & Bitboard(1)))
-                result |= x << i;
+            {
+                // Carry-propagating addition: plain OR loses carries when
+                // shifted operands overlap. b64[0] is the high word, b64[1]
+                // the low word, so carries flow from b64[1] into b64[0].
+                Bitboard add = x << i;
+                uint64_t sumLo = result.b64[1] + add.b64[1];
+                result.b64[0] += add.b64[0] + (sumLo < result.b64[1] ? 1 : 0);
+                result.b64[1] = sumLo;
+            }
         return result;
 #endif
     }

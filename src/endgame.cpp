@@ -847,6 +847,13 @@ ScaleFactor Endgame<KRPKB>::operator()(const Position& pos) const {
   assert(verify_material(pos, strongSide, RookValueMg, 1));
   assert(verify_material(pos, weakSide, BishopValueMg, 0));
 
+  // The fortress checks below push 2-3 ranks ahead of a pawn on relative
+  // rank 5/6, which is only on-board when at least 8 ranks exist. On
+  // smaller boards (e.g. 6x6 diana/petty) the pushed square goes negative
+  // and indexes SquareDistance out of bounds.
+  if (int(pos.max_rank()) < int(RANK_8))
+      return SCALE_FACTOR_NONE;
+
   // Test for a rook pawn on either edge file of the active board.
   if (pos.pieces(PAWN) & (FileABB | file_bb(pos.max_file())))
   {

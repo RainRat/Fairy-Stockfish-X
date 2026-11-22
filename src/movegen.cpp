@@ -1080,7 +1080,9 @@ namespace {
                     && is_ok(threeAhead)
                     && !(b1 & twoAhead)
                     && !(b1 & threeAhead)
-                    && !(pawnLikeDoubleSteps & twoAhead)
+                    // Match the real-pawn path (b2/b3 in generate_pawn_moves):
+                    // a triple step stays available even when the double
+                    // step is legal from the same square.
                     && !(pos.pieces() & (twoAhead | threeAhead))
                     && (pos.board_bb(Us, Pt) & threeAhead)
                     && (target & threeAhead))

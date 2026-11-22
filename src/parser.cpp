@@ -2266,19 +2266,9 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
     parse_attribute("bareKingDeadTypes", v->bareKingDeadTypes, v);
     parse_attribute("nonRoyalDrawThreshold", v->nonRoyalDrawThreshold);
     parse_color_setting("nFoldValue", v->nFoldValue);
+    // nFoldValueAbsolute folding happens in Variant::conclude() so that
+    // built-in variants get the same per-color mirroring.
     parse_attribute("nFoldValueAbsolute", v->nFoldValueAbsolute);
-    if (v->nFoldValueAbsolute) {
-        if (!v->nFoldValue.byColorSet[WHITE]) {
-            v->nFoldValue.byColor[WHITE] = v->nFoldValue.byColorSet[BLACK]
-                                             ? -v->nFoldValue.byColor[BLACK]
-                                             : v->nFoldValue.global;
-            v->nFoldValue.byColorSet[WHITE] = true;
-        }
-        if (!v->nFoldValue.byColorSet[BLACK]) {
-            v->nFoldValue.byColor[BLACK] = -v->nFoldValue.byColor[WHITE];
-            v->nFoldValue.byColorSet[BLACK] = true;
-        }
-    }
     parse_attribute("perpetualCheckIllegal", v->perpetualCheckIllegal);
     parse_attribute("moveRepetitionIllegal", v->moveRepetitionIllegal);
     parse_attribute("samePlayerBoardRepetitionIllegalAtN", v->samePlayerBoardRepetitionIllegalAtN);
