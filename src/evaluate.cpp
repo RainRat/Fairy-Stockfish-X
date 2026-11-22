@@ -69,6 +69,11 @@ namespace Eval {
   string eval_file_loaded = "None";
   uint32_t loadedNnueHash = 0;
   int loadedNnueDimensions = 0;
+  const Variant* nnueInitializedVariant = nullptr;
+
+  const Variant* NNUE::initialized_variant() {
+    return nnueInitializedVariant;
+  }
 
   /// NNUE::init() tries to load a NNUE network at startup time, or when the engine
   /// receives a UCI command "setoption name EvalFile value nn-[a-z0-9]{12}.nnue"
@@ -78,25 +83,25 @@ namespace Eval {
   /// in the engine directory. Distro packagers may define the DEFAULT_NNUE_DIRECTORY
   /// variable to have the engine search in a special directory in their distro.
 
-  void NNUE::init() {
+  void NNUE::init(const Variant* v) {
 
+    const Variant* selectedVariant = v ? v : variants.get(string(Options["UCI_Variant"]));
+    nnueInitializedVariant = selectedVariant;
     currentNnueVariant = nullptr;
     useNNUE = Options["Use NNUE"];
-    if (!useNNUE)
+    if (!useNNUE || !selectedVariant)
+    {
+        useNNUE = false;
         return;
+    }
 
     string eval_file = string(Options["EvalFile"]);
 
     // Restrict NNUE usage to corresponding variant
     // Support multiple variant networks separated by semicolon(Windows)/colon(Unix)
     stringstream ss(eval_file);
-    string variant = string(Options["UCI_Variant"]);
+    const string variant = selectedVariant->name;
     useNNUE = false;
-    const auto variantIt = variants.find(variant);
-    if (variantIt == variants.end())
-        return;
-
-    const Variant* selectedVariant = variantIt->second;
 
     while (getline(ss, eval_file, UCI::SepChar))
     {
@@ -2248,7 +2253,7 @@ Value Eval::evaluate(const Position& pos) {
 
   Value v;
 
-  if (!Eval::useNNUE || !pos.nnue_applicable() || pos.topology_wraps())
+  if (!Eval::useNNUE || currentNnueVariant != pos.variant() || !pos.nnue_applicable() || pos.topology_wraps())
       v = Evaluation<NO_TRACE>(pos).value();
   else
   {
@@ -2354,7 +2359,7 @@ std::string Eval::trace(Position& pos) {
      << "+------------+-------------+-------------+-------------+\n";
 
   // Mirror Eval::evaluate(): NNUE is never used on wrapped topologies.
-  const bool nnueActive = Eval::useNNUE && pos.nnue_applicable() && !pos.topology_wraps();
+  const bool nnueActive = Eval::useNNUE && currentNnueVariant == pos.variant() && pos.nnue_applicable() && !pos.topology_wraps();
   if (nnueActive)
       ss << '\n' << NNUE::trace(pos) << '\n';
 

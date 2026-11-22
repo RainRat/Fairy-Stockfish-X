@@ -14,6 +14,7 @@
 #include "endgame.h"
 #include "evaluate.h"
 #include "position.h"
+#include "psqt.h"
 #include "search.h"
 #include "syzygy/tbprobe.h"
 #include "thread.h"
@@ -69,16 +70,12 @@ bool buildPosition(Position& pos, StateListPtr& states, const Variant* v, const 
 
     UCI::init_variant(v);
     // Evaluation tables (PSQT, NNUE) are global and per-variant. Refresh them
-    // when the queried variant differs from the last one evaluated, mirroring
-    // on_variant_set(), so evaluate() never scores a position with another
-    // variant's piece values or tables.
-    static const Variant* evalInitializedVariant = nullptr;
-    if (evalInitializedVariant != v)
-    {
+    // against the real table-owner pointers rather than a local cache, because
+    // set_option("UCI_Variant", ...) / on_variant_set() also rewrites them.
+    if (PSQT::current_variant() != v)
         PSQT::init(v);
-        Eval::NNUE::init();
-        evalInitializedVariant = v;
-    }
+    if (Eval::NNUE::initialized_variant() != v)
+        Eval::NNUE::init(v);
     if (strcmp(fen, "startpos") == 0)
         fen = v->startFen.c_str();
     const FEN::FenValidation validation = FEN::validate_fen(fen, v, chess960);
@@ -825,6 +822,7 @@ PyMODINIT_FUNC PyInit_pyffish() {
     Search::init();
     Threads.set(Options["Threads"]);
     Search::clear(); // After threads are up
+    Eval::NNUE::init();
 
     return module;
 };

@@ -174,11 +174,14 @@ namespace {
       const std::string& betza,
       const Variant* variant,
       bool lame,
+      bool hopper,
       bool& hasLameProfile,
       bool& invalidLameProfile,
       PieceInfo::LameProfile& currentLameProfile,
       bool& hasUniversalHopper,
       PieceInfo::HopperProfile& currentHopperProfile,
+      bool& hopperBlockHasNonFriendlyKey,
+      bool& hopperBlockHasExplicitPost,
       bool& invalidPiece
   ) {
       if (lame)
@@ -192,6 +195,9 @@ namespace {
       {
           hasUniversalHopper = true;
           currentHopperProfile = {};
+          currentHopperProfile.isHopper = hopper;
+          hopperBlockHasNonFriendlyKey = false;
+          hopperBlockHasExplicitPost = false;
       }
 
       if (trim_view(params).empty())
@@ -250,7 +256,7 @@ namespace {
               {
                    if (key == "hurdles") { currentHopperProfile.isHopper = true; parse_min_max(val, currentHopperProfile.hurdlesMin, currentHopperProfile.hurdlesMax, invalidPiece); }
                    else if (key == "pre") { currentHopperProfile.isHopper = true; parse_min_max(val, currentHopperProfile.preMin, currentHopperProfile.preMax, invalidPiece); }
-                   else if (key == "post") { currentHopperProfile.isHopper = true; parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax, invalidPiece); }
+                   else if (key == "post") { currentHopperProfile.isHopper = true; hopperBlockHasExplicitPost = true; parse_min_max(val, currentHopperProfile.postMin, currentHopperProfile.postMax, invalidPiece); }
                    else if (key == "capture") {
                        currentHopperProfile.isHopper = true;
                        if (val == "dest") currentHopperProfile.captureMode = PieceInfo::CAPTURE_DEST;
@@ -274,6 +280,8 @@ namespace {
                   }
                   else if (key == "hurdle_types" || key == "transparent_types") {
                       bool isHurdle = (key == "hurdle_types");
+                      if (isHurdle)
+                          hopperBlockHasNonFriendlyKey = true;
                       uint8_t& special = isHurdle ? currentHopperProfile.hurdleSpecialTypes : currentHopperProfile.transparentSpecialTypes;
                       special = PieceInfo::HopperProfile::NONE; // Reset default for explicit types
 
@@ -297,6 +305,7 @@ namespace {
                       }
                   }
                   else if (key == "hurdle_piece_types" || key == "transparent_piece_types") {
+                      hopperBlockHasNonFriendlyKey = true;
                       bool isHurdle = (key == "hurdle_piece_types");
                       PieceSet& target = isHurdle ? currentHopperProfile.hurdlePieceTypes : currentHopperProfile.transparentPieceTypes;
                       if (!parse_piece_set(variant, val, target, true, true))
@@ -427,6 +436,7 @@ namespace {
       const std::string expandedBetza = expand_group_sugar(alias_to_betza(betza));
       std::vector<MoveModality> moveModalities = {};
       bool hopper = false;
+      bool hopperIsCannon = false;
       bool rider = false;
       bool lame = false;
       bool hasLameProfile = false;
@@ -441,12 +451,15 @@ namespace {
       bool standaloneH = false;
       std::vector<std::string> prelimDirections = {};
       bool hasUniversalHopper = false;
+      bool hopperBlockHasNonFriendlyKey = false;
+      bool hopperBlockHasExplicitPost = false;
       PieceInfo::HopperProfile currentHopperProfile;
 
       auto reset_parser_state = [&]() {
           moveModalities.clear();
           prelimDirections.clear();
           hopper = false;
+          hopperIsCannon = false;
           rider = false;
           lame = false;
           hasLameProfile = false;
@@ -459,6 +472,8 @@ namespace {
           standaloneH = false;
           distance = 0;
           hasUniversalHopper = false;
+          hopperBlockHasNonFriendlyKey = false;
+          hopperBlockHasExplicitPost = false;
           currentHopperProfile = {};
       };
       auto fail_piece = [&]() {
@@ -591,7 +606,8 @@ namespace {
           }
           if (hasUniversalHopper && !currentHopperProfile.isHopper)
           {
-              if (currentHopperProfile.transparentSpecialTypes & PieceInfo::HopperProfile::FRIENDLY)
+              if (!hopperBlockHasNonFriendlyKey
+                  && currentHopperProfile.transparentSpecialTypes == PieceInfo::HopperProfile::FRIENDLY)
                   p->friendlyJump = true;
               else
               {
@@ -606,6 +622,8 @@ namespace {
               }
               hasUniversalHopper = false;
           }
+          if (hasUniversalHopper && currentHopperProfile.isHopper && hopperIsCannon && !hopperBlockHasExplicitPost)
+              currentHopperProfile.postMax = 255;
           ensure_default_modalities();
           // Define moves for each atom and modality.
           for (const auto& atom : atoms)
@@ -728,7 +746,7 @@ namespace {
 
       auto commit_bent_slider = [&](auto flag, const char* pieceName) {
           // Keep first implementation strict: unqualified O only.
-          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || skiSlider || maxDistance)
+          if (!prelimDirections.empty() || hopper || lame || dynamicDistance || skiSlider || maxDistance || hasUniversalHopper)
           {
               std::cerr << "Modifiers are not yet implemented for " << pieceName << " in '" << betza << "'." << std::endl;
               fail_piece();
@@ -757,7 +775,7 @@ namespace {
                   continue;
               }
               std::string_view params(expandedBetza.data() + i + 1, close - i - 1);
-              parse_hopper_or_lame_block(params, betza, variant, lame, hasLameProfile, invalidLameProfile, currentLameProfile, hasUniversalHopper, currentHopperProfile, invalidPiece);
+              parse_hopper_or_lame_block(params, betza, variant, lame, hopper, hasLameProfile, invalidLameProfile, currentLameProfile, hasUniversalHopper, currentHopperProfile, hopperBlockHasNonFriendlyKey, hopperBlockHasExplicitPost, invalidPiece);
               i = close;
           }
           // Modality
@@ -767,6 +785,7 @@ namespace {
           else if (c == 'p' || c == 'g')
           {
               hopper = true;
+              hopperIsCannon = (c == 'p');
               currentHopperProfile.isHopper = true;
               if (c == 'g')
                   distance = 1;
@@ -919,6 +938,12 @@ namespace {
                         << "': range digits follow the atom (e.g. R2)." << std::endl;
               fail_piece();
           }
+      }
+      if (!invalidPiece && hasUniversalHopper)
+      {
+          std::cerr << "Invalid Betza hopper block in '" << betza
+                    << "': trailing {...} block has no movement atom." << std::endl;
+          fail_piece();
       }
       if (invalidPiece)
           return nullptr;

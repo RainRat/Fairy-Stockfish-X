@@ -225,12 +225,22 @@ Value piece_value(Phase phase, PieceType pt)
 namespace PSQT
 {
 
+namespace {
+const Variant* currentVariant = nullptr;
+} // namespace
+
 Score psq[PIECE_NB][SQUARE_NB + 1];
+
+const Variant* current_variant() {
+  return currentVariant;
+}
 
 // PSQT::init() initializes piece-square tables: the white halves of the tables are
 // copied from Bonus[] and PBonus[], adding the piece value, then the black halves of
 // the tables are initialized by flipping and changing the sign of the white scores.
 void init(const Variant* v) {
+
+  currentVariant = v;
 
   std::memcpy(PieceValue, BasePieceValue, sizeof(PieceValue));
   std::memset(CapturePieceValue, 0, sizeof(CapturePieceValue));

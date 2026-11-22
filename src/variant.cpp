@@ -2864,12 +2864,12 @@ void VariantMap::parse_istream(std::istream& file) {
         {
             if (!input.empty() && input.back() == '\r')
                 input.pop_back();
-            if (input.find_first_not_of(" \t") == std::string::npos)
+            const size_t firstCharPos = input.find_first_not_of(" \t");
+            if (firstCharPos == std::string::npos)
                 continue;
             std::stringstream ss(input);
             // Comment detection must ignore leading whitespace: an indented
             // comment line is not a configuration line.
-            const size_t firstCharPos = input.find_first_not_of(" \t");
             if (input[firstCharPos] != ';' && input[firstCharPos] != '#')
             {
                 if (input.find('=') == std::string::npos)
@@ -2933,6 +2933,8 @@ void VariantMap::parse_istream(std::istream& file) {
         }
 
         // Create variant
+        const std::string variantKey = lower_ascii(variant);
+        const std::string templateKey = lower_ascii(variant_template);
         if (variants.has(variant))
         {
             if (!DoCheck && !verboseLoadWarnings)
@@ -2940,9 +2942,10 @@ void VariantMap::parse_istream(std::istream& file) {
             else
                 std::cerr << "Variant '" << variant << "' already exists." << std::endl;
         }
-        else if (!variant_template.empty() && (skippedVariants.count(variant_template) || !variants.has(variant_template)))
+        else if (!variant_template.empty() && (skippedVariants.count(templateKey) || !variants.has(variant_template)))
         {
-            skippedVariants.insert(variant);
+            const bool templateSkipped = skippedVariants.count(templateKey) > 0;
+            skippedVariants.insert(variantKey);
             if (!variants.has(variant_template))
             {
                 if constexpr (DoCheck)
@@ -2951,7 +2954,7 @@ void VariantMap::parse_istream(std::istream& file) {
                     // variant is otherwise unusable; check mode must report it.
                     // Templates merely skipped for this build's board limits stay
                     // silent, matching the size-skip handling of plain variants.
-                    if (!skippedVariants.count(variant_template))
+                    if (!templateSkipped)
                         std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
                 }
                 else if (verboseLoadWarnings)
@@ -2985,7 +2988,7 @@ void VariantMap::parse_istream(std::istream& file) {
                 parse_file_index(attribs["maxFile"], cfgMaxFile);
             if ((cfgMaxRank > 0 && cfgMaxRank > RANK_MAX) || (cfgMaxFile >= 0 && cfgMaxFile > FILE_MAX))
             {
-                skippedVariants.insert(variant);
+                skippedVariants.insert(variantKey);
                 if constexpr (!DoCheck)
                 {
                     if (verboseLoadWarnings)
@@ -3032,7 +3035,7 @@ void VariantMap::parse_istream(std::istream& file) {
             }
             else
             {
-                skippedVariants.insert(variant);
+                skippedVariants.insert(variantKey);
                 if constexpr (!DoCheck)
                 {
                     if (verboseLoadWarnings)

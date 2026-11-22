@@ -48,7 +48,8 @@ namespace Eval {
     std::string trace(Position& pos);
     Value evaluate(const Position& pos, bool adjusted = false);
 
-    void init();
+    void init(const Variant* v = nullptr);
+    const Variant* initialized_variant();
     void verify();
 
     bool load_eval(std::string name, std::istream& stream);

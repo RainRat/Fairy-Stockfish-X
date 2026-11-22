@@ -6675,7 +6675,7 @@ bool Position::legal_without_mate_only_probe(Move m) const {
       // canonical gating_move_blocks_occupancy() sites; a raw is_gating(m)
       // test (or a bare walling(us) test) would inject the spell square or
       // SquareBB[SQ_NONE] for ordinary moves of a walling side.
-      if (gating_move_blocks_occupancy(m) && !laser_game())
+      if (gating_move_blocks_occupancy(m) && !laser_game() && is_ok(gating_square(m)))
           occupied |= gating_square(m);
       if (type_of(m) == CASTLING)
       {
@@ -6831,7 +6831,7 @@ bool Position::legal_without_mate_only_probe(Move m) const {
           occupied ^= st->wallSquares;
       // See the pseudo-royal block: keep occupancy simulation consistent with
       // gating_move_blocks_occupancy() (no spell-square or SQ_NONE injection).
-      if (gating_move_blocks_occupancy(m) && !laser_game())
+      if (gating_move_blocks_occupancy(m) && !laser_game() && is_ok(gating_square(m)))
           occupied |= gating_square(m);
       if (type_of(m) == CASTLING)
       {
@@ -6879,7 +6879,7 @@ bool Position::legal_without_mate_only_probe(Move m) const {
                   return false; // Anti-royal piece is missing and not replaced
 
               Bitboard antiRoyalsByType = pieces(sideToMove, pt);
-              if (movePt == pt && !cloneMove)
+              if (!dropMove && !cloneMove && is_ok(from) && movePt == pt)
                   antiRoyalsByType &= ~square_bb(from);
               antiRoyals |= antiRoyalsByType;
               if (finalMovePt == pt)
@@ -9164,12 +9164,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
-  // Drop moves participate as well: INSERT pushes contribute pushRightsMask,
+  // Drop moves participate as well: INSERT pushes contribute pushRightsMask
+  // (their `from` is only an adjacent direction marker, not a touched square),
   // and capture/exchange/swap drops landing on a rook's or king's home square
   // revoke through castlingRightsMask[to] (plain drops have empty masks).
   if (!passMove && !pureWallMove && st->castlingRights)
   {
-      const int rightsMask = (rifleShot ? castlingRightsMask[to]
+      const int rightsMask = (rifleShot || is_insert_move(m)
+                                       ? castlingRightsMask[to]
                                        : castlingRightsMask[to] | (is_ok(from) ? castlingRightsMask[from] : 0))
                           | (twoLeg && st->extraCaptured ? castlingRightsMask[st->extraCaptured.square] : 0)
                           | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
@@ -9310,7 +9312,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if (paired_drop(m))
       {
           Square to2 = secondary_drop_square(m);
-          if (castling_dropped_piece() && rank_of(to2) == castling_rank(us) && (castling_rook_pieces(us) & type_of(pc)))
+          if (dropColor == us && castling_dropped_piece() && rank_of(to2) == castling_rank(us) && (castling_rook_pieces(us) & type_of(pc)))
           {
               if (   (file_of(to2) == FILE_A || file_of(to2) == max_file())
                   && piece_on(make_square(castling_king_file(), castling_rank(us))) == make_piece(us, castling_king_piece(us)))
@@ -9565,11 +9567,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           // Update hash keys
           k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][to];
           st->pawnKey ^= Zobrist::psq[pc][to];
+          if (type_of(promotion) == PAWN)
+              st->pawnKey ^= Zobrist::psq[promotion][to];
           st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
                             ^ Zobrist::psq[pc][pieceCount[pc]];
 
       // Update material
-      st->nonPawnMaterial[us] += PieceValue[MG][promotion];
+      if (type_of(promotion) != PAWN)
+          st->nonPawnMaterial[us] += PieceValue[MG][promotion];
 
       grant_promoted_castling_rights(promotion, to);
   }
@@ -9651,11 +9656,14 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
       // Update hash keys
       k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][to];
+      if (type_of(promotion) == PAWN)
+          st->pawnKey ^= Zobrist::psq[promotion][to];
       st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
                         ^ Zobrist::psq[pc][pieceCount[pc]];
 
       // Update material
-      st->nonPawnMaterial[us] += PieceValue[MG][promotion] - PieceValue[MG][pc];
+      st->nonPawnMaterial[us] += (type_of(promotion) != PAWN ? PieceValue[MG][promotion] : VALUE_ZERO)
+                               - (type_of(pc) != PAWN ? PieceValue[MG][pc] : VALUE_ZERO);
 
       grant_promoted_castling_rights(promotion, to);
   }
@@ -10165,8 +10173,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                       st->pawnKey ^= Zobrist::psq[promotedPiece][bsq];
                   st->materialKey ^= Zobrist::psq[promotedPiece][pieceCount[promotedPiece] - 1]
                                   ^ Zobrist::psq[bpc][pieceCount[bpc]];
-                  st->nonPawnMaterial[bc] += PieceValue[MG][promotedPiece]
-                                          - (type_of(bpc) != PAWN ? PieceValue[MG][bpc] : 0);
+                  st->nonPawnMaterial[bc] += (type_of(promotedPiece) != PAWN ? PieceValue[MG][promotedPiece] : VALUE_ZERO)
+                                          - (type_of(bpc) != PAWN ? PieceValue[MG][bpc] : VALUE_ZERO);
                   continue;
               }
           }

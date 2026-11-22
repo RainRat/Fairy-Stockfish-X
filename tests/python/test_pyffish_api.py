@@ -845,5 +845,29 @@ class TestPublicAPI(unittest.TestCase):
         self.assertEqual(sf.legal_moves("immortal-snail", fen, []), ["e2d3"])
         self.assertEqual(sf.game_result("immortal-snail", fen, ["e2d3"]), sf.VALUE_MATE)
 
+    def test_evaluate_refreshes_psqt_and_nnue_across_variant_switches(self):
+        shogi_fen = sf.start_fen("shogi")
+        chess_fen = sf.start_fen("chess")
+        nnue_path = ROOT_DIR / "src" / "nn-3475407dc199.nnue"
+        try:
+            sf.set_option("UCI_Variant", "chess")
+            baseline_shogi = sf.evaluate("shogi", shogi_fen, [])
+            sf.set_option("UCI_Variant", "shogi")
+            after_option_shogi = sf.evaluate("shogi", shogi_fen, [])
+            self.assertEqual(baseline_shogi, after_option_shogi)
+            sf.set_option("UCI_Variant", "chess")
+            after_chess_option_shogi = sf.evaluate("shogi", shogi_fen, [])
+            self.assertEqual(baseline_shogi, after_chess_option_shogi)
+
+            if nnue_path.exists():
+                sf.set_option("UCI_Variant", "chess")
+                sf.set_option("EvalFile", str(nnue_path))
+                chess_nnue_eval = sf.evaluate("chess", chess_fen, [])
+                self.assertEqual(sf.evaluate("shogi", shogi_fen, []), baseline_shogi)
+                self.assertEqual(sf.evaluate("chess", chess_fen, []), chess_nnue_eval)
+        finally:
+            sf.set_option("EvalFile", "<empty>")
+            sf.set_option("UCI_Variant", "chess")
+
 if __name__ == "__main__":
     unittest.main()

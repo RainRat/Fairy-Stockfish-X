@@ -1791,4 +1791,69 @@ assert_contains "${rookmate_output}" "^info string variant rookmate "
 assert_contains "${rookmate_output}" "^Fen: rnbqcbnk/pppppppp/8/8/8/8/PPPPPPPP/RNBQCBNK w - - 7\+7 0 1$"
 assert_nodes "${rookmate_output}" 20
 
+cat > "$FSX_TMP_INI" <<'INI'
+[self-inherit:self-inherit]
+
+[hopper-mixed-friendly-hurdle:chess]
+customPiece1 = d:{transparent_types: friendly; hurdle_types: enemy}R
+
+[hopper-friendly-wall:chess]
+customPiece1 = d:{transparent_types: friendly, wall}R
+
+[hopper-bent-slider:chess]
+customPiece1 = d:{hurdle_types: enemy}O
+
+[hopper-trailing-block:chess]
+customPiece1 = d:R{hurdle_types: enemy}
+
+[cannon-prefix-filter:chess]
+pieceToCharTable = PNBRQK....D.....pnbrqk....d.....
+customPiece1 = d:p{hurdle_types: enemy}R
+
+[cannon-suffix-filter:chess]
+pieceToCharTable = PNBRQK....D.....pnbrqk....d.....
+customPiece1 = d:{hurdle_types: enemy}pR
+
+[grasshopper-filter:chess]
+pieceToCharTable = PNBRQK....D.....pnbrqk....d.....
+customPiece1 = d:g{hurdle_types: enemy}R
+INI
+
+batch5_followup_check=$("${ENGINE}" check "$FSX_TMP_INI" 2>&1 || true)
+assert_contains "${batch5_followup_check}" "Variant template 'self-inherit' does not exist."
+assert_contains "${batch5_followup_check}" "Variant 'hopper-mixed-friendly-hurdle' has invalid configuration"
+assert_contains "${batch5_followup_check}" "Variant 'hopper-friendly-wall' has invalid configuration"
+assert_contains "${batch5_followup_check}" "Modifiers are not yet implemented for bent slider"
+assert_contains "${batch5_followup_check}" "Variant 'hopper-bent-slider' has invalid configuration"
+assert_contains "${batch5_followup_check}" "trailing \{\.\.\.\} block has no movement atom"
+assert_contains "${batch5_followup_check}" "Variant 'hopper-trailing-block' has invalid configuration"
+assert_not_contains "${batch5_followup_check}" "Variant 'cannon-prefix-filter' has invalid configuration"
+assert_not_contains "${batch5_followup_check}" "Variant 'cannon-suffix-filter' has invalid configuration"
+assert_not_contains "${batch5_followup_check}" "Variant 'grasshopper-filter' has invalid configuration"
+
+cannon_prefix_moves=$(run_uci "$ENGINE" "$FSX_TMP_INI" cannon-prefix-filter <<'UCI'
+position fen 7k/8/8/8/8/3p4/3D4/K7 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "${cannon_prefix_moves}" "d2d5: 1"
+assert_nodes "${cannon_prefix_moves}" 8
+
+cannon_suffix_moves=$(run_uci "$ENGINE" "$FSX_TMP_INI" cannon-suffix-filter <<'UCI'
+position fen 7k/8/8/8/8/3p4/3D4/K7 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "${cannon_suffix_moves}" "d2d5: 1"
+assert_nodes "${cannon_suffix_moves}" 8
+
+grasshopper_filter_moves=$(run_uci "$ENGINE" "$FSX_TMP_INI" grasshopper-filter <<'UCI'
+position fen 7k/8/8/8/8/3p4/3D4/K7 w - - 0 1
+go perft 1
+UCI
+)
+assert_contains "${grasshopper_filter_moves}" "d2d4: 1"
+assert_not_contains "${grasshopper_filter_moves}" "d2d5: 1"
+assert_nodes "${grasshopper_filter_moves}" 4
+
 echo "parser regression tests passed"
