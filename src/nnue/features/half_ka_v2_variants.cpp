@@ -355,9 +355,10 @@ namespace Stockfish::Eval::NNUE::Features {
   bool HalfKAv2Variants::requires_refresh(StateInfo* st, Color perspective, const Position& pos) {
     // Swap/pull moves can carry the perspective's king in dirtyPiece.piece[1],
     // so every dirty entry must be checked, not just the mover slot.
-    for (int i = 0; i < st->dirtyPiece.dirty_num; ++i)
-        if (st->dirtyPiece.piece[i] == make_piece(perspective, pos.nnue_king()))
-            return true;
+    if (pos.nnue_king() != NO_PIECE_TYPE)
+        for (int i = 0; i < st->dirtyPiece.dirty_num; ++i)
+            if (st->dirtyPiece.piece[i] == make_piece(perspective, pos.nnue_king()))
+                return true;
     return st->nnueRefreshNeeded
         || pos.flip_enclosed_pieces();
   }

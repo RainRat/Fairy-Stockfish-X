@@ -404,6 +404,10 @@ Option& Option::operator=(const string& v) {
   return *this;
 }
 
+Option& Option::operator=(const char* v) {
+  return *this = std::string(v ? v : "");
+}
+
 Option& Option::operator=(bool v) {
   return *this = std::string(v ? "true" : "false");
 }

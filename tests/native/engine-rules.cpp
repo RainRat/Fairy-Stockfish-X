@@ -1594,9 +1594,34 @@ void state() {
         }
     }
 
+    const std::string prevVariant = std::string(Options["UCI_Variant"]);
+    const int prevHash = int(Options["Hash"]);
+    const bool prevPonder = bool(Options["Ponder"]);
+
     Options["UCI_Variant"] = std::string("CHESS");
     check(std::string(Options["UCI_Variant"]) == "chess",
           "case-insensitive combo option assignment did not normalize to canonical value");
+
+    Options["UCI_Variant"] = "CHESS";
+    check(std::string(Options["UCI_Variant"]) == "chess",
+          "const char* option assignment did not normalize combo value");
+    check(Options["UCI_Variant"].get_type() == "combo",
+          "const char* option assignment overwrote combo type");
+
+    Options["Hash"] = 32;
+    check(Options["Hash"].get_type() == "spin" && int(Options["Hash"]) == 32,
+          "int option assignment corrupted spin option type or value");
+
+    Options["Ponder"] = true;
+    check(Options["Ponder"].get_type() == "check" && bool(Options["Ponder"]),
+          "bool(true) option assignment corrupted check option");
+    Options["Ponder"] = false;
+    check(Options["Ponder"].get_type() == "check" && !bool(Options["Ponder"]),
+          "bool(false) option assignment corrupted check option");
+
+    Options["Hash"] = prevHash;
+    Options["Ponder"] = prevPonder;
+    Options["UCI_Variant"] = prevVariant;
 }
 
 void royal() {
@@ -1625,6 +1650,45 @@ void royal() {
         if (std::string(test.fen) == "9/9/9/9/9/9/5k3/9/K4L(0)3 w - - 0 1")
             check(MoveList<QUIET_CHECKS>(pos).contains(parse_move(pos, "f1f1f")),
                   "royal-destroying laser fire missing from quiet checks");
+    }
+
+    {
+        Position pos;
+        StateListPtr states;
+        Value result = VALUE_NONE;
+        set_position(pos, states, "royal-blast-extinction",
+                     "4k3/4p3/8/8/8/8/8/K3R3 w - - 0 1");
+        Move blastKill = parse_move(pos, "e1e7");
+        check(pos.legal(blastKill), "blast capture adjacent to enemy king should be legal");
+        states->emplace_back();
+        pos.do_move(blastKill, states->back());
+        check(pos.is_immediate_game_end(result, 0) && result == VALUE_MATE,
+              "non-laser blast king destruction did not honor extinctionValue = win");
+    }
+
+    {
+        Position pos;
+        StateListPtr states;
+        Value result = VALUE_NONE;
+        set_position(pos, states, "dos-laser-chess",
+                     "9/9/9/9/9/9/5k3/9/K4L(0)3 w - - 0 1");
+        Move laserKill = parse_move(pos, "f1f1f");
+        check(pos.legal(laserKill), "laser fire move should be legal");
+        states->emplace_back();
+        pos.do_move(laserKill, states->back());
+        check(pos.is_immediate_game_end(result, 0) && result == mated_in(0),
+              "laser royal destruction did not adjudicate immediate loss");
+    }
+
+    {
+        Position pos;
+        StateListPtr states;
+        set_position(pos, states, "royal-moa-check",
+                     "8/8/8/8/2a5/8/P7/K6k b - - 0 1");
+        check(!(pos.check_squares(CUSTOM_PIECE_1) & square_bb(SQ_B3)),
+              "diagfirst custom lame piece retained blocked reverse-path check square");
+        check(bool(pos.check_squares(CUSTOM_PIECE_1) & square_bb(SQ_C2)),
+              "diagfirst custom lame piece missed unblocked forward check square");
     }
 }
 
@@ -2547,6 +2611,17 @@ rook = r
 pushingStrength = r:5
 connectN = 3
 startFen = 6/6/6/Rr1rr1/6 w - - 0 1
+
+[royal-blast-extinction:chess]
+blastOnCapture = true
+extinctionValue = win
+extinctionPieceTypes = k
+castling = false
+
+[royal-moa-check:chess]
+customPiece1 = a:n{path:diagfirst}N
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+castling = false
 )INI");
     variants.parse_istream<false>(inline_config);
 }

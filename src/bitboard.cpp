@@ -563,13 +563,6 @@ Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initia
       if (hit)
           return (path & ~square_bb(s1)) | square_bb(s2);
   }
-  for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
-  {
-      bool hit = false;
-      Bitboard path = tuple_rider_path_between(ray, s1, s2, c, hit);
-      if (hit)
-          return path;
-  }
   return Bitboard(0);
 }
 

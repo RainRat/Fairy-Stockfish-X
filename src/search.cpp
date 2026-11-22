@@ -217,7 +217,8 @@ void Search::init() {
 
 void Search::clear() {
 
-  Threads.main()->wait_for_search_finished();
+  if (!Threads.empty())
+      Threads.main()->wait_for_search_finished();
 
   Time.availableNodes = 0;
   TT.clear();

@@ -270,7 +270,14 @@ struct PieceInfo {
     }
 
     const bool canUseMultiHopFastLame = (profile.limit == 0)
-                                     || (!has_hopper_like_movement() && !has_dynamic_slider() && !has_max_slider());
+                                     || (   slider[initial][modality].empty()
+                                         && hopper[initial][modality].empty()
+                                         && universalHopper[initial][modality].empty()
+                                         && tupleSlider[initial][modality].empty()
+                                         && leapRider[initial][modality].empty()
+                                         && !rose[initial][modality]
+                                         && !griffon[initial][modality]
+                                         && !manticore[initial][modality]);
     if (canUseMultiHopFastLame)
     {
         if ((adr == 2 && adf == 0) || (adr == 0 && adf == 2))

@@ -64,6 +64,7 @@ public:
   explicit Option(double v, int minv, int maxv, OnChange = nullptr);
 
   Option& operator=(const std::string&);
+  Option& operator=(const char* v);
   Option& operator=(bool v);
   Option& operator=(int v);
   void operator<<(const Option&);

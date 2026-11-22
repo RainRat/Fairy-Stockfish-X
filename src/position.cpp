@@ -649,7 +649,7 @@ namespace {
   inline Bitboard retro_asymmetric_check_squares(const Position& pos, Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
     // Hopper families need hurdle-aware retro logic. Keep pseudo candidates for
     // those, and test true forward attacks from each pseudo candidate so
-    // asymmetrical riders and hybrids match attacks_bb() exactly.
+    // asymmetrical riders and hybrids match attacks_from() exactly.
     if (pieceMap.get(pt)->has_hopper_like_capture())
         return PseudoAttacks[~attacker][pt][kingSq];
 
@@ -659,7 +659,7 @@ namespace {
     while (candidates)
     {
         Square from = pop_lsb(candidates);
-        if (pos.attacks_bb(attacker, pt, from, occupied) & kingSq)
+        if (pos.attacks_from<false, false>(attacker, pt, from, occupied) & kingSq)
             checks |= from;
     }
 
@@ -2596,13 +2596,17 @@ void Position::set_check_info(StateInfo* si) const {
               PieceType pt = pop_lsb(ps);
               PieceType movePt = effective_piece_type(pt);
               const PieceInfo* pi = pieceMap.get(movePt);
-              if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
-                  // For asymmetrical riders, use true retro paths from the king square.
+              if ((AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
+                  || (pi->has_custom_lame_capture() && !topology_wraps()))
+                  // For asymmetrical riders and unwrapped custom lame leapers, use true
+                  // forward attack tests from retro candidates so checkSquares matches attacks_bb().
                   si->checkSquares[pt] = retro_asymmetric_check_squares(*this, sideToMove, movePt, ksq, occupied);
               else
+              {
                   si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
-              if (pi->has_custom_lame_capture())
-                  si->checkSquares[pt] |= retro_lame_check_squares(*this, sideToMove, pt, ksq, occupied);
+                  if (pi->has_custom_lame_capture())
+                      si->checkSquares[pt] |= retro_lame_check_squares(*this, sideToMove, pt, ksq, occupied);
+              }
               // Collect special piece types that require slower check and evasion detection
               if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture() || pi->has_hopper_like_capture())
                   si->nonSlidingRiders |= pieces(pt);
@@ -11864,10 +11868,12 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
 
   // Laser destruction of a royal KING also ends the game immediately.
   // fire_laser() records destroyed pieces in bycatchSquares/bycatchPieces,
-  // not in st->captured/extraCaptured. Transformed (stacked) pieces keep a
-  // live piece on the square and are excluded via laserTransformedSquares.
+  // not in st->captured/extraCaptured. Transformed (stacked) or blast-promoted
+  // pieces keep a live piece on the square and are excluded.
+  if (laser_game())
   {
-      Bitboard destroyed = st->bycatchSquares & ~st->laserTransformedSquares;
+      bool destroyedRoyal[COLOR_NB] = { false, false };
+      Bitboard destroyed = st->bycatchSquares & ~(st->laserTransformedSquares | st->blastPromotedSquares);
       while (destroyed)
       {
           Square sq = pop_lsb(destroyed);
@@ -11876,19 +11882,26 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
               continue;
           PieceType destroyedType = type_of(bpc);
           Color destroyedColor = color_of(bpc);
-          bool destroyedRoyal = destroyedType == KING
-                             && !(pseudo_royal_types() & piece_set(KING));
-          if (!destroyedRoyal && !(pseudo_royal_types() & piece_set(destroyedType))
+          bool isRoyal = destroyedType == KING
+                      && !(pseudo_royal_types() & piece_set(KING));
+          if (!isRoyal && !(pseudo_royal_types() & piece_set(destroyedType))
               && king_type() != NO_PIECE_TYPE && destroyedType == king_type())
           {
               const bool usesPhysicalKings = count(WHITE, KING) + count(BLACK, KING) > 0;
-              destroyedRoyal = !usesPhysicalKings || count(destroyedColor, KING) == 0;
+              isRoyal = !usesPhysicalKings || count(destroyedColor, KING) == 0;
           }
-          if (destroyedRoyal)
-          {
-              result = destroyedColor == sideToMove ? mated_in(ply) : mate_in(ply);
-              return true;
-          }
+          if (isRoyal)
+              destroyedRoyal[destroyedColor] = true;
+      }
+      if (destroyedRoyal[WHITE] && destroyedRoyal[BLACK])
+      {
+          result = VALUE_DRAW;
+          return true;
+      }
+      if (destroyedRoyal[WHITE] || destroyedRoyal[BLACK])
+      {
+          result = destroyedRoyal[sideToMove] ? mated_in(ply) : mate_in(ply);
+          return true;
       }
   }
 
@@ -13074,6 +13087,7 @@ bool Position::see_pruning_unreliable() const {
                       || flag_region(WHITE) || flag_region(BLACK)
                       || var->castlingWins
                       || connect_n() != 0
+                      || var->connectNForfeit != 0
                       || connect_nxn() != 0
                       || collinear_n() != 0
                       || var->connectRegion1[WHITE] || var->connectRegion2[WHITE] || var->connectRegion3[WHITE]

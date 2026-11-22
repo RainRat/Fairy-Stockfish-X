@@ -653,6 +653,26 @@ UCI
   assert_contains "$out" "^Checkers:[[:space:]]*$"
   assert_not_contains "$out" "^a2b2:"
   assert_contains "$out" "^a2b3: 1$"
+
+  # Bounded lame + rose hybrid (nD@): single-hop nD must not promote to
+  # unlimited RIDER_LAME_DABBABA when rose places (4,0) in PseudoAttacks.
+  load_inline_variants <<'INI'
+[nd-rose-hybrid:chess]
+king = k
+customPiece1 = a:nD@
+pieceToCharTable = PNBRQ............A...Kpnbrq............a...k
+startFen = 7K/8/8/8/8/8/2p5/A3k3 b - - 0 1
+INI
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" nd-rose-hybrid <<'UCI'
+position startpos
+d
+position fen 7K/8/8/8/8/8/2p5/A3k3 w - - 0 1
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_contains "$out" "^a1c1: 1$"
+  assert_not_contains "$out" "^a1e1:"
 }
 
 test_universal_leaper

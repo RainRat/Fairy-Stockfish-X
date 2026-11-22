@@ -71,8 +71,11 @@ void TranspositionTable::resize(size_t mbSize) {
   // option). XBoard memory/option commands and binding set_option calls do
   // not provide that contract themselves.
   Threads.stop = true;
-  Threads.main()->wait_for_search_finished();
-  Threads.wait_for_search_finished();
+  if (!Threads.empty())
+  {
+      Threads.main()->wait_for_search_finished();
+      Threads.wait_for_search_finished();
+  }
 
   aligned_large_pages_free(table);
   table = nullptr;

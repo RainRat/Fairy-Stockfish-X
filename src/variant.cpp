@@ -2735,17 +2735,17 @@ Variant* Variant::conclude() {
                        && !connectGoalByType
                        && changingColorTrigger == ColorChangeTrigger::NEVER;
 
-    // Absolute n-fold values attribute the repetition result to the color
-    // that made the repetition (the side not to move) rather than to the
-    // side to move. Mirror the value by color; conclude() runs for built-in
-    // variants too, so e.g. minishogi folds the same way as INI variants.
+    // Absolute n-fold values interpret nFoldValue from White's point of view
+    // rather than from the side to move (mirroring Black as -WHITE).
+    // conclude() runs for built-in variants too, so e.g. minishogi folds
+    // the same way as INI variants.
     if (nFoldValueAbsolute)
     {
         if (!nFoldValue.byColorSet[WHITE])
         {
             nFoldValue.byColor[WHITE] = nFoldValue.byColorSet[BLACK]
                                       ? -nFoldValue.byColor[BLACK]
-                                      : -nFoldValue.global;
+                                      : nFoldValue.global;
             nFoldValue.byColorSet[WHITE] = true;
         }
         if (!nFoldValue.byColorSet[BLACK])

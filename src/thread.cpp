@@ -147,7 +147,11 @@ void Thread::idle_loop() {
       // cancellation is tracked via StateMachine::ponderCancel / shuttingDown
       // inside launch_ponder_worker() rather than !Threads.stop here.
       if (Threads.size() && this == Threads.main() && XBoard::stateMachine && XBoard::stateMachine->ponderMove.load())
+      {
+          lk.unlock();
           XBoard::stateMachine->launch_ponder_worker();
+          lk.lock();
+      }
       cv.wait(lk, [&]{ return searching; });
 
       if (exit)
