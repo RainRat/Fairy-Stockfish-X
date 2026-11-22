@@ -78,6 +78,20 @@ startFen = n7/4k3/8/8/8/8/8/8/4K3/4R3 w - - 0 1
 
 [spell-sacred:spell-chess]
 checkedRoyalsIgnoreFreeze = true
+
+[spell-royal:chess]
+potions = true
+customPiece1 = f:0
+customPiece2 = j:0
+freezePotion = f
+jumpPotion = j
+freezeCooldown = 3
+jumpCooldown = 3
+pieceDrops = true
+dropRegionWhite = -
+dropRegionBlack = -
+castling = false
+startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[JJFFFFFjjfffff] w - - 0 1
 )INI");
     variants.parse_istream<false>(in);
     loaded = true;
@@ -663,6 +677,96 @@ static void test_committed_gate_overflow_parse() {
     expect(pos.pos_is_ok(), "overlong committed-gate FEN did not parse cleanly");
 }
 
+static void test_expiring_freeze_zone_simulation() {
+    const Variant* spellRoyal = variants.get("spell-royal");
+    const Variant* spellChess = variants.get("spell-chess");
+    expect(spellRoyal != nullptr && spellChess != nullptr,
+           "spell variants failed to load for freeze expiration test");
+
+    // 1. Direct check into an expiring opponent freeze zone (bf:e2).
+    {
+        StateInfo st{}, next{}, nextJump{}, nextFreeze{};
+        Position pos;
+        pos.set(spellRoyal, "4k3/8/8/8/8/8/R7/4K3[JJFFFFFjjfffff] w - - 0 1 bf:e2", false, &st, nullptr);
+        Move m = make<NORMAL>(SQ_A2, SQ_E2);
+        expect(pos.gives_check(m), "direct check into expiring freeze zone missed gives_check");
+        pos.do_move(m, next);
+        expect(bool(pos.checkers()), "do_move did not set checkers on expiring freeze zone check");
+        pos.undo_move(m);
+
+        std::string jumpMoveStr = "j@e1,a2e2";
+        Move jm = UCI::to_move(pos, jumpMoveStr);
+        expect(jm != MOVE_NONE, "compound jump move into expiring freeze zone failed to parse");
+        expect(pos.gives_check(jm), "compound jump move into expiring freeze zone missed gives_check");
+        pos.do_move(jm, nextJump);
+        expect(bool(pos.checkers()), "compound jump move did not set checkers");
+        pos.undo_move(jm);
+
+        std::string freezeMoveStr = "f@c5,a2e2";
+        Move fm = UCI::to_move(pos, freezeMoveStr);
+        expect(fm != MOVE_NONE, "compound freeze move into expiring freeze zone failed to parse");
+        expect(pos.gives_check(fm), "compound freeze move into expiring freeze zone missed gives_check");
+        pos.do_move(fm, nextFreeze);
+        expect(bool(pos.checkers()), "compound freeze move did not set checkers");
+        pos.undo_move(fm);
+    }
+
+    // 2. Unrelated move expiring bf:e2 thaws an already-aimed checker on e2.
+    {
+        StateInfo st{}, next{};
+        Position pos;
+        pos.set(spellRoyal, "4k3/8/8/8/8/8/P3R3/4K3[JJFFFFFjjfffff] w - - 0 1 bf:e2", false, &st, nullptr);
+        Move m = make<NORMAL>(SQ_A2, SQ_A3);
+        expect(pos.gives_check(m), "unrelated move thawing frozen checker missed gives_check");
+        pos.do_move(m, next);
+        expect(bool(pos.checkers()), "do_move did not set checkers after thawing frozen checker");
+        pos.undo_move(m);
+    }
+
+    // 3. Discovered check from bishop on d3 inside expiring bf:e2.
+    {
+        StateInfo st{}, next{};
+        Position pos;
+        pos.set(spellRoyal, "8/7k/8/8/4P3/3B4/8/4K3[JJFFFFFjjfffff] w - - 0 1 bf:e2", false, &st, nullptr);
+        Move m = make<NORMAL>(SQ_E4, SQ_E5);
+        expect(pos.gives_check(m), "discovered check from expiring freeze zone missed gives_check");
+        pos.do_move(m, next);
+        expect(bool(pos.checkers()), "do_move did not set checkers on discovered check from expiring freeze zone");
+        pos.undo_move(m);
+    }
+
+    // 4. King stepping into check from enemy rook inside expiring wf:e2.
+    {
+        StateInfo st{};
+        Position pos;
+        pos.set(spellRoyal, "3K4/8/8/8/8/8/4r3/4k3[JJFFFFFjjfffff] w - - 0 1 wf:e2", false, &st, nullptr);
+        expect(!pos.legal(make<NORMAL>(SQ_D8, SQ_E8)),
+               "king stepped into check from rook in expiring freeze zone");
+    }
+
+    // 5. Shipped spell-chess castling: expiring wf:g8 must not allow castling
+    // into check, while newly casting f@g8,e1g1 freezes the rook on g8.
+    {
+        StateInfo st{};
+        Position pos;
+        pos.set(spellChess, "4k1r1/8/8/8/8/8/8/4K2R[JJFFFFFjjfffff] w K - 0 1 wf:g8", false, &st, nullptr);
+        std::string castleStr = "e1g1";
+        expect(UCI::to_move(pos, castleStr) == MOVE_NONE,
+               "castling into check allowed by expiring freeze zone");
+        expect(!MoveList<LEGAL>(pos).contains(make<CASTLING>(SQ_E1, SQ_H1)),
+               "MoveList<LEGAL> included castling through expiring freeze zone");
+    }
+    {
+        StateInfo st{};
+        Position pos;
+        pos.set(spellChess, "4k1r1/8/8/8/8/8/8/4K2R[JJFFFFFjjfffff] w K - 0 1", false, &st, nullptr);
+        std::string compoundCastle = "f@g8,e1g1";
+        Move cm = UCI::to_move(pos, compoundCastle);
+        expect(cm != MOVE_NONE && MoveList<LEGAL>(pos).contains(cm),
+               "compound freeze+castle move rejected");
+    }
+}
+
 int main() {
     init_engine();
     load_test_variants();
@@ -685,6 +789,7 @@ int main() {
     test_committed_piece_type_helpers();
     test_committed_gate_simulation();
     test_committed_gate_overflow_parse();
+    test_expiring_freeze_zone_simulation();
     return 0;
 }
 EOF

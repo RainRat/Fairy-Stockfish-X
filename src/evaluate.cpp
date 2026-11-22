@@ -1648,7 +1648,7 @@ namespace {
     // Potion variants use a capturable commoner in place of the ordinary
     // royal.  The standard king-safety evaluator intentionally skips such
     // positions, but a direct attack on that square is still an immediate
-    // capture threat.  Account for active Freeze zones cast by the attacker
+    // capture threat.  Account for active Freeze zones cast by the defender
     // when deciding whether its attack is currently effective.
     if (pos.potions_enabled() && pos.castling_king_piece(Us) == COMMONER
         && pos.count(Us, COMMONER) == 1)

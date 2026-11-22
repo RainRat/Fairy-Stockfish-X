@@ -627,7 +627,7 @@ namespace {
                           // satisfy the decode_direction precondition. U is rejected
                           // above and never reaches this path.
                           // Direction keys decode unambiguously only within
-                          // (-FILE_NB/2, FILE_NB/2]; the boundary values require a
+                          // (-FILE_NB/2, FILE_NB/2); the boundary values require a
                           // matching sign of dr, otherwise the key decodes as another ray.
                           if (   std::abs(df) > int(FILE_NB) / 2
                               || (df == int(FILE_NB) / 2 && dr < 0)

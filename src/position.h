@@ -2928,8 +2928,12 @@ inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simul
   if (potions_enabled())
   {
       // Potion zones are stored under the caster's color, so the squares of
-      // c's pieces frozen by a zone are those of ~c's zone.
-      mask |= st->potionZones[~c][Variant::POTION_FREEZE];
+      // c's pieces frozen by a zone are those of ~c's zone.  In a simulated
+      // post-move view, pre-existing zones have expired (do_move clears both
+      // sides' prior zones) and only a newly cast spellCtx->freezeExtra
+      // remains active against ~sideToMove.
+      if (!simulated)
+          mask |= st->potionZones[~c][Variant::POTION_FREEZE];
       if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
           mask |= spellCtx->freezeExtra;
   }
@@ -2973,7 +2977,7 @@ inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simul
           // from the attack map.  During a compound move, include the
           // temporary zone only when that move is being cast by the royal's
           // owner as well.
-          Bitboard frozenAttackers = st->potionZones[royalColor][Variant::POTION_FREEZE]
+          Bitboard frozenAttackers = (!simulated ? st->potionZones[royalColor][Variant::POTION_FREEZE] : Bitboard(0))
                                    | freeze_squares_from_freezers(~royalColor, simulated);
           if (const SpellContext* spellCtx = current_spell_context();
               spellCtx && sideToMove == royalColor)

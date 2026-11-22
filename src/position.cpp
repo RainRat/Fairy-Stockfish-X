@@ -7718,6 +7718,9 @@ bool Position::gives_check(Move m) const {
 
       const bool isComplex = is_clone_move(m)
                          || (potCtx.potion != Variant::POTION_TYPE_NB)
+                         || (potions_enabled()
+                             && (st->potionZones[WHITE][Variant::POTION_FREEZE]
+                                 || st->potionZones[BLACK][Variant::POTION_FREEZE]))
                          || is_drop_move(m)
                          || (var->wallingRule != NO_WALLING)
                          || (var->antiRoyalTypes != NO_PIECE_SET)
@@ -7979,10 +7982,11 @@ bool Position::gives_check_impl(Move m) const {
   if (is_two_leg(m) && capture(m))
       discCheckSq |= square_bb(via_sq(m));
 
-  const bool freezingChanged = var->freezePieceTypes
+  const bool freezingChanged = (var->freezePieceTypes
       && (var->freezeAttackedSquares
           || simulated.freezerOccupancy[WHITE] != pieces(WHITE, var->freezePieceTypes)
-          || simulated.freezerOccupancy[BLACK] != pieces(BLACK, var->freezePieceTypes));
+          || simulated.freezerOccupancy[BLACK] != pieces(BLACK, var->freezePieceTypes)))
+      || (potions_enabled() && bool(st->potionZones[~sideToMove][Variant::POTION_FREEZE]));
   if (  (((!dropMove && (blockers_for_king(~sideToMove) & discCheckSq)) || var->trapRegion
           || freezingChanged
           || var->hookPieceTypes)
@@ -8070,7 +8074,7 @@ bool Position::gives_check_impl(Move m) const {
       // Is there a discovered check?
       if (   castling_rank(WHITE) > RANK_1
           && ((blockers_for_king(~sideToMove) & rfrom) || (non_sliding_riders() & pieces(sideToMove)))
-          && attackers_to_king(royalSq, occupied, sideToMove))
+          && attackers_to_king(royalSq, occupied, sideToMove, janggiCannons, NO_PIECE_TYPE, &simulated))
           return true;
 
       return   (occupied & square_bb(rto))
