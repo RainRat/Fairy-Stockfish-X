@@ -68,6 +68,17 @@ bool buildPosition(Position& pos, StateListPtr& states, const Variant* v, const 
     states = StateListPtr(new std::deque<StateInfo>(1)); // Drop old and create a new one
 
     UCI::init_variant(v);
+    // Evaluation tables (PSQT, NNUE) are global and per-variant. Refresh them
+    // when the queried variant differs from the last one evaluated, mirroring
+    // on_variant_set(), so evaluate() never scores a position with another
+    // variant's piece values or tables.
+    static const Variant* evalInitializedVariant = nullptr;
+    if (evalInitializedVariant != v)
+    {
+        PSQT::init(v);
+        Eval::NNUE::init();
+        evalInitializedVariant = v;
+    }
     if (strcmp(fen, "startpos") == 0)
         fen = v->startFen.c_str();
     const FEN::FenValidation validation = FEN::validate_fen(fen, v, chess960);

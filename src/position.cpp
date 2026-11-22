@@ -2293,8 +2293,12 @@ Position& Position::set(const Variant* v, const string& fenStr, bool isChess960,
   // Lichess-style counter for 3check
   if (check_counting())
   {
-      if (ss >> token && token == '+')
+      // Peek before consuming: swallowing a non-'+' token would eat the
+      // first token of a trailing {points} or potion field.
+      ss >> std::ws;
+      if (ss.peek() == '+')
       {
+          ss >> token;
           ss >> token;
           st->checksRemaining[WHITE] = CheckCount(std::max(3 - (token - '0'), 0));
           ss >> token >> token;
@@ -4285,13 +4289,22 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
   if (!(surround_capture_opposite() || surround_capture_intervene() || surround_capture_edge()))
       return mask;
 
+  // connectDirections only holds the eight unit steps (see Variant::conclude()),
+  // so every hop must stay on the variant's board and remain adjacent to its
+  // predecessor: raw square arithmetic would wrap h5 + EAST into a6 on boards
+  // filling the capacity grid, and step off capacity-only squares on sub-capacity
+  // boards (breaking surroundCaptureEdge, which relies on "beyond" being off-board).
+  auto stepped_ok = [this](Square from, Square to) {
+      return is_ok(to) && (square_bb(to) & board_bb()) && distance(from, to) == 1;
+  };
+
   for (int sign : {-1, 1})
   {
       for (const Direction& d : var->connectDirections)
       {
           Direction mod_d = d * sign;
           Square s = moverSq + mod_d;
-          if (!is_ok(s) || !(square_bb(s) & themPieces & occupied))
+          if (!stepped_ok(moverSq, s) || !(square_bb(s) & themPieces & occupied))
               continue;
 
           if (s & surround_capture_max_region())
@@ -4314,7 +4327,7 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
           }
 
           Square oppSquare = s + mod_d;
-          if (!is_ok(oppSquare))
+          if (!stepped_ok(s, oppSquare))
           {
               if (surround_capture_edge())
                   mask |= s;
@@ -4325,13 +4338,19 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
               Square end = s;
               for (int i = 0; i < var->surroundCaptureCount; ++i)
               {
-                  if (!is_ok(end) || !(end & themPieces & occupied))
+                  if (!(square_bb(end) & themPieces & occupied))
                   {
                       captured = 0;
                       break;
                   }
                   captured |= square_bb(end);
-                  end += mod_d;
+                  Square next = Square(end + mod_d);
+                  if (!stepped_ok(end, next))
+                  {
+                      end = SQ_NONE;
+                      break;
+                  }
+                  end = next;
               }
 
               if (captured && is_ok(end)
@@ -4347,7 +4366,7 @@ Bitboard Position::compute_surround_capture_mask(Square moverSq, Bitboard usPiec
       {
           Square s1 = moverSq + d;
           Square s2 = moverSq - d;
-          if (is_ok(s1) && is_ok(s2) && (themPieces & s1 & occupied) && (themPieces & s2 & occupied))
+          if (stepped_ok(moverSq, s1) && stepped_ok(moverSq, s2) && (themPieces & s1 & occupied) && (themPieces & s2 & occupied))
               mask |= square_bb(s1) | s2;
       }
   }
@@ -6651,7 +6670,12 @@ bool Position::legal_without_mate_only_probe(Move m) const {
       Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
-      if (walling(us) || (is_gating(m) && !laser_game()))
+      // Ordinary gating pieces and placed walls participate in occupancy;
+      // spell-potion targets and laser rotations never do. Mirrors the
+      // canonical gating_move_blocks_occupancy() sites; a raw is_gating(m)
+      // test (or a bare walling(us) test) would inject the spell square or
+      // SquareBB[SQ_NONE] for ordinary moves of a walling side.
+      if (gating_move_blocks_occupancy(m) && !laser_game())
           occupied |= gating_square(m);
       if (type_of(m) == CASTLING)
       {
@@ -6805,7 +6829,9 @@ bool Position::legal_without_mate_only_probe(Move m) const {
           Bitboard blastImmune = blastOnCapture ? blast_immune_bb() : Bitboard(0);
       if (walling_rule() == DUCK)
           occupied ^= st->wallSquares;
-      if (walling(us) || (is_gating(m) && !laser_game()))
+      // See the pseudo-royal block: keep occupancy simulation consistent with
+      // gating_move_blocks_occupancy() (no spell-square or SQ_NONE injection).
+      if (gating_move_blocks_occupancy(m) && !laser_game())
           occupied |= gating_square(m);
       if (type_of(m) == CASTLING)
       {
@@ -6817,6 +6843,8 @@ bool Position::legal_without_mate_only_probe(Move m) const {
       }
       if (!rifleShot)
           occupied |= kto;
+      else
+          occupied &= ~square_bb(shotSq);
       if (type_of(m) == EN_PASSANT)
       {
           occupied &= ~square_bb(capture_square(to));
@@ -8918,11 +8946,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                                                    saved.piece.unpromoted, drop_loop(),
                                                    var->captureToHandSide, main_promotion_pawn_type(color_of(victim)));
       bool transferred = add_capture_transfer(st, transferPiece, &k);
-      if (Eval::useNNUE && dirtyIdx >= 0 && transferred)
+      if (Eval::useNNUE && dirtyIdx >= 0 && transferred && capture_type() == HAND)
       {
-          Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
-          dp.handPiece[dirtyIdx] = pieceToHand;
-          dp.handCount[dirtyIdx] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+          // Prison transfers do not touch NNUE hand features (the accumulator
+          // encodes count_in_hand only); reading the hand bucket here would
+          // yield a stale/zero count and a negative handCount - 1 index.
+          dp.handPiece[dirtyIdx] = transferPiece;
+          dp.handCount[dirtyIdx] = pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
       }
 
       if (points_counting())
@@ -9134,10 +9164,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       k ^= Zobrist::enpassant[pop_lsb(st->epSquares)];
 
   // Update castling rights if needed
-  if (!dropMove && !passMove && !pureWallMove && st->castlingRights)
+  // Drop moves participate as well: INSERT pushes contribute pushRightsMask,
+  // and capture/exchange/swap drops landing on a rook's or king's home square
+  // revoke through castlingRightsMask[to] (plain drops have empty masks).
+  if (!passMove && !pureWallMove && st->castlingRights)
   {
       const int rightsMask = (rifleShot ? castlingRightsMask[to]
-                                       : castlingRightsMask[from] | castlingRightsMask[to])
+                                       : castlingRightsMask[to] | (is_ok(from) ? castlingRightsMask[from] : 0))
                           | (twoLeg && st->extraCaptured ? castlingRightsMask[st->extraCaptured.square] : 0)
                           | (jumpCapsq != SQ_NONE ? castlingRightsMask[jumpCapsq] : 0)
                           | pushRightsMask | pullRightsMask;
@@ -9200,6 +9233,15 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               st->pawnKey ^= Zobrist::psq[resulting][s];
           else
               st->nonPawnMaterial[us] += PieceValue[MG][resulting];
+
+          // A flip changes the occupant's color: castling rights tied to
+          // the square are no longer valid for the original owner.
+          if (st->castlingRights && castlingRightsMask[s])
+          {
+              k ^= Zobrist::castling[st->castlingRights];
+              st->castlingRights &= ~castlingRightsMask[s];
+              k ^= Zobrist::castling[st->castlingRights];
+          }
       }
   }
 
@@ -9236,9 +9278,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       if (paired_drop(m))
           st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]-2];
       if (type_of(pc) != PAWN)
-          st->nonPawnMaterial[us] += PieceValue[MG][pc] * (paired_drop(m) ? 2 : 1);
+          st->nonPawnMaterial[color_of(pc)] += PieceValue[MG][pc] * (paired_drop(m) ? 2 : 1);
       // Set castling rights for dropped king or rook
-      if (castling_dropped_piece() && rank_of(to) == castling_rank(us))
+      // A borrowed opponent drop places an enemy piece and must not
+      // grant castling rights to the dropping side.
+      if (dropColor == us && castling_dropped_piece() && rank_of(to) == castling_rank(us))
       {
           if (type_of(pc) == castling_king_piece(us) && file_of(to) == castling_king_file())
           {
@@ -9639,7 +9683,13 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                         ^ Zobrist::psq[pc][pieceCount[pc]];
 
        // Update material
-       st->nonPawnMaterial[us] += PieceValue[MG][demotion] - PieceValue[MG][pc];
+       // The demoted piece may be a PAWN (a promoted pawn unpromoted by
+       // pieceDemotion): it joins pawnKey and never counts toward
+       // nonPawnMaterial, mirroring the reference computation in set_state.
+       if (type_of(demotion) == PAWN)
+           st->pawnKey ^= Zobrist::psq[demotion][to];
+       st->nonPawnMaterial[us] += (type_of(demotion) != PAWN ? PieceValue[MG][demotion] : VALUE_ZERO)
+                                - (type_of(pc) != PAWN ? PieceValue[MG][pc] : VALUE_ZERO);
    }
    // Set en passant square(s) if the moved piece can be captured
    else if (   !dropMove
@@ -9803,7 +9853,11 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
               k ^= Zobrist::psq[gating_piece][gate2];
               st->materialKey ^= Zobrist::psq[gating_piece][pieceCount[gating_piece] - 1];
-              st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
+              // Same PAWN/non-pawn split as the primary gate above.
+              if (type_of(gating_piece) == PAWN)
+                  st->pawnKey ^= Zobrist::psq[gating_piece][gate2];
+              else
+                  st->nonPawnMaterial[us] += PieceValue[MG][gating_piece];
           }
       }
   }
@@ -10146,11 +10200,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           if (!petrifiedCenter && !(liberty_self_removal & bsq) && !trapRemoval)
           {
               bool transferred = add_capture_transfer(st, transferPiece, &k);
-              if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred)
+              if (Eval::useNNUE && bycatchDirtyIdx >= 0 && transferred && capture_type() == HAND)
               {
-                  Piece pieceToHand = capture_type() == PRISON ? ~transferPiece : transferPiece;
-                  dp.handPiece[bycatchDirtyIdx] = pieceToHand;
-                  dp.handCount[bycatchDirtyIdx] = pieceCountInHand[color_of(pieceToHand)][type_of(pieceToHand)];
+                  // See remove_extra_capture: prison transfers carry no NNUE
+                  // hand-feature delta and must not read the hand bucket.
+                  dp.handPiece[bycatchDirtyIdx] = transferPiece;
+                  dp.handCount[bycatchDirtyIdx] = pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
               }
           }
 

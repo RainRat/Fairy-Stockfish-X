@@ -2867,7 +2867,10 @@ void VariantMap::parse_istream(std::istream& file) {
             if (input.find_first_not_of(" \t") == std::string::npos)
                 continue;
             std::stringstream ss(input);
-            if (ss.peek() != ';' && ss.peek() != '#')
+            // Comment detection must ignore leading whitespace: an indented
+            // comment line is not a configuration line.
+            const size_t firstCharPos = input.find_first_not_of(" \t");
+            if (input[firstCharPos] != ';' && input[firstCharPos] != '#')
             {
                 if (input.find('=') == std::string::npos)
                 {
@@ -2942,7 +2945,16 @@ void VariantMap::parse_istream(std::istream& file) {
             skippedVariants.insert(variant);
             if (!variants.has(variant_template))
             {
-                if (verboseLoadWarnings)
+                if constexpr (DoCheck)
+                {
+                    // A missing template is a hard config error even when the
+                    // variant is otherwise unusable; check mode must report it.
+                    // Templates merely skipped for this build's board limits stay
+                    // silent, matching the size-skip handling of plain variants.
+                    if (!skippedVariants.count(variant_template))
+                        std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
+                }
+                else if (verboseLoadWarnings)
                     std::cerr << "Variant template '" << variant_template << "' does not exist." << std::endl;
                 else
                     missingTemplates.insert(variant_template);

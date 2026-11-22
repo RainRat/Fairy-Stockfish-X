@@ -593,6 +593,17 @@ namespace {
           {
               if (currentHopperProfile.transparentSpecialTypes & PieceInfo::HopperProfile::FRIENDLY)
                   p->friendlyJump = true;
+              else
+              {
+                  // A block that never enables hopper semantics would otherwise
+                  // be silently discarded, leaving a plain non-hopping piece.
+                  std::cerr << "Betza hopper block in '" << betza
+                            << "' does not enable hopper moves:"
+                            << " add one of hurdles, pre, post, capture, or equi"
+                            << " (transparent_types:friendly alone means a friendly jump)." << std::endl;
+                  fail_piece();
+                  return;
+              }
               hasUniversalHopper = false;
           }
           ensure_default_modalities();
