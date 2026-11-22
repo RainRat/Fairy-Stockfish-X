@@ -196,6 +196,13 @@ promotionRank = 9
 [invalid-double-step-rank-offboard:chess]
 doubleStepRank = 9
 
+[invalid-double-step-rank-min-offboard:chess]
+doubleStepRankMin = 9
+
+[invalid-pawntypes-pieceless]
+king = -
+pawnTypes = *
+
 [invalid-connect-n-too-large:chess]
 connectN = 9
 
@@ -778,6 +785,8 @@ assert_contains_literal "${initial_capture_output}" "nMoveRule must be between 0
 assert_contains_literal "${initial_capture_output}" "nMoveRuleImmediate must be between 0 and 107374182."
 assert_contains_literal "${initial_capture_output}" "Inconsistent settings: promotionRank > maxRank."
 assert_contains_literal "${initial_capture_output}" "Inconsistent settings: doubleStepRank > maxRank."
+assert_contains_literal "${initial_capture_output}" "Inconsistent settings: doubleStepRankMin > maxRank."
+assert_contains_literal "${initial_capture_output}" "pawnTypes - Invalid syntax."
 assert_contains_literal "${initial_capture_output}" "connectN must be between 0 and the largest board dimension."
 assert_contains_literal "${initial_capture_output}" "pointsRuleCaptures - Invalid value invalid for type PointsRule"
 assert_contains_literal "${initial_capture_output}" "captureToHandSide - Invalid value invalid for type TransferSide"

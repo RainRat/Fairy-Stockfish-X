@@ -251,4 +251,19 @@ EOF
 echo "${out}" | grep -q "Hint: "
 echo "${out}" | grep -q "Fen: "
 
+# Pass-capable variants: bare setboard resets without "Fen is empty." stderr, and
+# invalid setboard reports once without committing a pass or re-validating.
+load_inline_variants <<'INI'
+[pass-xboard:chess]
+pass = true
+INI
+pass_err_file="${FSX_TMP_INI}.stderr"
+fsx_add_exit_cleanup "rm -f '${pass_err_file}'"
+pass_out=$(printf 'xboard\nprotover 2\noption VariantPath=%s\nvariant pass-xboard\nsetboard\nsetboard garbage\nd\nquit\n' "${FSX_TMP_INI}" | uci_timeout "${ENGINE}" 2>"${pass_err_file}")
+pass_err=$(cat "${pass_err_file}")
+echo "${pass_out}" | grep -q "Error (bad setboard): invalid FEN"
+echo "${pass_out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+assert_not_contains_literal "${pass_err}" "Fen is empty."
+[[ $(grep -Fc "Invalid piece character: 'g'." <<<"${pass_err}") -eq 1 ]]
+
 echo "xboard regression tests passed"

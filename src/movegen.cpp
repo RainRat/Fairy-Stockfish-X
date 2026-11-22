@@ -225,11 +225,12 @@ namespace {
         // (e.g., to prevent overwriting/disappearing pieces in rifle capture or special moves)
         if (!(occupancyAfter & forcedGateSquare))
         {
-            // A promotion uses the piece-type field for its result, so a compound
+            // PROMOTION uses the piece-type field for its result, so a compound
             // promotion and gate is only unambiguous when both share the same piece
-            // type (cf. the laser branch above). Otherwise fall back to the plain
-            // promotion rather than overwrite its result with the gate type.
-            if ((T == PROMOTION || T == PIECE_PROMOTION) && forcedGate != pt)
+            // type (cf. the laser branch above). PIECE_PROMOTION derives its promoted
+            // type from the moving piece and has no field collision. Otherwise fall
+            // back to the plain promotion rather than overwrite its result.
+            if (T == PROMOTION && forcedGate != pt)
                 emit(m);
             else
                 emit(make_gating<T>(from, to, forcedGate, forcedGateSquare));
@@ -250,10 +251,10 @@ namespace {
             for (PieceSet ps = pos.piece_types(); ps;)
             {
                 PieceType pt_gating = pop_lsb(ps);
-                // The piece-type field already holds the promotion result for
-                // promotion move types, so only matching gating types keep the
-                // compound move unambiguous (cf. the laser branch above).
-                if ((T == PROMOTION || T == PIECE_PROMOTION) && pt_gating != pt)
+                // For PROMOTION, the piece-type field already holds the promotion
+                // result, so only matching gating types keep the compound move
+                // unambiguous (cf. the laser branch above).
+                if (T == PROMOTION && pt_gating != pt)
                     continue;
                 if (pos.can_drop(us, pt_gating) && (pos.drop_region(us, pt_gating) & gateSq))
                 {

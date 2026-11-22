@@ -327,6 +327,13 @@ startFen = 4k3/8/8/8/8/8/8/Q3K3[] w - - 0 1
 [promotion-origin-mapped-sync:chess]
 promotedPieceType = p:q
 startFen = 4k3/8/8/8/8/8/8/Q3K3 w - - 0 1
+
+[reserve-promo-sync:chess]
+captureType = out
+pieceDrops = false
+promotionRequireInHand = true
+promotionConsumeInHand = true
+promotionPieceTypes = qrbn
 INI
 tmp_ini="${FSX_TMP_INI}"
 
@@ -391,6 +398,17 @@ assert_reload_key_match "${tmp_ini}" "promotion-origin-sync" \
   "position fen 4k3/8/8/8/8/8/8/Q~:N3K3[] w - - 0 1"
 assert_reload_key_match "${tmp_ini}" "promotion-origin-sync" \
   "position fen r3k3/8/8/8/8/8/8/Q~:N3K3[] b - - 0 1 moves a8a1"
+
+# Reserve-backed promotions without pieceDrops or captureType=hand still update
+# hand counts and must hash Zobrist::inHand consistently across incremental play
+# and FEN reload.
+assert_reload_key_match "${tmp_ini}" "reserve-promo-sync" \
+  "position fen 4k3/P7/8/8/8/8/8/4K3[Q] w - - 0 1 moves a7a8q"
+assert_distinct_position_keys "${tmp_ini}" "reserve-promo-sync" \
+  "4k3/P7/8/8/8/8/8/4K3[] w - - 0 1" \
+  "4k3/P7/8/8/8/8/8/4K3[Q] w - - 0 1"
+assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "battery-chess" \
+  "position startpos moves e2e4 d7d5 e4d5"
 
 # A Jump potion may let a double-step pass through an occupied enemy square.
 # The resulting en-passant target remains serializable after Jump expires.

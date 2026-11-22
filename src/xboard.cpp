@@ -517,12 +517,14 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       {
           std::lock_guard<std::mutex> lk(stateMutex);
           // Check if setboard actually indicates a passing move
-          // to avoid unnecessarily clearing the move history
-          if (pos.pass(pos.side_to_move()))
+          // to avoid unnecessarily clearing the move history.
+          // Empty FEN resets to startFen in setboard(), so bypass the probe.
+          if (pos.pass(pos.side_to_move()) && !fen.empty())
           {
               // Validate before probing: p.set() below must not see a
               // malformed FEN (the plain setboard() path validates first).
-              if (FEN::validate_fen(fen, pos.variant(), pos.is_chess960()) == FEN::FEN_OK)
+              const FEN::FenValidation validation = FEN::validate_fen(fen, pos.variant(), pos.is_chess960());
+              if (validation == FEN::FEN_OK)
               {
                   StateInfo st;
                   Position p;
@@ -536,8 +538,9 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
                       setboard(fen);
               }
               else
-                  // Reports the validation error instead of committing the pass.
-                  setboard(fen);
+                  // Report once without committing the pass or re-validating.
+                  sync_cout << "Error (bad setboard): invalid FEN (validation error "
+                            << validation << ")." << sync_endl;
           }
           else
               setboard(fen);

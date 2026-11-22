@@ -56,6 +56,33 @@ laser_k = D/D/D/D
 castling = false
 startFen = 7k/8/8/8/8/8/p7/R5K1 w - - 0 1
 
+[shogi-forced-gate:chess]
+gating = true
+gatingFromHand = false
+gatingPieceAfter = r:n p:n
+promotedPieceType = r:q p:g
+promotionRegionWhite = *8
+promotionRegionBlack = *1
+promotionPieceTypes = -
+gold = g
+castling = false
+
+[promo-gate-mismatch:chess]
+gating = true
+gatingFromHand = false
+gatingPieceAfter = p:n
+promotionPieceTypes = q
+castling = false
+
+[shogi-seirawan-gate:chess]
+seirawanGating = true
+gating = true
+promotedPieceType = r:q
+promotionRegionWhite = *2
+promotionPieceTypes = -
+castling = false
+startFen = 4k3/8/8/8/8/8/8/R3K3[N] w A - 0 1
+
 INI
 
 run_cmds() {
@@ -105,6 +132,26 @@ echo "${out}" | grep -q "^a1a2:1: 1$"
 out=$(run_cmds "position startpos moves a1a2:1
 d" "laser-rifle-rotation")
 echo "${out}" | grep -q "Fen: 7k/8/8/8/8/8/8/R(1)5K1 b - - 0 1"
+
+# PIECE_PROMOTION derives its promoted type from the moving piece and does not
+# collide with gating_type, so both non-pawn and pawn forced gating still fire.
+out=$(run_cmds "position fen 4k3/R7/8/8/8/8/8/4K3 w - - 0 1 moves a7a8+
+d" "shogi-forced-gate")
+echo "${out}" | grep -q "Fen: +R3k3/N7/8/8/8/8/8/4K3 b - - 0 1"
+
+out=$(run_cmds "position fen 4k3/P7/8/8/8/8/8/4K3 w - - 0 1 moves a7a8+
+d" "shogi-forced-gate")
+echo "${out}" | grep -q "Fen: +P3k3/N7/8/8/8/8/8/4K3 b - - 0 1"
+
+# Mismatched PROMOTION + forced gating still promotes to the PROMOTION result.
+out=$(run_cmds "position fen 4k3/P7/8/8/8/8/8/4K3 w - - 0 1 moves a7a8q
+d" "promo-gate-mismatch")
+echo "${out}" | grep -q "Fen: Q3k3/8/8/8/8/8/8/4K3 b - - 0 1"
+
+# Seirawan gating emits both plain and gated PIECE_PROMOTION moves.
+out=$(run_cmds "position startpos
+go perft 1" "shogi-seirawan-gate")
+[[ $(echo "${out}" | grep -c '^a1a2+: 1$') -eq 2 ]]
 
 rm -f "${TMP_VARIANT_PATH}"
 unset TMP_VARIANT_PATH

@@ -1631,10 +1631,16 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     const bool hasDoubleStepRankMin = parse_attribute<false>("doubleStepRankMin", doubleStepRankMin);
     if (hasDoubleStepRank || hasDoubleStepRankMin)
     {
-        if (int(doubleStepRank) > int(v->maxRank) || int(doubleStepRankMin) > int(v->maxRank))
+        if (int(doubleStepRank) > int(v->maxRank))
         {
             if (DoCheck)
                 std::cerr << "Inconsistent settings: doubleStepRank > maxRank." << std::endl;
+            return false;
+        }
+        if (int(doubleStepRankMin) > int(v->maxRank))
+        {
+            if (DoCheck)
+                std::cerr << "Inconsistent settings: doubleStepRankMin > maxRank." << std::endl;
             return false;
         }
         for (Color c : {WHITE, BLACK})
@@ -2912,8 +2918,9 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     }
     if (v->nMoveRule < 0
         // Consumers compute 2 * nMoveRule (game-end adjudication) and up to
-        // 10 * (2 * nMoveRule - rule50) (material counting scaling), so the
-        // bound must keep every product inside int range.
+        // 10 * (2 * nMoveRule - rule50) (material counting scaling); Eval::evaluate()
+        // widens its v * (2 * nMoveRule - rule50) damping product to int64_t, so
+        // keeping nMoveRule <= INT_MAX / 20 keeps every 32-bit int operand in range.
         || v->nMoveRule > std::numeric_limits<int>::max() / 20)
     {
         if (DoCheck)

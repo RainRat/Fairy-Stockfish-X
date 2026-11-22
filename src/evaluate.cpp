@@ -2288,7 +2288,9 @@ Value Eval::evaluate(const Position& pos) {
   // Damp down the evaluation linearly when shuffling
   if (pos.n_move_rule())
   {
-      v = v * (2 * pos.n_move_rule() - pos.rule50_count()) / (2 * pos.n_move_rule());
+      const int64_t denom = 2 * int64_t(pos.n_move_rule());
+      const int64_t scaled = int64_t(v) * (denom - pos.rule50_count()) / denom;
+      v = Value(std::clamp<int64_t>(scaled, -VALUE_INFINITE, VALUE_INFINITE));
       if (pos.material_counting())
           v += pos.material_counting_result() / (10 * std::max(2 * pos.n_move_rule() - pos.rule50_count(), 1));
   }
@@ -2352,14 +2354,15 @@ std::string Eval::trace(Position& pos) {
      << "+------------+-------------+-------------+-------------+\n";
 
   // Mirror Eval::evaluate(): NNUE is never used on wrapped topologies.
-  if (Eval::useNNUE && pos.nnue_applicable() && !pos.topology_wraps())
+  const bool nnueActive = Eval::useNNUE && pos.nnue_applicable() && !pos.topology_wraps();
+  if (nnueActive)
       ss << '\n' << NNUE::trace(pos) << '\n';
 
   ss << std::showpoint << std::showpos << std::fixed << std::setprecision(2) << std::setw(15);
 
   v = pos.side_to_move() == WHITE ? v : -v;
   ss << "\nClassical evaluation   " << to_cp(v) << " (white side)\n";
-  if (Eval::useNNUE && pos.nnue_applicable())
+  if (nnueActive)
   {
       v = NNUE::evaluate(pos, false);
       v = pos.side_to_move() == WHITE ? v : -v;
@@ -2369,7 +2372,7 @@ std::string Eval::trace(Position& pos) {
   v = evaluate(pos);
   v = pos.side_to_move() == WHITE ? v : -v;
   ss << "Final evaluation       " << to_cp(v) << " (white side)";
-  if (Eval::useNNUE && pos.nnue_applicable())
+  if (nnueActive)
      ss << " [with scaled NNUE, hybrid, ...]";
   ss << "\n";
 

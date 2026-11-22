@@ -75,6 +75,12 @@ castling = false
 promotionPieceTypes = -
 # The bishop geometry position has one black king and no white king.
 startFen = 5/5/5/4k/5 w - - 0 1
+
+[wrap-chess:chess]
+cylindrical = true
+
+[large-nmove:chess]
+nMoveRule = 107374182
 INI
 
 # Narrow boards should evaluate without tripping invalid shelter clamping.
@@ -101,5 +107,15 @@ CMDS
 trace_output=$(run_trace "${tmp_ini}" "chess" "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 [[ "${trace_output}" == *"|   Bucket   |  Material  | Positional |   Total    |"* ]]
 [[ "${trace_output}" == *"|            |   (PSQT)   |  (Layers)  |            |"* ]]
+
+# Wrapped topologies never use NNUE, so Eval::trace() must omit NNUE lines too.
+grep -Eq '^NNUE evaluation' <<<"${trace_output}"
+wrap_trace_output=$(run_trace "${tmp_ini}" "wrap-chess" "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+! grep -Eq '^NNUE evaluation' <<<"${wrap_trace_output}"
+[[ "${wrap_trace_output}" != *"[with scaled NNUE, hybrid, ...]"* ]]
+
+# nMoveRule up to INT_MAX / 20 must not overflow Eval::evaluate() damping.
+large_nmove_eval=$(run_eval "${tmp_ini}" "large-nmove" "4k3/8/8/8/8/8/4Q3/4K3 w - - 0 1")
+awk -v v="${large_nmove_eval}" 'BEGIN { exit !(v + 0 > 5) }'
 
 echo "eval geometry regression tests passed"
