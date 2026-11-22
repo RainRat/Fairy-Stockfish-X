@@ -2351,7 +2351,8 @@ std::string Eval::trace(Position& pos) {
      << "|      Total | " << Term(TOTAL)
      << "+------------+-------------+-------------+-------------+\n";
 
-  if (Eval::useNNUE && pos.nnue_applicable())
+  // Mirror Eval::evaluate(): NNUE is never used on wrapped topologies.
+  if (Eval::useNNUE && pos.nnue_applicable() && !pos.topology_wraps())
       ss << '\n' << NNUE::trace(pos) << '\n';
 
   ss << std::showpoint << std::showpos << std::fixed << std::setprecision(2) << std::setw(15);

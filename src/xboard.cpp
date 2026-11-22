@@ -520,15 +520,23 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
           // to avoid unnecessarily clearing the move history
           if (pos.pass(pos.side_to_move()))
           {
-              StateInfo st;
-              Position p;
-              p.set(pos.variant(), fen, pos.is_chess960(), &st, pos.this_thread());
-              Move m;
-              std::string passMove = "@@@@";
-              if ((m = UCI::to_move(pos, passMove)) != MOVE_NONE)
-                  do_move(m);
-              // apply setboard if passing does not lead to a match
-              if (pos.key() != p.key())
+              // Validate before probing: p.set() below must not see a
+              // malformed FEN (the plain setboard() path validates first).
+              if (FEN::validate_fen(fen, pos.variant(), pos.is_chess960()) == FEN::FEN_OK)
+              {
+                  StateInfo st;
+                  Position p;
+                  p.set(pos.variant(), fen, pos.is_chess960(), &st, pos.this_thread());
+                  Move m;
+                  std::string passMove = "@@@@";
+                  if ((m = UCI::to_move(pos, passMove)) != MOVE_NONE)
+                      do_move(m);
+                  // apply setboard if passing does not lead to a match
+                  if (pos.key() != p.key())
+                      setboard(fen);
+              }
+              else
+                  // Reports the validation error instead of committing the pass.
                   setboard(fen);
           }
           else

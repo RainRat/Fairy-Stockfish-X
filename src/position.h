@@ -2687,6 +2687,10 @@ inline Bitboard Position::drop_region(Color c, PieceType pt) const {
           else if (enclosing_drop() == ANYSIDE)
           {
               Bitboard occupied = pieces();
+              // Keep the previously computed drop region and piece filters;
+              // the computed insertion targets are landing squares, so they
+              // still have to be legal drop squares.
+              Bitboard allowed = b;
               b = 0ULL;
               Bitboard candidates = (shift<WEST>(occupied) | file_bb(max_file())) & ~occupied;
 
@@ -2704,15 +2708,16 @@ inline Bitboard Position::drop_region(Color c, PieceType pt) const {
               candidates = (shift<NORTH>(occupied) | rank_bb(RANK_1)) & ~occupied;
               for (File f = FILE_A; f <= max_file(); ++f) {
                   if (!(occupied & make_square(f, max_rank()))) {
-                      b |= lsb(candidates & file_bb(f));
+                      b |= msb(candidates & file_bb(f));
                   }
               }
               candidates = (shift<EAST>(occupied) | file_bb(FILE_A)) & ~occupied;
               for (Rank r = RANK_1; r <= max_rank(); ++r) {
                   if (!(occupied & make_square(max_file(), r))) {
-                      b |= lsb(candidates & rank_bb(r));
+                      b |= msb(candidates & rank_bb(r));
                   }
               }
+              b &= allowed;
           }
           else if (enclosing_drop() == TOP)
           {

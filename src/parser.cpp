@@ -1407,7 +1407,9 @@ bool VariantParser<DoCheck>::parse_color_setting_first_piece(const std::string& 
         PieceType pt = NO_PIECE_TYPE;
         if (value == "*" || !token.empty())
         {
-            pt = value == "*" ? lsb(v->pieceTypes) : parse_piece_type_token(v, token);
+            // Guard against a pieceless variant: lsb(NO_PIECE_SET) is UB.
+            pt = value == "*" ? (v->pieceTypes ? lsb(v->pieceTypes) : NO_PIECE_TYPE)
+                              : parse_piece_type_token(v, token);
             if (pt != NO_PIECE_TYPE)
             {
                 parsed = pt;
@@ -1612,6 +1614,14 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     Rank promotionRank = RANK_8;
     if (parse_attribute<false>("promotionRank", promotionRank))
     {
+        // A rank beyond the board would produce negative relative ranks
+        // (and thus out-of-bounds bitboard accesses) in zone_bb.
+        if (int(promotionRank) > int(v->maxRank))
+        {
+            if (DoCheck)
+                std::cerr << "Inconsistent settings: promotionRank > maxRank." << std::endl;
+            return false;
+        }
         for (Color c : {WHITE, BLACK})
             v->promotionRegion[c] = zone_bb(c, promotionRank, v->maxRank);
     }
@@ -1621,6 +1631,12 @@ bool VariantParser<DoCheck>::parse_legacy_attributes(Variant* v) {
     const bool hasDoubleStepRankMin = parse_attribute<false>("doubleStepRankMin", doubleStepRankMin);
     if (hasDoubleStepRank || hasDoubleStepRankMin)
     {
+        if (int(doubleStepRank) > int(v->maxRank) || int(doubleStepRankMin) > int(v->maxRank))
+        {
+            if (DoCheck)
+                std::cerr << "Inconsistent settings: doubleStepRank > maxRank." << std::endl;
+            return false;
+        }
         for (Color c : {WHITE, BLACK})
             v->doubleStepRegion[c] =   zone_bb(c, doubleStepRankMin, v->maxRank)
                                     & ~forward_ranks_bb(c, relative_rank(c, doubleStepRank, v->maxRank));
@@ -2895,19 +2911,22 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
         valid = false;
     }
     if (v->nMoveRule < 0
-        || v->nMoveRule > (std::numeric_limits<int>::max() + 1LL) / 2)
+        // Consumers compute 2 * nMoveRule (game-end adjudication) and up to
+        // 10 * (2 * nMoveRule - rule50) (material counting scaling), so the
+        // bound must keep every product inside int range.
+        || v->nMoveRule > std::numeric_limits<int>::max() / 20)
     {
         if (DoCheck)
             std::cerr << "nMoveRule must be between 0 and "
-                      << (std::numeric_limits<int>::max() + 1LL) / 2 << "." << std::endl;
+                      << std::numeric_limits<int>::max() / 20 << "." << std::endl;
         valid = false;
     }
     if (v->nMoveRuleImmediate < 0
-        || v->nMoveRuleImmediate > (std::numeric_limits<int>::max() + 1LL) / 2)
+        || v->nMoveRuleImmediate > std::numeric_limits<int>::max() / 20)
     {
         if (DoCheck)
             std::cerr << "nMoveRuleImmediate must be between 0 and "
-                      << (std::numeric_limits<int>::max() + 1LL) / 2 << "." << std::endl;
+                      << std::numeric_limits<int>::max() / 20 << "." << std::endl;
         valid = false;
     }
     if (v->nFoldRule < 0)

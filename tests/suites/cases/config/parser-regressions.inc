@@ -190,6 +190,12 @@ nMoveRule = -1
 [invalid-nmove-overflow:chess]
 nMoveRule = 1073741825
 
+[invalid-promotion-rank-offboard:chess]
+promotionRank = 9
+
+[invalid-double-step-rank-offboard:chess]
+doubleStepRank = 9
+
 [invalid-connect-n-too-large:chess]
 connectN = 9
 
@@ -768,8 +774,10 @@ assert_contains_literal "${initial_capture_output}" "Potion cooldown must be bet
 assert_contains_literal "${initial_capture_output}" "nFoldRule cannot be negative."
 assert_contains_literal "${initial_capture_output}" "nFoldRuleImmediate cannot be negative."
 assert_contains_literal "${initial_capture_output}" "removeConnectN - Value must be in range [0,"
-assert_contains_literal "${initial_capture_output}" "nMoveRule must be between 0 and 1073741824."
-assert_contains_literal "${initial_capture_output}" "nMoveRuleImmediate must be between 0 and 1073741824."
+assert_contains_literal "${initial_capture_output}" "nMoveRule must be between 0 and 107374182."
+assert_contains_literal "${initial_capture_output}" "nMoveRuleImmediate must be between 0 and 107374182."
+assert_contains_literal "${initial_capture_output}" "Inconsistent settings: promotionRank > maxRank."
+assert_contains_literal "${initial_capture_output}" "Inconsistent settings: doubleStepRank > maxRank."
 assert_contains_literal "${initial_capture_output}" "connectN must be between 0 and the largest board dimension."
 assert_contains_literal "${initial_capture_output}" "pointsRuleCaptures - Invalid value invalid for type PointsRule"
 assert_contains_literal "${initial_capture_output}" "captureToHandSide - Invalid value invalid for type TransferSide"

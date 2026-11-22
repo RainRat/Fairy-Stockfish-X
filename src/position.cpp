@@ -1382,8 +1382,13 @@ inline int append_dirty(StateInfo* st, Piece pc, Square from, Square to, Piece h
 }
 
 Key Position::reserve_key() const {
+  // capture_type() == HAND must be included: do_move() folds every
+  // capture-to-hand delta into key and reserveKey (xor_in_hand_count),
+  // so variants like battery-chess (pieceDrops = false) desync from
+  // set_state() without the matching hand buckets here.
   if (!(piece_drops() || seirawan_gating() || potions_enabled()
-        || capture_type() == PRISON || two_boards() || prison_pawn_promotion()))
+        || capture_type() == HAND || capture_type() == PRISON
+        || two_boards() || prison_pawn_promotion()))
       return 0;
 
   if (potions_enabled() && !piece_drops() && !seirawan_gating() && !two_boards()
@@ -1432,7 +1437,8 @@ Key Position::reserve_key() const {
       for (PieceType pt = PAWN; pt <= KING; ++pt)
       {
           Piece pc = make_piece(c, pt);
-          if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
+          if (piece_drops() || seirawan_gating() || potions_enabled()
+              || capture_type() == HAND || two_boards())
               k ^= Zobrist::inHand[pc][in_hand_zobrist_index(pieceCountInHand[c][pt])];
           if (capture_type() == PRISON || prison_pawn_promotion())
               k ^= Zobrist::inPrison[pc][in_hand_zobrist_index(pieceCountInPrison[~c][pt])];
@@ -2671,7 +2677,8 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
           for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
               si->materialKey ^= Zobrist::psq[pc][cnt];
 
-          if (piece_drops() || seirawan_gating() || potions_enabled() || two_boards())
+          if (piece_drops() || seirawan_gating() || potions_enabled()
+              || capture_type() == HAND || two_boards())
           {
               int n = std::clamp(pieceCountInHand[c][pt], 0, SQUARE_NB - 1);
               si->key ^= Zobrist::inHand[pc][n];
