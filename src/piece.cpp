@@ -626,10 +626,15 @@ namespace {
                           // Universal hopper rays are named-atom steps, so they must
                           // satisfy the decode_direction precondition. U is rejected
                           // above and never reaches this path.
-                          if (std::abs(df) > int(FILE_NB) / 2)
+                          // Direction keys decode unambiguously only within
+                          // (-FILE_NB/2, FILE_NB/2]; the boundary values require a
+                          // matching sign of dr, otherwise the key decodes as another ray.
+                          if (   std::abs(df) > int(FILE_NB) / 2
+                              || (df == int(FILE_NB) / 2 && dr < 0)
+                              || (df == -int(FILE_NB) / 2 && dr > 0))
                           {
                               std::cerr << "Invalid Betza universal hopper direction in '" << betza
-                                        << "': file delta exceeds half the board width." << std::endl;
+                                        << "': file delta is not representable for this board width." << std::endl;
                               fail_piece();
                               return;
                           }

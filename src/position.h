@@ -2927,7 +2927,9 @@ inline Bitboard Position::freeze_squares(Color c, const SimulatedMoveInfo* simul
   Bitboard mask = freeze_squares_from_freezers(c, simulated);
   if (potions_enabled())
   {
-      mask |= st->potionZones[c][Variant::POTION_FREEZE];
+      // Potion zones are stored under the caster's color, so the squares of
+      // c's pieces frozen by a zone are those of ~c's zone.
+      mask |= st->potionZones[~c][Variant::POTION_FREEZE];
       if (const SpellContext* spellCtx = current_spell_context(); spellCtx && c == ~sideToMove)
           mask |= spellCtx->freezeExtra;
   }
@@ -4510,7 +4512,9 @@ inline Piece Position::piece_at(Square sq, Bitboard occupied) const {
   }
 
   if (more_than_one(vacated)) {
-      Square fromK = square<KING>(sideToMove);
+      // Guard the castling interpretation: kingless or multi-king positions
+      // must not reach the single-king lookup below.
+      Square fromK = count<KING>(sideToMove) == 1 ? square<KING>(sideToMove) : SQ_NONE;
       if (is_ok(fromK) && (vacated & fromK)) {
           Square fromR = lsb(vacated & ~square_bb(fromK));
           Square toK, toR;

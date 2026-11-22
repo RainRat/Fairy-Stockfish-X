@@ -468,11 +468,12 @@ static void* aligned_large_pages_alloc_windows(size_t allocSize) {
       {
           // Round up size to full pages and allocate
           size_t roundedSize;
-          if (!round_up_to_multiple(allocSize, largePageSize, roundedSize))
-              return nullptr;
-          allocSize = roundedSize;
-          mem = VirtualAlloc(
-              NULL, allocSize, MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES, PAGE_READWRITE);
+          if (round_up_to_multiple(allocSize, largePageSize, roundedSize))
+          {
+              allocSize = roundedSize;
+              mem = VirtualAlloc(
+                  NULL, allocSize, MEM_RESERVE | MEM_COMMIT | MEM_LARGE_PAGES, PAGE_READWRITE);
+          }
 
           // Privilege no longer needed, restore previous state
           AdjustTokenPrivileges(hProcessToken, FALSE, &prevTp, 0, NULL, NULL);

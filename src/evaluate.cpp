@@ -1654,7 +1654,10 @@ namespace {
         && pos.count(Us, COMMONER) == 1)
     {
         const Square royalSq = pos.square(Us, COMMONER);
-        Bitboard attackers = attackedBy[Them][ALL_PIECES] & square_bb(royalSq);
+        // attackedBy only marks the royal square as attacked; resolve the
+        // actual attacker squares so frozen attackers (which cannot capture
+        // the commoner on their next move) can be excluded from the threat.
+        Bitboard attackers = pos.attackers_to(royalSq, Them);
 #ifndef NDEBUG
         assert(freezeMasks[Them] == pos.freeze_squares(Them));
 #endif
@@ -1785,8 +1788,20 @@ namespace {
     // merging the entire army into one group.
     if (pos.connect_group() != 0)
     {
+        // Mirror the adjudication's eligibility and undirected adjacency:
+        // eligible pieces are those of the connect piece types, and the
+        // stored connect directions cover only half the neighborhood.
+        auto eligible_of = [&](Color c) {
+            Bitboard b = 0;
+            for (PieceSet ps = pos.connect_piece_types(); ps;)
+            {
+                PieceType pt = pop_lsb(ps);
+                b |= pos.connect_goal_by_type() ? pos.pieces(pt) : pos.pieces(c, pt);
+            }
+            return b;
+        };
         auto group_stats = [&](Color c) {
-            Bitboard remaining = pos.pieces(c);
+            Bitboard remaining = eligible_of(c);
             int largest = 0;
             int components = 0;
 
@@ -1805,13 +1820,16 @@ namespace {
                         Square s = pop_lsb(tmp);
                         for (Direction d : pos.getConnectDirections())
                         {
-                            Square n = s + d;
-                            if (!is_ok(n) || distance(s, n) != dist(d))
-                                continue;
+                            for (Direction dd : {d, Direction(-d)})
+                            {
+                                Square n = s + dd;
+                                if (!is_ok(n) || distance(s, n) != dist(dd))
+                                    continue;
 
-                            Bitboard nbb = square_bb(n);
-                            if (nbb & remaining)
-                                next |= nbb;
+                                Bitboard nbb = square_bb(n);
+                                if (nbb & remaining)
+                                    next |= nbb;
+                            }
                         }
                     }
 
@@ -2059,7 +2077,10 @@ namespace {
         for (PieceSet ps = pos.piece_types(); ps;)
         {
             PieceType pt = pop_lsb(ps);
-            if (pt > PAWN)
+            // Exclude pawns and the king like the main path: initialize()
+            // already counted their attacks, and pieces() would score them
+            // fairy mobility and pollute attackedBy2.
+            if (pt != SHOGI_PAWN && pt != PAWN && pt != KING)
                 score += pieces<WHITE>(pt) - pieces<BLACK>(pt);
         }
 

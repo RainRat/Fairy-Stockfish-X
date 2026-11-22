@@ -164,7 +164,10 @@ extern "C" PyObject* pyffish_setOption(PyObject* self, PyObject *args) {
 
     if (Options.count(name))
     {
-        PyObject* valueStr = PyObject_Str(valueObj);
+        // Python bools str() as "True"/"False", which check options reject;
+        // convert them to their UCI spelling instead of silently dropping the call.
+        PyObject* valueStr = PyBool_Check(valueObj) ? PyUnicode_FromString(valueObj == Py_True ? "true" : "false")
+                                                    : PyObject_Str(valueObj);
         if (!valueStr)
             return NULL;
         PyObject *Value = PyUnicode_AsEncodedString(valueStr, "UTF-8", "strict");
