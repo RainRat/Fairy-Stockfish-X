@@ -2112,10 +2112,10 @@ namespace {
                     continue;
 
                 const Bitboard path = pruneUseless
-                                    ? between_bb(baseInfo.from, baseInfo.to,
+                                    ? between_bb(baseInfo.to, baseInfo.from,
                                                  baseInfo.moverType, baseInfo.modality,
-                                                 baseInfo.isInitial)
-                                      & ~square_bb(baseInfo.to)
+                                                 baseInfo.isInitial, Us)
+                                      & ~square_bb(baseInfo.from) & ~square_bb(baseInfo.to)
                                     : Bitboard(0);
                 Bitboard targets = candidates & ~square_bb(baseInfo.to);
                 while (targets)
@@ -2166,10 +2166,13 @@ namespace {
                     continue;
 
                 // Pure leapers cannot have an intermediate path square.
-                const bool initial = baseInfo.isInitial && pieceMap.get(baseInfo.moverType)->has_explicit_initial_moves();
-                const bool isRider = baseInfo.modality == MODALITY_CAPTURE
-                    ? AttackRiderTypes[baseInfo.moverType] != NO_RIDER
-                    : MoveRiderTypes[initial][baseInfo.moverType] != NO_RIDER;
+                const PieceInfo* moverInfo = pieceMap.get(baseInfo.moverType);
+                const bool initial = baseInfo.isInitial && moverInfo->has_explicit_initial_moves();
+                const bool isRider = (baseInfo.modality == MODALITY_CAPTURE
+                                      ? AttackRiderTypes[baseInfo.moverType] != NO_RIDER
+                                      : MoveRiderTypes[initial][baseInfo.moverType] != NO_RIDER)
+                                  || !moverInfo->leapRider[initial][baseInfo.modality].empty()
+                                  || !moverInfo->tupleSlider[initial][baseInfo.modality].empty();
 
                 if ((baseInfo.mt == NORMAL || baseInfo.mt == PROMOTION)
                     && !isRider
@@ -2181,11 +2184,11 @@ namespace {
                 if (distance(baseInfo.from, baseInfo.to) <= 1)
                     continue;
 
-                Bitboard path = between_bb(baseInfo.from, baseInfo.to, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial);
+                Bitboard path = between_bb(baseInfo.to, baseInfo.from, baseInfo.moverType, baseInfo.modality, baseInfo.isInitial, Us);
                 // Persistent Jump targets are already removed from the
                 // occupancy used to prepare these base moves, so they must
                 // not be counted again when finding the newly cast target.
-                Bitboard intersection = path & candidates & ~square_bb(baseInfo.to)
+                Bitboard intersection = path & candidates & ~square_bb(baseInfo.from) & ~square_bb(baseInfo.to)
                                       & ~inheritedJump;
                 if (popcount(intersection) != 1)
                     continue;
@@ -2245,9 +2248,9 @@ namespace {
               base = make<EN_PASSANT>(from, to);
               break;
           case PROMOTION:
+          case PROMOTION_POTION:
               base = make<PROMOTION>(from, to, promotion_type(m));
               break;
-          case PROMOTION_POTION:
           default:
               return false;
       }

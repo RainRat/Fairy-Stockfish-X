@@ -646,9 +646,10 @@ namespace {
 
 
 
-  inline Bitboard retro_asymmetric_check_squares(Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
+  inline Bitboard retro_asymmetric_check_squares(const Position& pos, Color attacker, PieceType pt, Square kingSq, Bitboard occupied) {
     // Hopper families need hurdle-aware retro logic. Keep pseudo candidates for
-    // those, and use path-based retro filtering for other asymmetrical riders.
+    // those, and test true forward attacks from each pseudo candidate so
+    // asymmetrical riders and hybrids match attacks_bb() exactly.
     if (pieceMap.get(pt)->has_hopper_like_capture())
         return PseudoAttacks[~attacker][pt][kingSq];
 
@@ -658,8 +659,7 @@ namespace {
     while (candidates)
     {
         Square from = pop_lsb(candidates);
-        Bitboard blockers = between_bb(kingSq, from, pt) & ~square_bb(from);
-        if (!(blockers & occupied))
+        if (pos.attacks_bb(attacker, pt, from, occupied) & kingSq)
             checks |= from;
     }
 
@@ -2598,10 +2598,10 @@ void Position::set_check_info(StateInfo* si) const {
               const PieceInfo* pi = pieceMap.get(movePt);
               if (AttackRiderTypes[movePt] & ASYMMETRICAL_RIDERS)
                   // For asymmetrical riders, use true retro paths from the king square.
-                  si->checkSquares[pt] = retro_asymmetric_check_squares(sideToMove, movePt, ksq, occupied);
+                  si->checkSquares[pt] = retro_asymmetric_check_squares(*this, sideToMove, movePt, ksq, occupied);
               else
                   si->checkSquares[pt] = attacks_bb(~sideToMove, movePt, ksq, occupied);
-              if (pi->has_lame_capture())
+              if (pi->has_custom_lame_capture())
                   si->checkSquares[pt] |= retro_lame_check_squares(*this, sideToMove, pt, ksq, occupied);
               // Collect special piece types that require slower check and evasion detection
               if ((AttackRiderTypes[movePt] & NON_SLIDING_RIDERS) || pi->has_lame_capture() || pi->has_hopper_like_capture())
@@ -3207,9 +3207,9 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
           if (b)
           {
               // Consider asymmetrical moves (e.g., horse)
-              if (riderTypes & ASYMMETRICAL_RIDERS)
+              if ((riderTypes & ASYMMETRICAL_RIDERS) || pi->has_custom_lame_capture())
               {
-                  Bitboard asymmetricals = PseudoAttacks[~c][pt][s] & ptPieces;
+                  Bitboard asymmetricals = b;
                   while (asymmetricals)
                   {
                       Square s2 = pop_lsb(asymmetricals);
@@ -3219,7 +3219,9 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
               }
               else
                   snipers |= b & ~attacks_bb(~c, pt, s, pieces());
-              if (((riderTypes & ~HOPPING_RIDERS) && !pi->has_hopper_like_capture()) || !pi->tupleSlider[0][MODALITY_CAPTURE].empty())
+              if (((riderTypes & ~(HOPPING_RIDERS | RIDER_HORSE | RIDER_JANGGI_ELEPHANT)) && !pi->has_hopper_like_capture())
+                  || !pi->tupleSlider[0][MODALITY_CAPTURE].empty()
+                  || !pi->leapRider[0][MODALITY_CAPTURE].empty())
                   slidingSnipers |= snipers & ptPieces;
           }
       }
@@ -3257,6 +3259,7 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
         continue;
     }
     bool isHopper = (AttackRiderTypes[sniperType] & HOPPING_RIDERS) || pieceMap.get(sniperType)->has_hopper_like_capture();
+    bool isCustomLame = pieceMap.get(sniperType)->has_custom_lame_capture();
     Bitboard b = 0;
     if (isHopper)
     {
@@ -3268,9 +3271,29 @@ Bitboard Position::slider_blockers(Bitboard sliders, Square s, Bitboard& pinners
                 b |= p_sq;
         }
     }
+    else if (isCustomLame)
+    {
+        const File f1 = std::min(file_of(s), file_of(sniperSq));
+        const File f2 = std::max(file_of(s), file_of(sniperSq));
+        const Rank r1 = std::min(rank_of(s), rank_of(sniperSq));
+        const Rank r2 = std::max(rank_of(s), rank_of(sniperSq));
+        Bitboard candidates = 0;
+        for (File f = f1; f <= f2; ++f)
+            candidates |= file_bb(f);
+        Bitboard rankMask = 0;
+        for (Rank r = r1; r <= r2; ++r)
+            rankMask |= rank_bb(r);
+        candidates &= rankMask & allPieces & ~square_bb(s) & ~square_bb(sniperSq);
+        while (candidates)
+        {
+            Square p_sq = pop_lsb(candidates);
+            if (attacks_from(c, sniperType, sniperSq, allPieces ^ p_sq) & s)
+                b |= p_sq;
+        }
+    }
     else
     {
-        b = between_bb(s, sniperSq, sniperType) & occupancy;
+        b = (between_bb(s, sniperSq, sniperType) & ~square_bb(sniperSq)) & occupancy;
         if (b && more_than_one(b))
             b = 0;
     }
@@ -7924,7 +7947,7 @@ bool Position::gives_check_impl(Move m) const {
           }
           else if (AttackRiderTypes[pt] & ASYMMETRICAL_RIDERS)
           {
-              if ((check_squares(pt) & attackFrom) && (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq))
+              if (attacks_bb(sideToMove, pt, attackFrom, occupied) & royalSq)
                   return true;
           }
           else if (usingPhysicalKingTarget)
@@ -11835,6 +11858,36 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       }
   }
 
+  // Laser destruction of a royal KING also ends the game immediately.
+  // fire_laser() records destroyed pieces in bycatchSquares/bycatchPieces,
+  // not in st->captured/extraCaptured. Transformed (stacked) pieces keep a
+  // live piece on the square and are excluded via laserTransformedSquares.
+  {
+      Bitboard destroyed = st->bycatchSquares & ~st->laserTransformedSquares;
+      while (destroyed)
+      {
+          Square sq = pop_lsb(destroyed);
+          Piece bpc = st->bycatchPieces[sq].piece();
+          if (bpc == NO_PIECE)
+              continue;
+          PieceType destroyedType = type_of(bpc);
+          Color destroyedColor = color_of(bpc);
+          bool destroyedRoyal = destroyedType == KING
+                             && !(pseudo_royal_types() & piece_set(KING));
+          if (!destroyedRoyal && !(pseudo_royal_types() & piece_set(destroyedType))
+              && king_type() != NO_PIECE_TYPE && destroyedType == king_type())
+          {
+              const bool usesPhysicalKings = count(WHITE, KING) + count(BLACK, KING) > 0;
+              destroyedRoyal = !usesPhysicalKings || count(destroyedColor, KING) == 0;
+          }
+          if (destroyedRoyal)
+          {
+              result = destroyedColor == sideToMove ? mated_in(ply) : mate_in(ply);
+              return true;
+          }
+      }
+  }
+
   // Pseudo-royal loss
   // Some variants transfer royal status across a family of piece types.
   // If a special capture removes the current pseudo-royal, the game ends
@@ -12325,7 +12378,8 @@ bool Position::is_immediate_game_end(Value& result, int ply) const {
       // Connect-n
       int targetN = connect_n() == -1 ? popcount(eligible) : connect_n();
       if (var->materialCounting != CONNECT_N_COUNT && (connect_n() != 0) && (targetN >= 2) && (popcount(eligible) >= targetN))
-          return has_connect_n_line(c, targetN);
+          if (has_connect_n_line(c, targetN))
+              return true;
 
       auto connected_regions = [&](Bitboard region1, Bitboard region2, Bitboard region3 = 0) {
           Bitboard region1Pieces = region1 & eligible;

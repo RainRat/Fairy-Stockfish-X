@@ -470,9 +470,195 @@ UCI
   assert_contains "$out" "d4d6:"
 }
 
+test_lame_and_bent_pin_evasion_regressions() {
+  load_inline_variants <<'INI'
+[griffon-pin-evade:chess]
+customPiece1 = g:O
+pieceToCharTable = PNBRQ............GKpnbrq............gk
+
+[griffon-nocheck:griffon-pin-evade]
+checking = false
+
+[manticore-pin-evade:chess]
+customPiece1 = m:M
+pieceToCharTable = PNBRQ............MKpnbrq............mk
+
+[zebra-rider-nocheck:chess]
+customPiece1 = z:ZZ
+checking = false
+pieceToCharTable = PNBRQ............ZKpnbrq............zk
+
+[dabbaba-nonlame-rider:chess]
+customPiece1 = d:DD
+pieceToCharTable = PNBRQ............DKpnbrq............dk
+
+[horse-lame:chess]
+customPiece1 = h:nN
+pieceToCharTable = PNBRQ............HKpnbrq............hk
+
+[janggi-el-lame:chess]
+customPiece1 = e:nZ
+pieceToCharTable = PNBRQ............EKpnbrq............ek
+
+[alfil-lame:chess]
+customPiece1 = a:nA
+pieceToCharTable = PNBRQ............AKpnbrq............ak
+
+[alfil-lame-rider:chess]
+customPiece1 = a:nAA
+pieceToCharTable = PNBRQ............AKpnbrq............ak
+
+[moa-lame:chess]
+customPiece1 = a:n{path:diagfirst}N
+pieceToCharTable = PNBRQ............AKpnbrq............ak
+INI
+
+  local out
+  # Griffon d4 -> c3 -> c2 -> c1: Rook c8 must be able to interpose on c2/c3 (not d2/d3).
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" griffon-pin-evade <<'UCI'
+position fen 2R4k/8/8/8/3g4/8/8/1PKP4 w - - 0 1
+go perft 1
+UCI
+)
+  assert_contains "$out" "^c8c2: 1$"
+  assert_contains "$out" "^c8c3: 1$"
+  assert_not_contains "$out" "^c8d2:"
+  assert_not_contains "$out" "^c8d3:"
+
+  # Griffon d4 pins White Rook on c2 to White King on c1.
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" griffon-pin-evade <<'UCI'
+position fen 7k/8/8/8/3g4/8/2R5/1PKP4 w - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_not_contains "$out" "^c2b2:"
+  assert_contains "$out" "^c2c3: 1$"
+
+  # Griffon self-unblocking check under checking=false must be rejected.
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" griffon-nocheck <<'UCI'
+position fen 8/8/8/4G2k/8/8/8/4K3 w - - 0 1
+go perft 1
+UCI
+)
+  assert_not_contains "$out" "^e5d4:"
+
+  # Manticore d4 -> d3 -> e2 -> f1: pawn on c4 does not block; Rook a3 interposes on d3 (c8c4 must not).
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" manticore-pin-evade <<'UCI'
+position fen 2R4k/8/8/8/2pm4/R7/8/4PKP1 w - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers: d4"
+  assert_contains "$out" "^a3d3: 1$"
+  assert_not_contains "$out" "^c8c4:"
+
+  # Non-lame ZZ must not acquire phantom Janggi Elephant eyes.
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" zebra-rider-nocheck <<'UCI'
+position fen 8/2Z5/8/8/8/p7/8/2k4K w - - 0 1
+go perft 1
+UCI
+)
+  assert_not_contains "$out" "^c7a4:"
+
+  # Non-lame DD checking e1 from a1 is only blockable on c1, not b1/d1.
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" dabbaba-nonlame-rider <<'UCI'
+position fen 1RRR3k/8/8/8/8/8/8/d3K3 w - - 0 1
+go perft 1
+UCI
+)
+  assert_contains "$out" "^c8c1: 1$"
+  assert_not_contains "$out" "^b8b1:"
+  assert_not_contains "$out" "^d8d1:"
+
+  # Lame Horse pin and discovered check.
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" horse-lame <<'UCI'
+position fen 4k3/3r4/3H4/8/8/8/8/4K3 b - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_not_contains "$out" "^d7c7:"
+  assert_contains "$out" "^d7d6: 1$"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" horse-lame <<'UCI'
+position fen 4k3/3R4/3H4/8/8/8/8/4K3 w - - 0 1 moves d7c7
+d
+UCI
+)
+  assert_contains "$out" "^Checkers: d6"
+
+  # Lame Janggi Elephant pin on both eyes (c5 -> c6 -> d7 -> e8).
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" janggi-el-lame <<'UCI'
+position fen 4k3/8/2r5/2E5/8/8/8/4K3 b - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_not_contains "$out" "^c6b6:"
+  assert_contains "$out" "^c6c5: 1$"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" janggi-el-lame <<'UCI'
+position fen 4k3/3q4/8/2E5/8/8/8/4K3 b - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_not_contains "$out" "^d7e7:"
+  assert_contains "$out" "^d7c6: 1$"
+
+  # Lame Alfil eye pin (a1 -> b2 -> c3).
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-lame <<'UCI'
+position fen 8/8/8/8/8/2k5/1q6/A6K b - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_not_contains "$out" "^b2b3:"
+  assert_contains "$out" "^b2a1: 1$"
+
+  # Multi-hop lame Alfil rider (nAA) check, evasion, and pin.
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-lame-rider <<'UCI'
+position fen 1r6/8/8/4k3/8/8/8/A6K b - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers: a1"
+  assert_contains "$out" "^b8b2: 1$"
+
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" alfil-lame-rider <<'UCI'
+position fen 8/8/8/4k3/8/8/1q6/A6K b - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_not_contains "$out" "^b2a2:"
+  assert_contains "$out" "^b2c3: 1$"
+
+  # Custom lame Moa (path:diagfirst) pin on diagonal leg a2 (b3 -> a2 -> a1).
+  out=$(run_uci "$ENGINE" "$TMP_VARIANTS" moa-lame <<'UCI'
+position fen 8/8/8/8/8/1A6/q7/k6K b - - 0 1
+d
+go perft 1
+UCI
+)
+  assert_contains "$out" "^Checkers:[[:space:]]*$"
+  assert_not_contains "$out" "^a2b2:"
+  assert_contains "$out" "^a2b3: 1$"
+}
+
 test_universal_leaper
 test_rose
 test_bent_riders
 test_bent_rider_evasion
 test_asym_rider_checkers
 test_alfil_dabbaba_riders
+test_lame_and_bent_pin_evasion_regressions

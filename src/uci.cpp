@@ -518,6 +518,8 @@ void UCI::loop(int argc, char* argv[]) {
 
       else if (token == "uci" || token == "usi" || token == "ucci" || token == "xboard" || token == "ucicyclone")
       {
+          if (CurrentProtocol == XBOARD && XBoard::stateMachine)
+              XBoard::stateMachine->stop(true);
           CurrentProtocol =  token == "uci"  ? (CurrentProtocol == UCI_CYCLONE ? UCI_CYCLONE : UCI_GENERAL)
                            : token == "ucicyclone" ? UCI_CYCLONE
                            : token == "usi"  ? USI

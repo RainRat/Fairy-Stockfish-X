@@ -23,6 +23,7 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <algorithm>
 #include <cctype>
 #include <limits>
 #include <iostream>
@@ -1592,7 +1593,7 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
             rtrim(modifiedFen);
         }
     }
-    if (!modifiedFen.empty())
+    if (!modifiedFen.empty() && v->potions)
     {
         size_t lastSpace = modifiedFen.find_last_of(' ');
         std::string lastToken = lastSpace == std::string::npos ? modifiedFen : modifiedFen.substr(lastSpace + 1);
@@ -1692,8 +1693,23 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
         return FEN_INVALID_SIDE_TO_MOVE;
     }
 
-    // Castling and en passant can be skipped
-    bool skipCastlingAndEp = fenParts.size() >= 4 && fenParts.size() <= 5 && std::isdigit(static_cast<unsigned char>(fenParts[2][0]));
+    // Castling and en passant can be skipped when the next field is a pure
+    // digit counter (halfmove) or, in check-counting variants, an inline
+    // check-count field like "7+7" (e.g. rookmate). A digit-leading hand
+    // like "2P" (USI sfen) must not trigger the skip.
+    auto is_all_digits = [](const std::string& s) {
+        return !s.empty() && std::all_of(s.begin(), s.end(),
+                                         [](unsigned char ch) { return std::isdigit(ch); });
+    };
+    auto is_inline_check_count = [v](const std::string& s) {
+        return v->checkCounting && s.size() == 3
+            && std::isdigit(static_cast<unsigned char>(s[0]))
+            && s[1] == '+'
+            && std::isdigit(static_cast<unsigned char>(s[2]));
+    };
+    bool skipCastlingAndEp =
+        (fenParts.size() >= 4 && fenParts.size() <= 5 && is_all_digits(fenParts[2]))
+        || ((fenParts.size() == 3 || fenParts.size() == 5) && is_inline_check_count(fenParts[2]));
 
     // 3) Part
     // check castling rights
@@ -1764,11 +1780,15 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
     }
 
     // 6) Part
-    // check half move counter
-    const size_t halfMoveIndex = fenParts.size() - 2 - optionalTrailingFields;
-    const size_t moveIndex = fenParts.size() - 1 - optionalTrailingFields;
+    // check half move counter. Fixed positions: [board, side, (castling, ep)?,
+    // (check)?, halfmove?, fullmove?, (lichess-check)?]. The old size-2/size-1
+    // math pointed at the EP square for valid 5-field FENs and at the side to
+    // move for 3-field FENs.
+    const size_t halfMoveIndex = 2 + optionalInbetweenFields;
+    const size_t moveIndex = 3 + optionalInbetweenFields;
 
-    if (fenParts.size() >= 3 + optionalInbetweenFields && check_digit_field(fenParts[halfMoveIndex]) == NOK)
+    if (fenParts.size() > halfMoveIndex && halfMoveIndex < fenParts.size() - optionalTrailingFields
+        && check_digit_field(fenParts[halfMoveIndex]) == NOK)
     {
         std::cerr << "Invalid half move counter: '" << fenParts[halfMoveIndex] << "'." << std::endl;
         return FEN_INVALID_HALF_MOVE_COUNTER;
@@ -1776,7 +1796,8 @@ inline FenValidation validate_fen(const std::string& fen, const Variant* v, bool
 
     // 7) Part
     // check move counter
-    if (fenParts.size() >= 4 + optionalInbetweenFields && check_digit_field(fenParts[moveIndex]) == NOK)
+    if (fenParts.size() > moveIndex && moveIndex < fenParts.size() - optionalTrailingFields
+        && check_digit_field(fenParts[moveIndex]) == NOK)
     {
         std::cerr << "Invalid move counter: '" << fenParts[moveIndex] << "'." << std::endl;
         return FEN_INVALID_MOVE_COUNTER;

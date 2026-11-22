@@ -1275,9 +1275,13 @@ template <bool Current, class T> bool VariantParser<DoCheck>::parse_attribute(co
             // For extinctionMustAppear, '*' is an aggregate activation gate,
             // rather than the expanded set of every concrete piece type.
             bool aggregateExtinctionAppearance = key == "extinctionMustAppear" && trim(it->second) == "*";
-            if (aggregateExtinctionAppearance || parse_piece_set_token_string(it->second, v, parsedTarget))
+            // For extinctionPieceTypes, '*' is the wildcard matching any piece
+            // type (including future promotions), as in built-in variants
+            // using piece_set(ALL_PIECES), not just current v->pieceTypes.
+            bool wildcardExtinctionTypes = key.rfind("extinctionPieceTypes", 0) == 0 && trim(it->second) == "*";
+            if (aggregateExtinctionAppearance || wildcardExtinctionTypes || parse_piece_set_token_string(it->second, v, parsedTarget))
             {
-                if (aggregateExtinctionAppearance)
+                if (aggregateExtinctionAppearance || wildcardExtinctionTypes)
                     parsedTarget = piece_set(ALL_PIECES);
                 target = parsedTarget;
                 return true;

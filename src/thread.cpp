@@ -142,8 +142,11 @@ void Thread::idle_loop() {
       std::unique_lock<std::mutex> lk(mutex);
       searching = false;
       cv.notify_one(); // Wake up anyone waiting for search finished
-      // Start ponder search from separate thread to prevent deadlock
-      if (!Threads.stop && Threads.size() && this == Threads.main() && XBoard::stateMachine && XBoard::stateMachine->ponderMove.load())
+      // Start ponder search from separate thread to prevent deadlock.
+      // MainThread::search() raises Threads.stop at the end of every search, so
+      // cancellation is tracked via StateMachine::ponderCancel / shuttingDown
+      // inside launch_ponder_worker() rather than !Threads.stop here.
+      if (Threads.size() && this == Threads.main() && XBoard::stateMachine && XBoard::stateMachine->ponderMove.load())
           XBoard::stateMachine->launch_ponder_worker();
       cv.wait(lk, [&]{ return searching; });
 
@@ -353,8 +356,11 @@ Thread* ThreadPool::get_best_thread() const {
         }
         else if (bestThreadInProvenLoss)
         {
-            // Make sure we pick the shortest mated / TB conversion
-            if (newThreadInProvenLoss && newThreadScore < bestThreadScore)
+            // A proven win must always escape a proven loss; among losses keep
+            // the shortest mated / TB conversion to match upstream voting.
+            if (newThreadInProvenWin)
+                bestThread = th;
+            else if (newThreadInProvenLoss && newThreadScore < bestThreadScore)
                 bestThread = th;
         }
         else if (   newThreadInProvenWin

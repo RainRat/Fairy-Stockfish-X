@@ -1760,4 +1760,18 @@ UCI
 assert_contains "${hindustani_promotion}" "b7b8n: 1"
 assert_not_contains "${hindustani_promotion}" "b7b8q: 1"
 
+shipped_variants_check=$("${ENGINE}" check "${ROOT_DIR}/src/variants.ini" 2>&1)
+assert_not_contains "${shipped_variants_check}" "Variant 'rookmate' has invalid configuration"
+assert_not_contains "${shipped_variants_check}" "Invalid castling specification: '7'"
+
+rookmate_output=$(run_uci "$ENGINE" "${ROOT_DIR}/src/variants.ini" rookmate <<'UCI'
+position startpos
+d
+go perft 1
+UCI
+)
+assert_contains "${rookmate_output}" "^info string variant rookmate "
+assert_contains "${rookmate_output}" "^Fen: rnbqcbnk/pppppppp/8/8/8/8/PPPPPPPP/RNBQCBNK w - - 7\+7 0 1$"
+assert_nodes "${rookmate_output}" 20
+
 echo "parser regression tests passed"

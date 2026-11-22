@@ -96,4 +96,20 @@ EOF
 check_searchmove skirook "7k/8/8/8/8/s7/P7/K6R w - - 0 1" "h1h2" "(none)"
 check_searchmove skirook "7k/8/8/8/8/s7/P7/K6R w - - 0 1" "a1b1" "a1b1"
 
+# Ski-slider between_bb must strip the square adjacent to the attacker (not the king),
+# and ASYMMETRICAL_RIDERS must include ski sliders for checks and pins.
+check_searchmove skirook "7k/8/8/s7/p7/8/8/K7 w - - 0 1" "a1a2" "(none)"
+check_searchmove skirook "7k/8/8/s7/p7/8/8/K7 w - - 0 1" "a1b1" "a1b1"
+check_searchmove skirook "7k/8/8/s7/8/8/R7/K7 w - - 0 1" "a2b2" "(none)"
+check_searchmove skirook "7k/8/8/s7/8/8/R7/K7 w - - 0 1" "a2a3" "a2a3"
+check_searchmove skirook "7k/8/8/s7/8/8/R7/K7 w - - 0 1" "a2a5" "a2a5"
+
+check_searchmove skibishop "7k/8/8/8/3a4/2p5/8/K7 w - - 0 1" "a1b2" "(none)"
+check_searchmove skibishop "7k/8/8/8/3a4/2p5/8/K7 w - - 0 1" "a1b1" "a1b1"
+check_searchmove skibishop "7k/8/8/8/3a4/8/1B6/K7 w - - 0 1" "b2c1" "(none)"
+check_searchmove skibishop "7k/8/8/8/3a4/8/1B6/K7 w - - 0 1" "b2c3" "(none)"
+check_searchmove skibishop "7k/8/8/8/3a4/8/1B6/K7 w - - 0 1" "b2d4" "b2d4"
+check_searchmove skibishop "7k/8/8/4a3/8/8/1B6/K7 w - - 0 1" "b2c3" "b2c3"
+check_searchmove skibishop "7k/8/8/4a3/8/8/1B6/K7 w - - 0 1" "b2d4" "(none)"
+
 echo "ski-sliders test OK"

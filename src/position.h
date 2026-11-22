@@ -1933,7 +1933,8 @@ inline Bitboard Position::configured_ordinary_targets(const PieceInfo* pi, Color
     {
         b |= hopper_targets(pi->hopper[Phase][Modality], c, s, occ, quietMode);
     }
-    b |= lame_leaper_bb(pi->stepsLame[Phase][Modality], s, occ, c, quietMode);
+    if (pi->has_custom_lame(Phase, Modality))
+        b |= lame_leaper_bb(pi->stepsLame[Phase][Modality], s, occ, c, quietMode);
 
     return b;
 }
@@ -3841,10 +3842,10 @@ inline Bitboard Position::between_bb(Square s1, Square s2, PieceType pt, MoveMod
 }
 
 inline Color Position::color_of_piece_at(Square s1, Square s2, PieceType pt) const {
-  if (is_ok(s1) && type_of(piece_on(s1)) == pt)
-      return color_of(piece_on(s1));
   if (is_ok(s2) && type_of(piece_on(s2)) == pt)
       return color_of(piece_on(s2));
+  if (is_ok(s1) && type_of(piece_on(s1)) == pt)
+      return color_of(piece_on(s1));
   return sideToMove;
 }
 

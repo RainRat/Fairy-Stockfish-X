@@ -1114,7 +1114,12 @@ void set(T& e, uint8_t* data) {
             for (int i = 0; i < sides; i++)
             {
                 int p = i ? *data >>  4 : *data & 0xF;
-                e.get(i, f)->pieces[k] = make_piece(Color(p >> 3), PieceType(p & 7));
+                PieceType pt = PieceType(p & 7);
+                // Syzygy encodes King as 6; in FSX KING == PIECE_TYPE_NB - 1
+                // while 6 is FERS.
+                if ((p & 7) == 6)
+                    pt = KING;
+                e.get(i, f)->pieces[k] = make_piece(Color(p >> 3), pt);
             }
 
         for (int i = 0; i < sides; ++i)

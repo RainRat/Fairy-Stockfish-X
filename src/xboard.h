@@ -51,6 +51,7 @@ public:
   void ponder();
   void stop(bool abort = true);
   void shutdown_ponder_worker();
+  void finish_search_move(Move bestMove, Move nextPonderMove);
   void setboard(std::string fen = "");
   void do_move(Move m);
   void undo_move();
@@ -69,8 +70,10 @@ private:
   Search::LimitsType limits;
   Color playColor;
   std::string ponderHighlight;
+  std::mutex stateMutex;
   std::mutex ponderMutex;
   std::unique_ptr<NativeThread> ponderWorker;
+  std::atomic<bool> ponderCancel {false};
   std::atomic<bool> shuttingDown;
 };
 

@@ -228,24 +228,6 @@ namespace {
     return leaper;
   }
 
-  void add_step_like_rider_types(RiderType& riderTypes, Direction d) {
-    const int ad = std::abs(int(d));
-    if ((ad % FILE_NB) == 0)
-        riderTypes |= RIDER_ROOK_V;
-    if (ad < FILE_NB)
-        riderTypes |= RIDER_ROOK_H;
-    if ((FILE_NB > 1 && (ad % (FILE_NB - 1)) == 0) || (ad % (FILE_NB + 1)) == 0)
-        riderTypes |= RIDER_BISHOP;
-    if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
-        riderTypes |= RIDER_LAME_DABBABA;
-    if (HorseDirections.find(d) != HorseDirections.end())
-        riderTypes |= RIDER_HORSE;
-    if (ElephantDirections.find(d) != ElephantDirections.end())
-        riderTypes |= RIDER_ELEPHANT;
-    if (JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
-        riderTypes |= RIDER_JANGGI_ELEPHANT;
-  }
-
   void add_slider_rider_types(RiderType& riderTypes, Direction d, int limit) {
     if (limit == DYNAMIC_SLIDER_LIMIT)
         return;
@@ -267,14 +249,8 @@ namespace {
         riderTypes |= RIDER_ROOK_H;
     if (RookDirectionsV.find(d) != RookDirectionsV.end())
         riderTypes |= RIDER_ROOK_V;
-    if (LameDabbabaDirections.find(d) != LameDabbabaDirections.end())
-        riderTypes |= RIDER_LAME_DABBABA;
     if (HorseDirections.find(d) != HorseDirections.end())
         riderTypes |= RIDER_NIGHTRIDER;
-    if (ElephantDirections.find(d) != ElephantDirections.end())
-        riderTypes |= RIDER_ELEPHANT;
-    if (JanggiElephantDirections.find(d) != JanggiElephantDirections.end())
-        riderTypes |= RIDER_JANGGI_ELEPHANT;
   }
 
   void add_hopper_rider_types(RiderType& riderTypes, Direction d, int limit) {
@@ -583,15 +559,30 @@ Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initia
   for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
   {
       bool hit = false;
-      Bitboard path = tuple_rider_path_between(ray, s1, s2, c, hit);
+      Bitboard path = tuple_rider_path_between(ray, s2, s1, c, hit);
       if (hit)
-          return path;
+          return (path & ~square_bb(s1)) | square_bb(s2);
   }
   for (const auto& ray : pieceMap.get(pt)->tupleSlider[initial][modality])
   {
       bool hit = false;
-      Bitboard path = tuple_rider_path_between(ray, s2, s1, c, hit);
+      Bitboard path = tuple_rider_path_between(ray, s1, s2, c, hit);
       if (hit)
+          return path;
+  }
+  return Bitboard(0);
+}
+
+Bitboard leap_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2, Color c) {
+  const PieceInfo* pi = pieceMap.get(pt);
+  if (initial && !pi->has_explicit_initial_moves())
+      initial = false;
+  for (const auto& [d, limit] : pi->leapRider[initial][modality])
+  {
+      Direction step = c == WHITE ? d : Direction(-d);
+      auto [stepR, stepF] = decode_direction(step);
+      Bitboard path = fixed_step_between_bb(s2, s1, stepF, stepR);
+      if (path && (limit <= 0 || popcount(path) <= limit))
           return (path & ~square_bb(s1)) | square_bb(s2);
   }
   return Bitboard(0);
@@ -646,9 +637,8 @@ void Bitboards::init_pieces() {
                   continue;
               auto& riderTypes = modality == MODALITY_CAPTURE ? AttackRiderTypes[pt] : MoveRiderTypes[initial][pt];
               riderTypes = NO_RIDER;
-              for (auto const& [d, limit] : pi->steps[initial][modality])
-                  if (limit)
-                      add_step_like_rider_types(riderTypes, d);
+              for (auto const& [d, profile] : pi->stepsLame[initial][modality])
+                  riderTypes |= pi->standard_lame_rider_for(initial, modality, d, profile);
               for (auto const& [d, limit] : pi->slider[initial][modality])
                   add_slider_rider_types(riderTypes, d, limit);
               for (auto const& [d, limit] : pi->hopper[initial][modality])
@@ -702,8 +692,11 @@ void Bitboards::init_pieces() {
                        }
                        for (auto const& [d, profile] : pi->stepsLame[initial][modality])
                        {
-                           Bitboard dst = safe_destination(s, c == WHITE ? d : -d);
-                           pseudo |= dst;
+                           Direction step = c == WHITE ? d : Direction(-d);
+                           if (profile.limit < 0)
+                               pseudo |= safe_destination(s, step);
+                           else
+                               pseudo |= limited_step_rider_attacks(s, Bitboard(0), step, profile.limit);
                        }
                       for (auto const& [dr, df] : pi->tupleSteps[initial][modality])
                       {

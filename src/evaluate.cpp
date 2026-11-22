@@ -2025,7 +2025,11 @@ namespace {
     // If we have a specialized evaluation function for the current material
     // configuration, call it and return.
     if (me->specialized_eval_exists())
-        return me->evaluate(pos);
+    {
+        Value ev = me->evaluate(pos);
+        if (ev != VALUE_NONE)
+            return ev;
+    }
 
     // Freeze masks describe the current position and remain unchanged for the
     // duration of an evaluation. Potion contexts and simulated positions are

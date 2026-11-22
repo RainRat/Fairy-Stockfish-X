@@ -317,19 +317,19 @@ std::ostream& operator<<(std::ostream& os, const OptionsMap& om) {
 
 /// Option class constructors and conversion operators
 
-Option::Option(const char* v, OnChange f) : type("string"), min(0), max(0), on_change(f)
+Option::Option(const char* v, OnChange f) : type("string"), min(0), max(0), idx(0), on_change(f)
 { defaultValue = currentValue = v; }
 
-Option::Option(const char* v, const std::vector<std::string>& values, OnChange f) : type("combo"), min(0), max(0), comboValues(values), on_change(f)
+Option::Option(const char* v, const std::vector<std::string>& values, OnChange f) : type("combo"), min(0), max(0), comboValues(values), idx(0), on_change(f)
 { defaultValue = currentValue = v; }
 
-Option::Option(bool v, OnChange f) : type("check"), min(0), max(0), on_change(f)
+Option::Option(bool v, OnChange f) : type("check"), min(0), max(0), idx(0), on_change(f)
 { defaultValue = currentValue = (v ? "true" : "false"); }
 
-Option::Option(OnChange f) : type("button"), min(0), max(0), on_change(f)
+Option::Option(OnChange f) : type("button"), min(0), max(0), idx(0), on_change(f)
 {}
 
-Option::Option(double v, int minv, int maxv, OnChange f) : type("spin"), min(minv), max(maxv), on_change(f)
+Option::Option(double v, int minv, int maxv, OnChange f) : type("spin"), min(minv), max(maxv), idx(0), on_change(f)
 { defaultValue = currentValue = std::to_string(v); }
 
 Option::operator double() const {
@@ -402,6 +402,14 @@ Option& Option::operator=(const string& v) {
       on_change(*this);
 
   return *this;
+}
+
+Option& Option::operator=(bool v) {
+  return *this = std::string(v ? "true" : "false");
+}
+
+Option& Option::operator=(int v) {
+  return *this = std::to_string(v);
 }
 
 void Option::set_combo(std::vector<std::string> newComboValues) {

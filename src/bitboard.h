@@ -227,6 +227,7 @@ extern RiderType MoveRiderTypes[2][PIECE_TYPE_NB];
 Bitboard custom_rider_attacks(PieceType pt, bool initial, bool isCapture, Color c, Square s, Bitboard occupied);
 Bitboard bent_rider_attack(RiderType R, Square s, Bitboard occupied);
 Bitboard tuple_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2, Color c);
+Bitboard leap_rider_between_bb(PieceType pt, MoveModality modality, bool initial, Square s1, Square s2, Color c);
 inline Square lsb(Bitboard b);
 
 constexpr std::array<std::pair<int, int>, 8> RoseSteps = {{
@@ -566,103 +567,45 @@ inline Bitboard nightrider_between_bb(Square s1, Square s2) {
 }
 
 // Reconstruct the unique blocker/interposition path for bent riders by
-// materializing the mandatory pivot square and then the allowed second leg.
-inline Bitboard bent_slider_between_bb(Square s1, Square s2, int pivotF, int pivotR,
-                                       bool allowHorizontal, bool allowVertical, bool allowDiagonal = false) {
-  int f0 = int(file_of(s1));
-  int r0 = int(rank_of(s1));
-  int pf = f0 + pivotF;
-  int pr = r0 + pivotR;
+// pivoting from the attacker square along the two allowed outward second-leg rays.
+// Follows between_bb(target, attacker) convention: excludes target, includes attacker.
+inline Bitboard bent_slider_between_bb(Square target, Square attacker, int pivotF, int pivotR,
+                                       int leg1F, int leg1R, int leg2F, int leg2R) {
+  int pf = int(file_of(attacker)) + pivotF;
+  int pr = int(rank_of(attacker)) + pivotR;
   if (pf < int(FILE_A) || pf > int(FILE_MAX) || pr < int(RANK_1) || pr > int(RANK_MAX))
       return Bitboard(0);
 
-  int tf = int(file_of(s2));
-  int tr = int(rank_of(s2));
-  if (tf == pf && tr == pr)
+  Square pivotSq = make_square(File(pf), Rank(pr));
+  if (pivotSq == target)
       return Bitboard(0);
 
-  Bitboard path = square_bb(make_square(File(pf), Rank(pr)));
+  Bitboard legPath = fixed_step_between_bb(pivotSq, target, leg1F, leg1R);
+  if (!legPath)
+      legPath = fixed_step_between_bb(pivotSq, target, leg2F, leg2R);
+  if (!legPath)
+      return Bitboard(0);
 
-  if (allowDiagonal && std::abs(tf - pf) == std::abs(tr - pr))
-  {
-      int stepF = tf > pf ? 1 : -1;
-      int stepR = tr > pr ? 1 : -1;
-      for (int f = pf + stepF, r = pr + stepR;; f += stepF, r += stepR)
-      {
-          if (f < int(FILE_A) || f > int(FILE_MAX) || r < int(RANK_1) || r > int(RANK_MAX))
-              return Bitboard(0);
-          path |= square_bb(make_square(File(f), Rank(r)));
-          if (f == tf && r == tr)
-              return path;
-      }
-  }
-
-  if (allowHorizontal && tr == pr)
-  {
-      int step = tf > pf ? 1 : -1;
-      for (int f = pf + step;; f += step)
-      {
-          if (f < int(FILE_A) || f > int(FILE_MAX))
-              return Bitboard(0);
-          path |= square_bb(make_square(File(f), Rank(pr)));
-          if (f == tf)
-              return path;
-      }
-  }
-
-  if (allowVertical && tf == pf)
-  {
-      int step = tr > pr ? 1 : -1;
-      for (int r = pr + step;; r += step)
-      {
-          if (r < int(RANK_1) || r > int(RANK_MAX))
-              return Bitboard(0);
-          path |= square_bb(make_square(File(pf), Rank(r)));
-          if (r == tr)
-              return path;
-      }
-  }
-
-  return Bitboard(0);
+  return square_bb(attacker) | square_bb(pivotSq) | (legPath & ~square_bb(target));
 }
 
+// Convention: s1 is the target square (excluded) and s2 is the attacker square (included).
 inline Bitboard between_bb(Square s1, Square s2, PieceType pt, MoveModality modality = MODALITY_CAPTURE, bool initial = false, Color c = WHITE) {
   RiderType r = modality == MODALITY_CAPTURE ? AttackRiderTypes[pt] : MoveRiderTypes[initial][pt];
   Bitboard path = Bitboard(0);
-  auto remap_reverse_path = [&](Bitboard reversePath) {
-      return (reversePath & ~square_bb(s1)) | square_bb(s2);
-  };
   if ((path = tuple_rider_between_bb(pt, modality, initial, s1, s2, c)))
       return path;
-
-  if ((r & RIDER_HORSE) && (path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1]))
+  if ((path = leap_rider_between_bb(pt, modality, initial, s1, s2, c)))
       return path;
 
-  if (r & RIDER_ELEPHANT)
-  {
-      for (auto [sf, sr] : { std::pair<int, int>{ 2, 2}, { 2,-2}, {-2, 2}, {-2,-2} })
-      {
-          if ((path = fixed_step_between_bb(s1, s2, sf, sr)))
-              return path;
-      }
-      if ((path = PseudoAttacks[WHITE][FERS][s2] & PseudoAttacks[WHITE][FERS][s1]))
-          return path;
-  }
+  if ((r & RIDER_HORSE) && (PseudoAttacks[WHITE][KNIGHT][s2] & s1))
+      if ((path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][FERS][s1]))
+          return path | square_bb(s2);
 
-  if (r & RIDER_LAME_DABBABA)
-  {
-      for (auto [sf, sr] : { std::pair<int, int>{ 2, 0}, {-2, 0}, { 0, 2}, { 0,-2} })
-      {
-          if ((path = fixed_step_between_bb(s1, s2, sf, sr)))
-              return path;
-      }
-      if ((path = PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][WAZIR][s1]))
-          return path;
-  }
-
-  if ((r & RIDER_JANGGI_ELEPHANT) && (path =  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
-                                             | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1])))
-      return path;
+  if ((r & RIDER_JANGGI_ELEPHANT) && (PseudoAttacks[WHITE][JANGGI_ELEPHANT][s2] & s1))
+      if ((path =  (PseudoAttacks[WHITE][WAZIR][s2] & PseudoAttacks[WHITE][ALFIL][s1])
+                 | (PseudoAttacks[WHITE][KNIGHT][s2] & PseudoAttacks[WHITE][FERS][s1])))
+          return path | square_bb(s2);
 
   if (r & (RIDER_SKI_ROOK_H | RIDER_SKI_ROOK_V | RIDER_SKI_BISHOP))
   {
@@ -679,9 +622,25 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt, MoveModality moda
       if (path)
       {
           // Ski sliders ignore the first square in front of the attacker.
-          path &= ~PseudoAttacks[WHITE][KING][s1];
+          path &= ~PseudoAttacks[WHITE][KING][s2];
           return path;
       }
+  }
+
+  if (r & RIDER_ELEPHANT)
+  {
+      const int df = std::abs(int(file_of(s2)) - int(file_of(s1)));
+      const int dr = std::abs(int(rank_of(s2)) - int(rank_of(s1)));
+      if (df != 0 && df == dr && (df % 2 == 0))
+          return between_bb(s1, s2);
+  }
+
+  if (r & RIDER_LAME_DABBABA)
+  {
+      const int df = std::abs(int(file_of(s2)) - int(file_of(s1)));
+      const int dr = std::abs(int(rank_of(s2)) - int(rank_of(s1)));
+      if ((df == 0 && dr != 0 && (dr % 2 == 0)) || (dr == 0 && df != 0 && (df % 2 == 0)))
+          return between_bb(s1, s2);
   }
 
   if (r & RIDER_ROSE)
@@ -698,30 +657,30 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt, MoveModality moda
 
   struct BentRiderRule {
       RiderType mask;
-      int df;
-      int dr;
-      bool allowH;
-      bool allowV;
-      bool allowD;
+      int pivotF;
+      int pivotR;
+      int leg1F;
+      int leg1R;
+      int leg2F;
+      int leg2R;
   };
   static constexpr BentRiderRule rules[] = {
-      { RIDER_GRIFFON_NH,   1,  1,  true,  true, false },
-      { RIDER_GRIFFON_SH,  -1,  1,  true,  true, false },
-      { RIDER_GRIFFON_EV,   1, -1,  true,  true, false },
-      { RIDER_GRIFFON_WV,  -1, -1,  true,  true, false },
-      { RIDER_MANTICORE_NE, 0,  1, false, false,  true },
-      { RIDER_MANTICORE_NW, -1, 0, false, false,  true },
-      { RIDER_MANTICORE_SE, 1,  0, false, false,  true },
-      { RIDER_MANTICORE_SW, 0, -1, false, false,  true }
+      { RIDER_GRIFFON_NH,   1,  1,  1,  0,  0,  1 },
+      { RIDER_GRIFFON_SH,  -1,  1, -1,  0,  0,  1 },
+      { RIDER_GRIFFON_EV,   1, -1,  1,  0,  0, -1 },
+      { RIDER_GRIFFON_WV,  -1, -1, -1,  0,  0, -1 },
+      { RIDER_MANTICORE_NE, 0,  1,  1,  1, -1,  1 },
+      { RIDER_MANTICORE_NW,-1,  0, -1,  1, -1, -1 },
+      { RIDER_MANTICORE_SE, 1,  0,  1,  1,  1, -1 },
+      { RIDER_MANTICORE_SW, 0, -1,  1, -1, -1, -1 }
   };
   for (const auto& rule : rules)
   {
       if (r & rule.mask)
       {
-          if ((path = bent_slider_between_bb(s1, s2, rule.df, rule.dr, rule.allowH, rule.allowV, rule.allowD)))
+          if ((path = bent_slider_between_bb(s1, s2, rule.pivotF, rule.pivotR,
+                                             rule.leg1F, rule.leg1R, rule.leg2F, rule.leg2R)))
               return path;
-          if ((path = bent_slider_between_bb(s2, s1, rule.df, rule.dr, rule.allowH, rule.allowV, rule.allowD)))
-              return remap_reverse_path(path);
       }
   }
 

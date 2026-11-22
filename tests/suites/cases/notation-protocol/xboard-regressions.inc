@@ -198,4 +198,57 @@ if echo "${out}" | grep -q "Error (bad holding)"; then
   false
 fi
 
+# Ponder synchronization stress: rapid hard/ponder search followed by ponder
+# miss, lift, ponderhit, and stop/new transitions must not race or desync state.
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant chess\n"
+   send "hard\n"
+   send "sd 2\n"
+   send "setboard rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1\n"
+   send "go\n"
+   expect -re {move [a-h][1-8][a-h][1-8]}
+   after 50
+   send "lift e2\n"
+   expect "highlight "
+   send "usermove e2e3\n"
+   expect -re {move [a-h][1-8][a-h][1-8]}
+   after 50
+   send "new\n"
+   send "force\n"
+   send "d\n"
+   expect "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+# Ponderhit followed by forced stop/new must preserve valid state and exit cleanly.
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant chess\n"
+   send "hard\n"
+   send "sd 2\n"
+   send "setboard r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3\n"
+   send "go\n"
+   expect -re {move ([a-h][1-8][a-h][1-8])}
+   expect -re {Hint: ([a-h][1-8][a-h][1-8])}
+   set hint \$expect_out(1,string)
+   send "usermove \$hint\n"
+   expect -re {move [a-h][1-8][a-h][1-8]}
+   send "force\n"
+   send "d\n"
+   expect "Fen: "
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Hint: "
+echo "${out}" | grep -q "Fen: "
+
 echo "xboard regression tests passed"

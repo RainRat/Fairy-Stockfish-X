@@ -57,13 +57,15 @@ class Option {
   typedef void (*OnChange)(const Option&);
 
 public:
-  Option(OnChange = nullptr);
-  Option(bool v, OnChange = nullptr);
-  Option(const char* v, OnChange = nullptr);
-  Option(const char* v, const std::vector<std::string>& variants, OnChange = nullptr);
-  Option(double v, int minv, int maxv, OnChange = nullptr);
+  explicit Option(OnChange = nullptr);
+  explicit Option(bool v, OnChange = nullptr);
+  explicit Option(const char* v, OnChange = nullptr);
+  explicit Option(const char* v, const std::vector<std::string>& variants, OnChange = nullptr);
+  explicit Option(double v, int minv, int maxv, OnChange = nullptr);
 
   Option& operator=(const std::string&);
+  Option& operator=(bool v);
+  Option& operator=(int v);
   void operator<<(const Option&);
   operator double() const;
   operator std::string() const;

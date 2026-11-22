@@ -107,7 +107,7 @@ namespace XBoard {
 
     join_ponder_worker();
 
-    if (shuttingDown.load())
+    if (shuttingDown.load() || ponderCancel.load())
         return;
 
     // A late cancellation is harmless because ponder() rechecks atomically
@@ -116,7 +116,7 @@ namespace XBoard {
         return;
 
     std::lock_guard<std::mutex> lk(ponderMutex);
-    if (ponderMove.load() == MOVE_NONE)
+    if (shuttingDown.load() || ponderCancel.load() || ponderMove.load() == MOVE_NONE)
         return;
 
     ponderWorker.reset(new NativeThread(&StateMachine::ponder, this));
@@ -137,17 +137,26 @@ namespace XBoard {
   }
 
   void StateMachine::cancel_ponder_worker() {
+    ponderCancel.store(true);
     ponderMove.store(MOVE_NONE);
     join_ponder_worker();
   }
 
   void StateMachine::shutdown_ponder_worker() {
     shuttingDown.store(true);
-    ponderMove.store(MOVE_NONE);
-    Threads.abort = true;
-    Threads.stop = true;
-    Threads.main()->wait_for_search_finished();
-    join_ponder_worker();
+    stop(true);
+  }
+
+  void StateMachine::finish_search_move(Move bestMove, Move nextPonderMove) {
+
+    std::lock_guard<std::mutex> lk(stateMutex);
+    if (moveAfterSearch)
+    {
+        do_move(bestMove);
+        moveAfterSearch = false;
+        if (nextPonderMove != MOVE_NONE && !shuttingDown.load() && !ponderCancel.load())
+            ponderMove.store(nextPonderMove);
+    }
   }
 
   // go() starts the search for game play, analysis, or perft.
@@ -155,6 +164,8 @@ namespace XBoard {
   void StateMachine::go(Search::LimitsType searchLimits, bool ponder) {
 
     searchLimits.startTime = now(); // As early as possible!
+    if (!ponder)
+        ponderCancel.store(false);
 
     Threads.start_thinking(pos, states, searchLimits, ponder);
   }
@@ -163,21 +174,26 @@ namespace XBoard {
 
   void StateMachine::ponder() {
 
-    if (shuttingDown.load())
+    std::lock_guard<std::mutex> lk(stateMutex);
+
+    if (shuttingDown.load() || ponderCancel.load())
+    {
+        ponderMove.store(MOVE_NONE);
         return;
+    }
 
     Move pm = ponderMove.exchange(MOVE_NONE);
     if (pm == MOVE_NONE)
         return;
 
     sync_cout << "Hint: " << UCI::move(pos, pm) << sync_endl;
-    {
-        std::lock_guard<std::mutex> lk(ponderMutex);
-        ponderHighlight = highlight(UCI::square(pos, from_sq(pm)));
-    }
+    ponderHighlight = highlight(UCI::square(pos, from_sq(pm)));
     do_move(pm);
-    if (shuttingDown.load())
+    if (shuttingDown.load() || ponderCancel.load())
+    {
+        undo_move();
         return;
+    }
     go(limits, true);
   }
 
@@ -186,11 +202,26 @@ namespace XBoard {
 
   void StateMachine::stop(bool abort) {
 
+    // Cancel any pending ponder worker before touching shared state.
+    // ponder() mutates pos/states/moveList, so it must be joined before
+    // the main command loop mutates them.
+    ponderCancel.store(true);
+    ponderMove.store(MOVE_NONE);
+
     if (abort)
         Threads.abort = true;
     Threads.stop = true;
     Threads.main()->wait_for_search_finished();
+    join_ponder_worker();
+    if (Threads.main()->ponder || Threads.is_searching())
+    {
+        if (abort)
+            Threads.abort = true;
+        Threads.stop = true;
+        Threads.main()->wait_for_search_finished();
+    }
     // Ensure that current position does not get out of sync with GUI
+    std::lock_guard<std::mutex> lk(stateMutex);
     if (Threads.main()->ponder)
     {
         assert(moveList.size());
@@ -319,20 +350,34 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   {
       if (is >> token)
       {
-          if (Threads.main()->ponder)
+          join_ponder_worker();
+          bool needRestart = false;
+          Move currentPonderMove = MOVE_NONE;
+          std::string highlightText;
           {
-              if (token == UCI::square(pos, from_sq(moveList.back())))
+              std::lock_guard<std::mutex> lk(stateMutex);
+              if (Threads.main()->ponder)
               {
-                  std::string highlightText;
-                  std::lock_guard<std::mutex> lk(ponderMutex);
-                  highlightText = ponderHighlight;
-                  sync_cout << "highlight " << highlightText << sync_endl;
+                  assert(moveList.size());
+                  if (token == UCI::square(pos, from_sq(moveList.back())))
+                      highlightText = ponderHighlight;
+                  else
+                  {
+                      currentPonderMove = moveList.back();
+                      needRestart = true;
+                  }
               }
               else
+                  highlightText = highlight(token);
+          }
+          if (!needRestart)
+              sync_cout << "highlight " << highlightText << sync_endl;
+          else
+          {
+              stop();
               {
-                  Move currentPonderMove = moveList.back();
-                  stop();
-                  sync_cout << "highlight " << highlight(token) << sync_endl;
+                  std::lock_guard<std::mutex> lk(stateMutex);
+                  highlightText = highlight(token);
                   // Restart ponder search with random guess
                   auto moves = MoveList<LEGAL>(pos);
                   std::vector<Move> filteredMoves;
@@ -346,11 +391,11 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
                   }
                   else
                       ponderMove.store(currentPonderMove);
-                  ponder();
+                  ponderCancel.store(false);
               }
+              sync_cout << "highlight " << highlightText << sync_endl;
+              ponder();
           }
-          else
-              sync_cout << "highlight " << highlight(token) << sync_endl;
       }
   }
   else if (token == "ping")
@@ -383,18 +428,25 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   }
   else if (token == "?")
   {
+      join_ponder_worker();
       if (!Threads.main()->ponder)
           stop(false);
   }
   else if (token == "go")
   {
       stop();
-      playColor = pos.side_to_move();
-      go(limits);
-      moveAfterSearch = true;
+      Search::LimitsType nextLimits;
+      {
+          std::lock_guard<std::mutex> lk(stateMutex);
+          playColor = pos.side_to_move();
+          moveAfterSearch = true;
+          nextLimits = limits;
+      }
+      go(nextLimits);
   }
   else if (token == "level" || token == "st" || token == "sd" || token == "time" || token == "otim")
   {
+      std::lock_guard<std::mutex> lk(stateMutex);
       if (token == "level")
       {
           int movestogo = 0;
@@ -460,31 +512,42 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       stop();
       std::string fen;
       std::getline(is >> std::ws, fen);
-      // Check if setboard actually indicates a passing move
-      // to avoid unnecessarily clearing the move history
-      if (pos.pass(pos.side_to_move()))
+      bool startSearch = false;
+      Search::LimitsType nextLimits;
       {
-          StateInfo st;
-          Position p;
-          p.set(pos.variant(), fen, pos.is_chess960(), &st, pos.this_thread());
-          Move m;
-          std::string passMove = "@@@@";
-          if ((m = UCI::to_move(pos, passMove)) != MOVE_NONE)
-              do_move(m);
-          // apply setboard if passing does not lead to a match
-          if (pos.key() != p.key())
+          std::lock_guard<std::mutex> lk(stateMutex);
+          // Check if setboard actually indicates a passing move
+          // to avoid unnecessarily clearing the move history
+          if (pos.pass(pos.side_to_move()))
+          {
+              StateInfo st;
+              Position p;
+              p.set(pos.variant(), fen, pos.is_chess960(), &st, pos.this_thread());
+              Move m;
+              std::string passMove = "@@@@";
+              if ((m = UCI::to_move(pos, passMove)) != MOVE_NONE)
+                  do_move(m);
+              // apply setboard if passing does not lead to a match
+              if (pos.key() != p.key())
+                  setboard(fen);
+          }
+          else
               setboard(fen);
+          // Winboard sends setboard after passing moves
+          if (Options["UCI_AnalyseMode"])
+          {
+              nextLimits = analysisLimits;
+              startSearch = true;
+          }
+          else if (pos.side_to_move() == playColor)
+          {
+              moveAfterSearch = true;
+              nextLimits = limits;
+              startSearch = true;
+          }
       }
-      else
-          setboard(fen);
-      // Winboard sends setboard after passing moves
-      if (Options["UCI_AnalyseMode"])
-          go(analysisLimits);
-      else if (pos.side_to_move() == playColor)
-      {
-          go(limits);
-          moveAfterSearch = true;
-      }
+      if (startSearch)
+          go(nextLimits);
   }
   else if (token == "cores")
   {
@@ -509,11 +572,19 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       std::getline(is, value);
       if (Options.count(name))
       {
+          if (   name == "Threads" || name == "Hash" || name == "Clear Hash"
+              || name == "UCI_Variant" || name == "VariantPath" || name == "UCI_Chess960"
+              || name == "EvalFile" || name == "Use NNUE" || name == "SyzygyPath"
+              || name == "DynamicMagicsByBoardSize" || name == "MultiPV")
+              stop();
           if (Options[name].get_type() == "check")
               value = value == "1" ? "true" : "false";
           Options[name] = value;
           if (name == "Threads")
+          {
+              std::lock_guard<std::mutex> lk(stateMutex);
               pos.set_thread(Threads.main());
+          }
       }
   }
   else if (token == "analyze")
@@ -553,13 +624,19 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       Partner.parse_partner(is);
   else if (token == "ptell")
   {
-      Partner.parse_ptell(is, pos);
+      bool shouldPlayRequested = false;
+      {
+          std::lock_guard<std::mutex> lk(stateMutex);
+          Partner.parse_ptell(is, pos);
+          shouldPlayRequested = moveAfterSearch && Partner.moveRequested;
+      }
       // play move requested by partner
       // Partner.moveRequested can only be set if search was successfully aborted
-      if (moveAfterSearch && Partner.moveRequested)
+      if (shouldPlayRequested)
       {
           assert(Threads.abort);
           stop();
+          std::lock_guard<std::mutex> lk(stateMutex);
           sync_cout << "move " << UCI::move(pos, Partner.moveRequested) << sync_endl;
           do_move(Partner.moveRequested);
           moveAfterSearch = false;
@@ -628,9 +705,15 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       go(perft_limits);
   }
   else if (token == "d")
+  {
+      std::lock_guard<std::mutex> lk(stateMutex);
       sync_cout << pos << sync_endl;
+  }
   else if (token == "eval")
+  {
+      std::lock_guard<std::mutex> lk(stateMutex);
       sync_cout << Eval::trace(pos) << sync_endl;
+  }
   // Move strings and unknown commands
   else
   {
@@ -647,34 +730,50 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       }
 
       // Handle pondering
-      if (Threads.main()->ponder)
+      join_ponder_worker();
       {
-          assert(moveList.size());
-          if (token == UCI::move(pos, moveList.back()))
+          std::lock_guard<std::mutex> lk(stateMutex);
+          if (Threads.main()->ponder)
           {
-              // ponderhit
-              moveAfterSearch = true;
-              Threads.main()->ponder = false;
-              return;
+              assert(moveList.size());
+              if (token == UCI::move(pos, moveList.back()))
+              {
+                  // ponderhit
+                  moveAfterSearch = true;
+                  ponderCancel.store(false);
+                  Threads.main()->ponder = false;
+                  return;
+              }
           }
       }
       stop(false);
 
-      // Apply move
-      Move m;
-      if ((m = UCI::to_move(pos, token)) != MOVE_NONE)
-          do_move(m);
-      else
-          sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
-
-      // Restart search if applicable
-      if (Options["UCI_AnalyseMode"])
-          go(analysisLimits);
-      else if (pos.side_to_move() == playColor)
+      bool startSearch = false;
+      Search::LimitsType nextLimits;
       {
-          moveAfterSearch = true;
-          go(limits);
+          std::lock_guard<std::mutex> lk(stateMutex);
+          // Apply move
+          Move m;
+          if ((m = UCI::to_move(pos, token)) != MOVE_NONE)
+              do_move(m);
+          else
+              sync_cout << (isMove ? "Illegal move: " : "Error (unknown command): ") << token << sync_endl;
+
+          // Restart search if applicable
+          if (Options["UCI_AnalyseMode"])
+          {
+              nextLimits = analysisLimits;
+              startSearch = true;
+          }
+          else if (pos.side_to_move() == playColor)
+          {
+              moveAfterSearch = true;
+              nextLimits = limits;
+              startSearch = true;
+          }
       }
+      if (startSearch)
+          go(nextLimits);
   }
 }
 

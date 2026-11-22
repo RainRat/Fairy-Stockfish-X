@@ -20,6 +20,7 @@
 #define PIECE_H_INCLUDED
 
 #include <cassert>
+#include <cstdlib>
 #include <array>
 #include <string>
 #include <map>
@@ -232,13 +233,80 @@ struct PieceInfo {
         return true;
     return false;
   }
+  inline RiderType standard_lame_rider_for(int initial, MoveModality modality, Direction d, const LameProfile& profile) const {
+    auto [dr, df] = decode_direction(d);
+    const int adr = std::abs(dr);
+    const int adf = std::abs(df);
+    const bool standardPath = profile.path == LameProfile::MIDPOINT
+                           || profile.path == LameProfile::ORTH_FIRST;
+
+    auto family_all_standard = [&](auto matches_family) {
+      for (const auto& [od, oprof] : stepsLame[initial][modality])
+      {
+          auto [odr, odf] = decode_direction(od);
+          if (matches_family(std::abs(odr), std::abs(odf)))
+          {
+              if (oprof.limit >= 0
+                  || (oprof.path != LameProfile::MIDPOINT
+                      && oprof.path != LameProfile::ORTH_FIRST))
+                  return false;
+          }
+      }
+      return true;
+    };
+
+    if (profile.limit < 0 && standardPath)
+    {
+        if ((adr == 2 && adf == 1) || (adr == 1 && adf == 2))
+        {
+            if (family_all_standard([](int r, int f) { return (r == 2 && f == 1) || (r == 1 && f == 2); }))
+                return RIDER_HORSE;
+        }
+        if ((adr == 3 && adf == 2) || (adr == 2 && adf == 3))
+        {
+            if (family_all_standard([](int r, int f) { return (r == 3 && f == 2) || (r == 2 && f == 3); }))
+                return RIDER_JANGGI_ELEPHANT;
+        }
+    }
+
+    const bool canUseMultiHopFastLame = (profile.limit == 0)
+                                     || (!has_hopper_like_movement() && !has_dynamic_slider() && !has_max_slider());
+    if (canUseMultiHopFastLame)
+    {
+        if ((adr == 2 && adf == 0) || (adr == 0 && adf == 2))
+            return RIDER_LAME_DABBABA;
+        if (adr == 2 && adf == 2)
+            return RIDER_ELEPHANT;
+    }
+
+    return NO_RIDER;
+  }
+  inline bool has_custom_lame(int initial, MoveModality modality) const {
+    for (const auto& [d, profile] : stepsLame[initial][modality])
+      if (standard_lame_rider_for(initial, modality, d, profile) == NO_RIDER)
+        return true;
+    return false;
+  }
+  inline bool has_custom_lame_leaper() const {
+    for (int initial = 0; initial < 2; ++initial)
+      for (int modality = 0; modality < MOVE_MODALITY_NB; ++modality)
+        if (has_custom_lame(initial, static_cast<MoveModality>(modality)))
+          return true;
+    return false;
+  }
+  inline bool has_custom_lame_capture() const {
+    for (int initial = 0; initial < 2; ++initial)
+      if (has_custom_lame(initial, MODALITY_CAPTURE))
+        return true;
+    return false;
+  }
   inline bool has_simple_hopper_capture() const {
     for (int initial = 0; initial < 2; ++initial)
       if (!hopper[initial][MODALITY_CAPTURE].empty())
         return true;
     return false;
   }
-  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper() || has_lame_leaper() || friendlyJump; }
+  inline bool has_runtime_rider_augment() const { return riderAugmentMask != AUGMENT_NONE || has_universal_hopper() || has_custom_lame_leaper() || friendlyJump; }
   inline bool has_dynamic_slider() const { return riderAugmentMask & AUGMENT_DYNAMIC; }
   inline bool has_max_slider() const { return riderAugmentMask & AUGMENT_MAX; }
   inline bool has_explicit_initial_moves() const {
@@ -262,7 +330,7 @@ struct PieceInfo {
         || has_universal_hopper()
         || has_explicit_initial_moves()
         || has_simple_hopper_capture()
-        || has_lame_capture()
+        || has_custom_lame_capture()
         || griffon[0][MODALITY_CAPTURE]
         || griffon[1][MODALITY_CAPTURE]
         || manticore[0][MODALITY_CAPTURE]

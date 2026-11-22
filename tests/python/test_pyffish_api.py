@@ -395,6 +395,57 @@ class TestPublicAPI(unittest.TestCase):
         self.assertIn("shogun", sf.variants())
         self.assertIn("hostage", sf.variants())
 
+    def test_rookmate_and_omitted_castling_fen_validation(self):
+        self.assertIn("rookmate", sf.variants())
+        rookmate_board = "rnbqcbnk/pppppppp/8/8/8/8/PPPPPPPP/RNBQCBNK"
+        self.assertEqual(
+            sf.validate_fen(f"{rookmate_board} w 7+7 0 1", "rookmate", False),
+            sf.FEN_OK,
+        )
+        self.assertEqual(
+            sf.validate_fen(f"{rookmate_board} w 7+7", "rookmate", False),
+            sf.FEN_OK,
+        )
+        self.assertEqual(
+            sf.validate_fen(f"{rookmate_board} w 0 1 +2+0", "rookmate", False),
+            sf.FEN_OK,
+        )
+        self.assertEqual(
+            sf.validate_fen(f"{rookmate_board} w 7+7 x 1", "rookmate", False),
+            sf.FEN_INVALID_HALF_MOVE_COUNTER,
+        )
+        self.assertEqual(
+            sf.validate_fen(f"{rookmate_board} w 7+7 0 x", "rookmate", False),
+            sf.FEN_INVALID_MOVE_COUNTER,
+        )
+        self.assertEqual(
+            sf.validate_fen(
+                "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w 7+7 0 1", "chess", False
+            ),
+            sf.FEN_INVALID_CASTLING_INFO,
+        )
+        self.assertEqual(
+            sf.validate_fen(
+                "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0",
+                "chess",
+                False,
+            ),
+            sf.FEN_OK,
+        )
+        self.assertEqual(
+            sf.validate_fen("rbsgk/4p/5/P4/KGSBR b 2P 1", "minishogi", False),
+            sf.FEN_OK,
+        )
+        if "shogi" in sf.variants():
+            self.assertEqual(
+                sf.validate_fen(
+                    "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b 2P 1",
+                    "shogi",
+                    False,
+                ),
+                sf.FEN_OK,
+            )
+
     def test_installed_stub_matches_extension_exports(self):
         stub_path = Path(sf.__file__).resolve().parent / "pyffish.pyi"
         self.assertTrue(stub_path.is_file(), f"typing stub not installed beside extension: {stub_path}")

@@ -372,12 +372,11 @@ void MainThread::search() {
           }
           else
               sync_cout << "move " << move << sync_endl;
-          if (XBoard::stateMachine->moveAfterSearch)
+          if (XBoard::stateMachine)
           {
-              XBoard::stateMachine->do_move(bestMove);
-              XBoard::stateMachine->moveAfterSearch = false;
-              if (Options["Ponder"] && bestThread->rootMoves[0].pv.size() > 1)
-                  XBoard::stateMachine->ponderMove = bestThread->rootMoves[0].pv[1];
+              Move nextPonder = Options["Ponder"] && bestThread->rootMoves[0].pv.size() > 1
+                              ? bestThread->rootMoves[0].pv[1] : MOVE_NONE;
+              XBoard::stateMachine->finish_search_move(bestMove, nextPonder);
           }
       }
       return;
