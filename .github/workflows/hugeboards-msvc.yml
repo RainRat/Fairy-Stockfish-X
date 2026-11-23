@@ -6,7 +6,8 @@ on:
     branches: [master]
 jobs:
   msvc:
-    runs-on: windows-latest
+    # VS 2022 / MSVC 19.4x; VS 2026 19.52 crashes on the huge-board TUs (MSB6006).
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
       - name: Configure 64-bit MSVC checks
