@@ -88,7 +88,16 @@ void init_variant(const Variant* v) {
 void on_clear_hash(const Option&) { Search::clear(); }
 void on_hash_size(const Option& o) { TT.resize(size_t(o)); }
 void on_logger(const Option& o) { start_logger(o); }
-void on_threads(const Option& o) { Threads.set(size_t(o)); }
+void on_threads(const Option& o) {
+#ifdef NO_THREADS
+  // Builds without pthreads (ffish.js) cannot create even the main
+  // std::thread; Thread::Thread() would throw std::system_error and abort.
+  // The engine stays with an empty ThreadPool, which its API supports.
+  (void)o;
+#else
+  Threads.set(size_t(o));
+#endif
+}
 void on_tb_path(const Option& o) { Tablebases::init(o); }
 void on_variant_load_warnings(const Option& o) { variants.set_verbose_load_warnings(bool(o)); }
 
@@ -211,7 +220,11 @@ void init(OptionsMap& o) {
   constexpr int MaxHashMB = Is64Bit ? 33554432 : 2048;
 
   o["Debug Log File"]        << Option("", on_logger);
+#ifdef NO_THREADS
+  o["Threads"]               << Option(1, 1, 1, on_threads); // single-threaded build
+#else
   o["Threads"]               << Option(1, 1, 1024, on_threads);
+#endif
   o["Hash"]                  << Option(16, 1, MaxHashMB, on_hash_size);
   o["Clear Hash"]            << Option(on_clear_hash);
   o["Ponder"]                << Option(false);
