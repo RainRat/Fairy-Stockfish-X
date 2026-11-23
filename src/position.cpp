@@ -13081,7 +13081,22 @@ bool Position::has_game_cycle(int ply) const {
 
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
 
-  if (end < 3 || n_fold_rule() <= 0 || var->nFoldValue.get(WHITE) != VALUE_DRAW || var->nFoldValue.get(BLACK) != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
+  // Only the twofold and threefold rules are modelled: stp->repetition
+  // separates "occurred twice" from "occurred three times", which is what
+  // "one more move draws" needs, and says nothing about longer rules.
+  if (end < 3 || n_fold_rule() < 2 || n_fold_rule() > 3 || var->nFoldValue.get(WHITE) != VALUE_DRAW || var->nFoldValue.get(BLACK) != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
+    return false;
+
+  // The cuckoo heuristic assumes the shuttle move stays available and that a
+  // further occurrence is still a draw. A forced capture or drop can remove
+  // the quiet move, a frozen piece cannot play it at all, potion state is only
+  // partly covered by the piece keys, and the same-player board rule makes the
+  // extra repetition illegal rather than drawn.
+  if (   var->mustCapture.get(WHITE) || var->mustCapture.get(BLACK)
+      || var->mustDrop.get(WHITE) || var->mustDrop.get(BLACK)
+      || var->freezePieceTypes
+      || potions_enabled()
+      || var->samePlayerBoardRepetitionIllegalAtN > 0)
     return false;
 
   // A repetition needs the whole position, hands included: a cycle that

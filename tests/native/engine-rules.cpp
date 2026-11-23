@@ -1497,6 +1497,31 @@ void state() {
     }
     check(pos.has_game_cycle(20), "genuine repetition cycle was not detected");
 
+    // A cycle only helps when the next occurrence still draws and the shuttle
+    // move cannot be forced away, so the rule guards must decline the claim
+    // even where a genuine shuttle exists.
+    struct GuardCase { const char* variant; const char* fen; const char* moves[4]; };
+    const GuardCase guardCases[] = {
+      {"coffeehouse", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 0 1",
+       {"g1f3", "g8f6", "f3g1", "f6g8"}},
+      {"madrasi", "4k3/8/8/8/8/8/8/4K2R w - - 0 1", {"h1h2", "e8d8", "h2h1", "d8e8"}}
+    };
+    for (const GuardCase& c : guardCases)
+    {
+        Position guarded;
+        StateListPtr guardedStates;
+        set_position(guarded, guardedStates, c.variant, c.fen);
+        for (const char* notation : c.moves)
+        {
+            Move shuttle = parse_move(guarded, notation);
+            check(guarded.legal(shuttle), std::string(c.variant) + " shuttle move is illegal: " + notation);
+            guardedStates->emplace_back();
+            guarded.do_move(shuttle, guardedStates->back());
+        }
+        check(!guarded.has_game_cycle(20),
+              std::string(c.variant) + " still claims a repetition cycle under a rule guard");
+    }
+
     set_position(pos, states, "atomic",
                  "4k3/8/8/8/8/8/1p6/R3K3 b - - 0 1");
     Move move = parse_move(pos, "b2a1q");
