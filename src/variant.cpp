@@ -1148,7 +1148,7 @@ namespace {
     // One queen is replaced by a chancellor
     // https://en.wikipedia.org/wiki/Almost_chess#Sort_of_almost_chess
     Variant* sortofalmost_variant() {
-        Variant* v = chess_variant();
+        Variant* v = chess_variant()->init();
         v->pieceToCharTable = "PNBRQ...........CKpnbrq...........ck";
         v->add_piece(CHANCELLOR, 'c');
         v->startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBCKBNR w KQkq - 0 1";
@@ -1394,7 +1394,7 @@ namespace {
     // Features a variety of new pieces, thus there is a piece selection step where both players must agree to chose the additional piece combination.
     // In Fairy Stockfish the Piece Selection is determined at the PieceToCharTable, this default combination can be changed in variant.ini
     Variant* musketeer_variant() {
-        Variant* v = chess_variant();
+        Variant* v = chess_variant()->init();
         v->variantTemplate = "seirawan";
         v->pieceToCharTable = "PNBRQ.E....C.AF.MH.SU........D............LKpnbrq.e....c.af.mh.su........d............lk";  // The default piece combo in Musketeer Chess is Leopard L and Musketeer Cannon O
         v->add_piece(ARCHBISHOP, 'a');
