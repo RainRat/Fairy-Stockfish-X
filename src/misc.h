@@ -61,6 +61,10 @@ struct HashTable {
   static_assert(Size > 0 && (Size & (Size - 1)) == 0, "HashTable size must be a power of two");
   Entry* operator[](Key key) { return &table[(uint32_t)key & (Size - 1)]; }
 
+  // Invalidate every entry. Keys are only compared for equality, so zeroed
+  // entries simply miss and get recomputed.
+  void clear() { std::fill(table.begin(), table.end(), Entry{}); }
+
 private:
   std::vector<Entry> table = std::vector<Entry>(Size); // Allocate on the heap
 };

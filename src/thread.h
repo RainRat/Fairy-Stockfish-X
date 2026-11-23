@@ -65,6 +65,10 @@ public:
   virtual ~Thread();
   virtual void search();
   void clear();
+  // Pawn and material tables are keyed by keys that do not identify the
+  // variant, so entries computed under another variant's rules must not be
+  // reused after a variant switch.
+  void refresh_eval_tables(const Variant*);
   void idle_loop();
   void start_searching();
   void wait_for_search_finished();
@@ -73,6 +77,7 @@ public:
 
   Pawns::Table pawnsTable;
   Material::Table materialTable;
+  const Variant* evalTableVariant = nullptr;
   size_t pvIdx, pvLast;
   uint64_t ttHitAverage;
   int selDepth, nmpMinPly;

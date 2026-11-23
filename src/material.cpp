@@ -163,7 +163,9 @@ namespace Material {
 Entry* probe(const Position& pos) {
 
   Key key = pos.material_key(pos.endgame_eval());
-  Entry* e = pos.this_thread()->materialTable[key];
+  Thread* th = pos.this_thread();
+  th->refresh_eval_tables(pos.variant());
+  Entry* e = th->materialTable[key];
 
   if (e->key == key)
       return e;

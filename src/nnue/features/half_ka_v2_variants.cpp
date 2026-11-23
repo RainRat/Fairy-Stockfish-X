@@ -223,9 +223,9 @@ namespace Stockfish::Eval::NNUE::Features {
       if (pos.nnue_points_score_planes())
       {
         int oldUs = st->previous ? std::max(0, std::min(st->previous->pointsCount[perspective], POINTS_SCORE_MAX)) : 0;
-        int newUs = pos.points_score_clamped(perspective);
+        int newUs = std::max(0, std::min(st->pointsCount[perspective], POINTS_SCORE_MAX));
         int oldThem = st->previous ? std::max(0, std::min(st->previous->pointsCount[~perspective], POINTS_SCORE_MAX)) : 0;
-        int newThem = pos.points_score_clamped(~perspective);
+        int newThem = std::max(0, std::min(st->pointsCount[~perspective], POINTS_SCORE_MAX));
         add_changed_bits(oldUs, newUs, planeOffset, POINTS_SCORE_BITS);
         add_changed_bits(oldThem, newThem, planeOffset + POINTS_SCORE_BITS, POINTS_SCORE_BITS);
         planeOffset += pos.nnue_points_score_planes();

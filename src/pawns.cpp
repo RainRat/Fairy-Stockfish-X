@@ -240,7 +240,9 @@ Entry* probe(const Position& pos) {
       if (pos.count<ALL_PIECES>(c) == pos.count<PAWN>(c))
           key ^= Zobrist::pawnBare[c];
 
-  Entry* e = pos.this_thread()->pawnsTable[key];
+  Thread* th = pos.this_thread();
+  th->refresh_eval_tables(pos.variant());
+  Entry* e = th->pawnsTable[key];
 
   if (e->key == key)
       return e;

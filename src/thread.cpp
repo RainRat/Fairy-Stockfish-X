@@ -104,6 +104,22 @@ void Thread::clear() {
 }
 
 
+/// Thread::refresh_eval_tables() drops the pawn and material caches when the
+/// variant changes. Their keys are built from piece placement/counts only, so
+/// two variants can produce the same key while evaluating it with different
+/// board geometry or rules (rank/edge handling, hand scaling, density).
+
+void Thread::refresh_eval_tables(const Variant* v) {
+
+  if (evalTableVariant == v)
+      return;
+
+  pawnsTable.clear();
+  materialTable.clear();
+  evalTableVariant = v;
+}
+
+
 /// Thread::start_searching() wakes up the thread that will start the search
 
 void Thread::start_searching() {
