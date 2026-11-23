@@ -123,7 +123,9 @@ struct MainThread : public Thread {
   Value iterValue[4];
   int callsCnt;
   bool stopOnPonderhit;
-  std::atomic_bool ponder;
+  // Read before the first search (XBoard shutdown and protocol switches call
+  // stop()), so it must not depend on start_thinking() initializing it.
+  std::atomic_bool ponder{false};
   Thread* bestThread; // to fetch best move when in XBoard mode
 };
 
