@@ -145,6 +145,8 @@ struct ThreadPool : public std::vector<Thread*> {
   void start_thinking(Position&, StateListPtr&, const Search::LimitsType&, bool = false);
   void clear();
   void set(size_t);
+  // Drops cached NNUE accumulators that belong to another network or feature layout.
+  void invalidate_accumulators();
 
   MainThread* main() const {
     assert(!empty());
@@ -167,7 +169,7 @@ struct ThreadPool : public std::vector<Thread*> {
 
   StateListPtr setupStates;
   const StateListPtr* setupStateOwner = nullptr;
-  const std::deque<StateInfo>* setupStateSource = nullptr;
+  std::deque<StateInfo>* setupStateSource = nullptr;
   size_t setupStateSize = 0;
   Key setupStateKey = 0;
 

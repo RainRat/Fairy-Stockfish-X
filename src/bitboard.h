@@ -436,15 +436,20 @@ constexpr Bitboard king_flank(File f) {
 
 
 /// shift() moves a bitboard one step along direction D (mainly for pawns)
+///
+/// The result is masked to the board: squares are packed FILE_NB apart on a
+/// container that can be wider than the board (120 of 128 bits on 12x10), so a
+/// north or north-east step from the top rank would otherwise land in the
+/// spare bits above SQUARE_NB instead of dropping off the board.
 
 constexpr Bitboard shift(Direction D, Bitboard b) {
-  return  D == NORTH      ?  b                       << NORTH      : D == SOUTH      ?  b             >> NORTH
-        : D == NORTH+NORTH?  b                       <<(2 * NORTH) : D == SOUTH+SOUTH?  b             >> (2 * NORTH)
-        : D == 3 * NORTH  ?  b                       <<(3 * NORTH) : D == 3 * SOUTH  ?  b             >> (3 * NORTH)
-        : D == EAST       ? (b & ~file_bb(FILE_MAX)) << EAST       : D == WEST       ? (b & ~FileABB) >> EAST
-        : D == NORTH_EAST ? (b & ~file_bb(FILE_MAX)) << NORTH_EAST : D == NORTH_WEST ? (b & ~FileABB) << NORTH_WEST
-        : D == SOUTH_EAST ? (b & ~file_bb(FILE_MAX)) >> NORTH_WEST : D == SOUTH_WEST ? (b & ~FileABB) >> NORTH_EAST
-        : Bitboard(0);
+  return (  D == NORTH      ?  b                       << NORTH      : D == SOUTH      ?  b             >> NORTH
+          : D == NORTH+NORTH?  b                       <<(2 * NORTH) : D == SOUTH+SOUTH?  b             >> (2 * NORTH)
+          : D == 3 * NORTH  ?  b                       <<(3 * NORTH) : D == 3 * SOUTH  ?  b             >> (3 * NORTH)
+          : D == EAST       ? (b & ~file_bb(FILE_MAX)) << EAST       : D == WEST       ? (b & ~FileABB) >> EAST
+          : D == NORTH_EAST ? (b & ~file_bb(FILE_MAX)) << NORTH_EAST : D == NORTH_WEST ? (b & ~FileABB) << NORTH_WEST
+          : D == SOUTH_EAST ? (b & ~file_bb(FILE_MAX)) >> NORTH_WEST : D == SOUTH_WEST ? (b & ~FileABB) >> NORTH_EAST
+          : Bitboard(0)) & AllSquares;
 }
 
 
@@ -694,13 +699,13 @@ inline Bitboard between_bb(Square s1, Square s2, PieceType pt, MoveModality moda
 /// forward_ranks_bb(BLACK, SQ_D3) will return the 16 squares on ranks 1 and 2.
 
 constexpr Bitboard forward_ranks_bb(Color c, Square s) {
-  return c == WHITE ? (AllSquares ^ Rank1BB) << FILE_NB * relative_rank(WHITE, s, RANK_MAX)
-                    : (AllSquares ^ rank_bb(RANK_MAX)) >> FILE_NB * relative_rank(BLACK, s, RANK_MAX);
+  return c == WHITE ? ((AllSquares ^ Rank1BB) << FILE_NB * relative_rank(WHITE, s, RANK_MAX)) & AllSquares
+                    : ((AllSquares ^ rank_bb(RANK_MAX)) >> FILE_NB * relative_rank(BLACK, s, RANK_MAX)) & AllSquares;
 }
 
 constexpr Bitboard forward_ranks_bb(Color c, Rank r) {
-  return c == WHITE ? (AllSquares ^ Rank1BB) << FILE_NB * (r - RANK_1)
-                    : (AllSquares ^ rank_bb(RANK_MAX)) >> FILE_NB * (RANK_MAX - r);
+  return c == WHITE ? ((AllSquares ^ Rank1BB) << FILE_NB * (r - RANK_1)) & AllSquares
+                    : ((AllSquares ^ rank_bb(RANK_MAX)) >> FILE_NB * (RANK_MAX - r)) & AllSquares;
 }
 
 

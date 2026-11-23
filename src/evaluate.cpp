@@ -85,6 +85,10 @@ namespace Eval {
 
   void NNUE::init(const Variant* v) {
 
+    // Accumulators cached in position and root states belong to the previous
+    // network and feature layout, whatever this call decides.
+    Threads.invalidate_accumulators();
+
     const Variant* selectedVariant = v ? v : variants.get(string(Options["UCI_Variant"]));
     nnueInitializedVariant = selectedVariant;
     currentNnueVariant = nullptr;

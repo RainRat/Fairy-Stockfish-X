@@ -210,6 +210,30 @@ void ThreadPool::set(size_t requested) {
 }
 
 
+/// ThreadPool::invalidate_accumulators() forgets every cached NNUE
+/// accumulator. Accumulators are only valid for the network and feature layout
+/// that produced them, and they survive in three places: the shared setup
+/// chain, the caller's own state list (UCI/XBoard positions), and each
+/// thread's root state, which start_thinking() copies from the setup chain.
+/// Search rebuilds whatever it needs, so clearing the flags is enough.
+
+void ThreadPool::invalidate_accumulators() {
+
+  auto clear = [](std::deque<StateInfo>& states) {
+      for (StateInfo& st : states)
+          st.accumulator.computed[WHITE] = st.accumulator.computed[BLACK] = false;
+  };
+
+  if (setupStates)
+      clear(*setupStates);
+  if (setupStateSource)
+      clear(*setupStateSource);
+
+  for (Thread* th : *this)
+      th->rootState.accumulator.computed[WHITE] = th->rootState.accumulator.computed[BLACK] = false;
+}
+
+
 /// ThreadPool::clear() sets threadPool data to initial values
 
 void ThreadPool::clear() {

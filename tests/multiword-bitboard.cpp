@@ -60,6 +60,42 @@ void check(Bitboard b) {
     }
 }
 
+// Squares are packed FILE_NB apart on a container that can be wider than the
+// board (22x22 on 512 bits), so a north step from the top rank must drop off
+// the board instead of landing in the spare bits above SQUARE_NB.
+void spare_bits() {
+    auto fits = [](Bitboard b) { return (b & ~AllSquares) == Bitboard(0); };
+
+    for (Direction d : {NORTH, SOUTH, EAST, WEST, NORTH_EAST, NORTH_WEST,
+                        SOUTH_EAST, SOUTH_WEST,
+                        Direction(NORTH + NORTH), Direction(SOUTH + SOUTH),
+                        Direction(3 * NORTH), Direction(3 * SOUTH)})
+        assert(fits(shift(d, AllSquares)));
+
+    assert(fits(pawn_attacks_bb<WHITE>(AllSquares)));
+    assert(fits(pawn_attacks_bb<BLACK>(AllSquares)));
+    assert(fits(pawn_double_attacks_bb<WHITE>(AllSquares)));
+    assert(fits(pawn_double_attacks_bb<BLACK>(AllSquares)));
+
+    for (Rank r = RANK_1; r <= RANK_MAX; ++r) {
+        assert(fits(forward_ranks_bb(WHITE, r)));
+        assert(fits(forward_ranks_bb(BLACK, r)));
+        assert(fits(zone_bb(WHITE, r, RANK_MAX)));
+        assert(fits(zone_bb(BLACK, r, RANK_MAX)));
+    }
+    for (int s = 0; s < SQUARE_NB; ++s) {
+        Square sq = Square(s);
+        assert(fits(forward_ranks_bb(WHITE, sq)));
+        assert(fits(forward_ranks_bb(BLACK, sq)));
+        assert(fits(forward_file_bb(WHITE, sq)));
+        assert(fits(forward_file_bb(BLACK, sq)));
+        assert(fits(pawn_attack_span(WHITE, sq)));
+        assert(fits(pawn_attack_span(BLACK, sq)));
+        assert(fits(passed_pawn_span(WHITE, sq)));
+        assert(fits(passed_pawn_span(BLACK, sq)));
+    }
+}
+
 void moves() {
     for (int s = 0; s < SQUARE_NB; ++s) {
         Square from = Square(s), to = Square(SQUARE_NB - 1 - s), via = SQ_MAX;
@@ -143,5 +179,6 @@ int main() {
     }
     moves();
     scores();
+    spare_bits();
     std::cout << BOARD_BITS << "-bit arithmetic and move encoding passed\n";
 }
