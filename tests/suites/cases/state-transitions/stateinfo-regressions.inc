@@ -249,7 +249,6 @@ static void test_null_move_clears_undo_payload() {
     pos.set(variants.get("chess"), "startpos", false, &st, nullptr);
 
     const Key beforeKey = pos.state()->key;
-    const Key beforeBoardKey = pos.state()->boardKey;
     const Key beforePawnKey = pos.state()->pawnKey;
     const Key beforeMaterialKey = pos.state()->materialKey;
     StateInfo next{};
@@ -272,7 +271,6 @@ static void test_null_move_clears_undo_payload() {
     pos.undo_null_move();
     assert(pos.pos_is_ok());
     assert(pos.state()->key == beforeKey);
-    assert(pos.state()->boardKey == beforeBoardKey);
     assert(pos.state()->pawnKey == beforePawnKey);
     assert(pos.state()->materialKey == beforeMaterialKey);
 }

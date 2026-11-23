@@ -78,7 +78,6 @@ int main() {
     assert(pos.legal(m));
 
     const Key beforeKey = pos.state()->key;
-    const Key beforeBoardKey = pos.state()->boardKey;
     const Key beforePawnKey = pos.state()->pawnKey;
     const Key beforeMaterialKey = pos.state()->materialKey;
     StateInfo next{};
@@ -88,7 +87,6 @@ int main() {
     pos.undo_move(m);
     assert(pos.pos_is_ok());
     assert(pos.state()->key == beforeKey);
-    assert(pos.state()->boardKey == beforeBoardKey);
     assert(pos.state()->pawnKey == beforePawnKey);
     assert(pos.state()->materialKey == beforeMaterialKey);
 
@@ -101,7 +99,6 @@ int main() {
     assert(pos.legal(drop));
     const std::string beforeFen = pos.fen();
     const Key libertyKey = pos.state()->key;
-    const Key libertyBoardKey = pos.state()->boardKey;
     const Key libertyPawnKey = pos.state()->pawnKey;
     const Key libertyMaterialKey = pos.state()->materialKey;
     StateInfo libertyNext{};
@@ -111,7 +108,6 @@ int main() {
     assert(pos.pos_is_ok());
     assert(pos.fen() == beforeFen);
     assert(pos.state()->key == libertyKey);
-    assert(pos.state()->boardKey == libertyBoardKey);
     assert(pos.state()->pawnKey == libertyPawnKey);
     assert(pos.state()->materialKey == libertyMaterialKey);
     return 0;

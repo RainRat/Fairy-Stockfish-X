@@ -2745,7 +2745,6 @@ void Position::recompute_state_hashes_and_material(StateInfo* si) const {
   si->key ^= si->pieceStateKey;
 
   si->reserveKey = reserve_key();
-  si->boardKey = si->key ^ si->reserveKey;
   si->layoutKey = layout_key();
 }
 
@@ -2776,7 +2775,6 @@ void Position::set_state(StateInfo* si) const {
   recompute_state_hashes_and_material(si);
   si->checkersBB = compute_checkers_bb(sideToMove);
   si->repetition = 0;
-  si->boardRepetition = 0;
 
 }
 
@@ -10574,7 +10572,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
 
   // Update the key with the final value
   st->key = k;
-  st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
   sideToMove = them;
@@ -10604,7 +10601,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           }
       }
 
-  st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
 
@@ -10643,7 +10639,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
           Key diff = Zobrist::checks[us][st->checksRemaining[us]]
                   ^  Zobrist::checks[us][st->checksRemaining[us] - 1];
           st->key ^= diff;
-          st->boardKey ^= diff;
           --st->checksRemaining[us];
       }
   }
@@ -10661,14 +10656,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                ^ Zobrist::autoMovePhase[mover][newPhase];
       st->autoMoveCount[mover] = newPhase;
       st->key ^= diff;
-      st->boardKey ^= diff;
   }
 
   // Calculate the repetition info. It is the ply distance from the previous
   // occurrence of the same position, negative in the 3-fold case, or zero
   // if the position was not repeated.
   st->repetition = 0;
-  st->boardRepetition = 0;
   int end = captures_to_hand() ? st->pliesFromNull : std::min(st->rule50, st->pliesFromNull);
   if (end >= 4)
   {
@@ -10677,11 +10670,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
       {
           stp = stp->previous->previous;
           if (stp->key == st->key)
+          {
               st->repetition = stp->repetition ? -i : i;
-          if (stp->boardKey == st->boardKey)
-              st->boardRepetition = stp->boardRepetition ? -i : i;
-          if (st->repetition && st->boardRepetition)
               break;
+          }
       }
   }
 
@@ -11322,7 +11314,6 @@ void Position::do_null_move(StateInfo& newSt) {
   }
 
   st->key ^= Zobrist::side;
-  st->boardKey = st->key ^ st->reserveKey;
   if (var->samePlayerBoardRepetitionIllegalAtN > 0)
       st->layoutKey = layout_key();
   prefetch(TT.first_entry(key()));
@@ -11336,7 +11327,6 @@ void Position::do_null_move(StateInfo& newSt) {
   st->checkersBB = compute_checkers_bb(sideToMove, st->evasionCheckersBB);
 
   st->repetition = 0;
-  st->boardRepetition = 0;
 
   assert(pos_is_ok());
 }
@@ -13094,8 +13084,11 @@ bool Position::has_game_cycle(int ply) const {
   if (end < 3 || n_fold_rule() <= 0 || var->nFoldValue.get(WHITE) != VALUE_DRAW || var->nFoldValue.get(BLACK) != VALUE_DRAW || var->perpetualCheckIllegal || var->materialCounting || var->moveRepetitionIllegal || walling_rule() == DUCK)
     return false;
 
-  bool useBoardKey = captures_to_hand();
-  Key originalKey = useBoardKey ? st->boardKey : st->key;
+  // A repetition needs the whole position, hands included: a cycle that
+  // returns the board but not the reserves is not a draw in a drop variant.
+  // The window still ignores rule50 for capture-to-hand variants, where a
+  // capture resets the counter but the reserves can come back later.
+  Key originalKey = st->key;
   StateInfo* stp = st->previous;
 
   enum class CuckooMatch { NoMatch, Rejected, Found };
@@ -13122,16 +13115,14 @@ bool Position::has_game_cycle(int ply) const {
           return CuckooMatch::Rejected;
 
       // For repetitions before or at the root, require one more
-      return (useBoardKey ? stp->boardRepetition : stp->repetition)
-           ? CuckooMatch::Found
-           : CuckooMatch::NoMatch;
+      return stp->repetition ? CuckooMatch::Found : CuckooMatch::NoMatch;
   };
 
   for (int i = 3; i <= end; i += 2)
   {
       stp = stp->previous->previous;
 
-      Key moveKey = originalKey ^ (useBoardKey ? stp->boardKey : stp->key);
+      Key moveKey = originalKey ^ stp->key;
       j = H1(moveKey);
       CuckooMatch match = check_cuckoo_slot(j, i, moveKey);
       if (match == CuckooMatch::NoMatch)
@@ -13503,7 +13494,6 @@ bool Position::pos_is_ok() const {
   }
   bool sameState =
       si.key == st->key
-      && si.boardKey == st->boardKey
       && si.reserveKey == st->reserveKey
       && st->reserveKey == reserve_key()
       && (var->samePlayerBoardRepetitionIllegalAtN <= 0 || si.layoutKey == st->layoutKey)

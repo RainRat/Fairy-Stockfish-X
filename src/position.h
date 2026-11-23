@@ -371,7 +371,6 @@ struct StateInfoCopied {
 
 struct StateInfoDerived {
   Key        key;
-  Key        boardKey;
   Bitboard   checkersBB;
   Bitboard   evasionCheckersBB;
   StateInfo* previous;
@@ -383,7 +382,6 @@ struct StateInfoDerived {
   Bitboard   pseudoRoyals;
   PieceSet   extinctionSeen[COLOR_NB];
   int        repetition;
-  int        boardRepetition;
   bool       shak;
   bool       bikjang;
   Move       move = MOVE_NONE;

@@ -1466,11 +1466,36 @@ void state() {
     }
     check(pos.state()->repetition < 0,
           "automatic-movement threefold repetition was not recorded");
-    check(pos.state()->boardRepetition < 0,
-          "automatic-movement board threefold repetition was not recorded");
     Value autoRepetitionResult = VALUE_NONE;
     check(pos.is_optional_game_end(autoRepetitionResult) && autoRepetitionResult == VALUE_DRAW,
           "automatic-movement threefold repetition was not adjudicated as a draw");
+
+    // A repetition needs the whole position, reserves included. White drops two
+    // knights and Black captures both, so the final board is the start board
+    // with the rook one square along while the hands have swapped sides. Both
+    // positions differ by a single reversible move, which is what the cuckoo
+    // lookup keys on, but the position itself never repeats.
+    set_position(pos, states, "crazyhouse", "3kq3/8/8/8/8/8/8/1K5R[NN] w - - 0 1");
+    for (const char* notation : {"N@e5", "e8e5", "N@e8", "e5e8", "h1h2" })
+    {
+        Move repeated = parse_move(pos, notation);
+        check(pos.legal(repeated), std::string("reserve-cycle move is illegal: ") + notation);
+        states->emplace_back();
+        pos.do_move(repeated, states->back());
+    }
+    check(!pos.has_game_cycle(20),
+          "hand-only change was reported as a repetition cycle");
+
+    // Control: the same shuffle without the captures does repeat.
+    set_position(pos, states, "crazyhouse", "3kq3/8/8/8/8/8/8/1K5R[] w - - 0 1");
+    for (const char* notation : {"h1h2", "d8c8", "h2h1", "c8d8" })
+    {
+        Move repeated = parse_move(pos, notation);
+        check(pos.legal(repeated), std::string("control cycle move is illegal: ") + notation);
+        states->emplace_back();
+        pos.do_move(repeated, states->back());
+    }
+    check(pos.has_game_cycle(20), "genuine repetition cycle was not detected");
 
     set_position(pos, states, "atomic",
                  "4k3/8/8/8/8/8/1p6/R3K3 b - - 0 1");
