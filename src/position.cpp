@@ -9166,7 +9166,12 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
   // (their `from` is only an adjacent direction marker, not a touched square),
   // and capture/exchange/swap drops landing on a rook's or king's home square
   // revoke through castlingRightsMask[to] (plain drops have empty masks).
-  if (!passMove && !pureWallMove && st->castlingRights)
+  // A laser fire leaves every piece where it was, so firing from a rook's or
+  // king's home square cannot forfeit castling. Rotations are always appended
+  // to a real move, whose own squares carry the mask; a rotation of a piece in
+  // place (e.g. a rook on a1) therefore never revokes a right.
+  const bool inPlaceMove = is_laser_fire(m);
+  if (!passMove && !pureWallMove && !inPlaceMove && st->castlingRights)
   {
       const int rightsMask = (rifleShot || is_insert_move(m)
                                        ? castlingRightsMask[to]
@@ -13860,6 +13865,21 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
         }
     }
 
+    // A destroyed piece leaves the game for good, which makes the move
+    // irreversible and can take a castling rook (or the king) with it. The
+    // do_move() castling block only sees the mover's own squares, so both
+    // effects are applied here, per destroyed square, for the plain and the
+    // stacked (top level removed) cases alike.
+    auto destroy_on_square = [&](Square sq) {
+        if (st->castlingRights && castlingRightsMask[sq])
+        {
+            k ^= Zobrist::castling[st->castlingRights];
+            st->castlingRights &= ~castlingRightsMask[sq];
+            k ^= Zobrist::castling[st->castlingRights];
+        }
+        st->rule50 = 0;
+    };
+
     while (destroyed_squares) {
         Square sq = pop_lsb(destroyed_squares);
         Piece pc = piece_on(sq);
@@ -13894,20 +13914,55 @@ void Position::fire_laser(Color us, Key& k, Square selectedEmitter) {
                     append_dirty(st, pc, sq, SQ_NONE);
                     append_dirty(st, base, SQ_NONE, sq);
                 }
+                destroy_on_square(sq);
                 continue;
             }
-            st->bycatchSquares |= sq;
+
+            // undo_move() undoes a capture transfer for every bycatch square
+            // that is not blast-promoted or laser-transformed, so a destroyed
+            // piece has to enter the hand/prison through the same path. A
+            // square a blast already claimed keeps its original record: undo
+            // restores the pre-move piece from it.
+            const bool alreadyRecorded = bool(st->bycatchPieces[sq]);
+            const bool capturedPromoted = is_promoted(sq);
             Piece unpromoted = unpromoted_piece_on(sq);
-            st->bycatchPieces[sq].set(pc, is_promoted(sq), unpromoted);
+            int dirtyIdx = -1;
+            if (Eval::useNNUE)
+                dirtyIdx = append_dirty(st, pc, sq, SQ_NONE);
+
+            if (!alreadyRecorded)
+            {
+                st->bycatchSquares |= sq;
+                st->bycatchPieces[sq].set(pc, capturedPromoted, unpromoted);
+                if (points_counting())
+                    add_capture_points(st, us, pc);
+            }
+
             remove_piece(sq);
+
+            if (!alreadyRecorded)
+            {
+                Piece transferPiece = reserve_transfer_piece(*this, us, pc, capturedPromoted, unpromoted,
+                                                             drop_loop(), var->captureToHandSide,
+                                                             main_promotion_pawn_type(color_of(pc)));
+                bool transferred = add_capture_transfer(st, transferPiece, &k);
+                if (Eval::useNNUE && dirtyIdx >= 0 && transferred && capture_type() == HAND)
+                {
+                    // See remove_extra_capture: prison transfers carry no NNUE
+                    // hand-feature delta and must not read the hand bucket.
+                    st->dirtyPiece.handPiece[dirtyIdx] = transferPiece;
+                    st->dirtyPiece.handCount[dirtyIdx] =
+                        pieceCountInHand[color_of(transferPiece)][type_of(transferPiece)];
+                }
+            }
+
             k ^= Zobrist::psq[pc][sq];
             st->materialKey ^= Zobrist::psq[pc][pieceCount[pc]];
             if (type_of(pc) == PAWN)
                 st->pawnKey ^= Zobrist::psq[pc][sq];
             else
                 st->nonPawnMaterial[color_of(pc)] -= PieceValue[MG][pc];
-            if (Eval::useNNUE)
-                append_dirty(st, pc, sq, SQ_NONE);
+            destroy_on_square(sq);
         }
     }
 }

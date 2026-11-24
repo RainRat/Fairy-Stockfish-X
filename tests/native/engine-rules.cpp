@@ -1717,6 +1717,38 @@ void royal() {
     }
 
     {
+        // A destroyed castling rook loses its right and the kill makes the
+        // move irreversible; the do_move() castling block only knows the
+        // mover's own squares, so fire_laser() has to apply both.
+        Position lasered;
+        StateListPtr laseredStates;
+        set_position(lasered, laseredStates, "dos-laser-chess-1994",
+                     "4k4/9/9/9/L(2)8/9/9/9/R3K4 w Q - 0 1");
+        check(lasered.castling_rights(WHITE) == WHITE_OOO, "laser fixture lacks the queenside right");
+        laseredStates->emplace_back();
+        lasered.do_move(parse_move(lasered, "a5a5f"), laseredStates->back());
+        check(lasered.piece_on(SQ_A1) == NO_PIECE, "laser fire did not destroy the a1 rook");
+        check(!(lasered.castling_rights(WHITE) & WHITE_OOO),
+              "destroyed castling rook left the queenside right set");
+        check(lasered.rule50_count() == 0, "laser kill did not reset rule50");
+        check(lasered.pos_is_ok(), "laser kill left the position inconsistent");
+    }
+    {
+        // Rotating a rook in place, here appended to another piece's move,
+        // does not forfeit its castling right: only moving the piece does.
+        Position rotated;
+        StateListPtr rotatedStates;
+        set_position(rotated, rotatedStates, "dos-laser-chess-1994",
+                     "4k4/9/9/9/9/9/2D6/9/R3K4 w Q - 0 1");
+        Move spin = parse_move(rotated, "c3c4:1a1");
+        check(rotated.legal(spin), "rotation fixture move is illegal");
+        rotatedStates->emplace_back();
+        rotated.do_move(spin, rotatedStates->back());
+        check(rotated.castling_rights(WHITE) & WHITE_OOO,
+              "rotating a rook in place forfeited its castling right");
+    }
+
+    {
         Position pos;
         StateListPtr states;
         Value result = VALUE_NONE;
