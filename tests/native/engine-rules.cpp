@@ -1734,6 +1734,42 @@ void royal() {
         check(lasered.pos_is_ok(), "laser kill left the position inconsistent");
     }
     {
+        // No shipped laser variant captures to hand, so derive one: a laser
+        // kill must enter the hand through the same add_capture_transfer()
+        // path that undo_move() unwinds, otherwise the counts underflow.
+        Variant* handVariant = new Variant(*variants.get("dos-laser-chess-1994"));
+        handVariant->name = "laser-hand-probe";
+        handVariant->captureType = HAND;
+        handVariant->pieceDrops = true;
+        handVariant->conclude();
+        variants.emplace(handVariant->name, handVariant);
+
+        Position hand;
+        StateListPtr handStates;
+        set_position(hand, handStates, "laser-hand-probe",
+                     "r3k4/9/9/9/L(0)8/9/9/9/4K4 w q - 0 1");
+        const Key handKey = hand.key();
+        check(hand.count_in_hand(WHITE, ROOK) == 0, "laser hand fixture starts with a rook in hand");
+        check(hand.castling_rights(BLACK) == BLACK_OOO, "laser hand fixture lacks Black's queenside right");
+
+        Move beam = parse_move(hand, "a5a5f");
+        StateInfo handNext;
+        hand.do_move(beam, handNext);
+        check(hand.piece_on(SQ_A9) == NO_PIECE, "laser fire did not destroy the a9 rook");
+        check(hand.count_in_hand(WHITE, ROOK) == 1,
+              "laser kill did not transfer the captured rook into the capturing side's hand");
+        check(!(hand.castling_rights(BLACK) & BLACK_OOO),
+              "destroyed castling rook left Black's queenside right set");
+        check(hand.pos_is_ok(), "laser hand transfer left the position inconsistent");
+
+        hand.undo_move(beam);
+        check(hand.pos_is_ok(), "undo_move() of a laser hand transfer left the position inconsistent");
+        check(hand.count_in_hand(WHITE, ROOK) == 0,
+              "undo_move() did not remove the transferred rook from the hand");
+        check(hand.key() == handKey, "undo_move() of a laser hand transfer did not restore the key");
+    }
+
+    {
         // Rotating a rook in place, here appended to another piece's move,
         // does not forfeit its castling right: only moving the piece does.
         Position rotated;
