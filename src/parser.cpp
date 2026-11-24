@@ -138,6 +138,18 @@ namespace {
         return true;
     }
 
+    // The piece type that carries royal status: the configured royal when the
+    // piece set contains it, otherwise a physical KING. Mirrors the runtime
+    // preference in Position::royal_piece_type() for variants such as xiangqi
+    // (kingType = WAZIR) and knightmate (kingType = KNIGHT, no knights).
+    PieceType royal_piece_slot(const Variant* v) {
+        if (v->kingType != NO_PIECE_TYPE && (v->pieceTypes & piece_set(v->kingType)))
+            return v->kingType;
+        if (v->pieceTypes & piece_set(KING))
+            return KING;
+        return NO_PIECE_TYPE;
+    }
+
     PieceType parse_piece_type_token(const Variant* v, const std::string& token) {
         if (token.empty())
             return NO_PIECE_TYPE;
@@ -1560,10 +1572,21 @@ bool VariantParser<DoCheck>::parse_piece_types(Variant* v) {
         // mobility region
         std::string capitalizedPiece = name;
         capitalizedPiece[0] = std::toupper(static_cast<unsigned char>(capitalizedPiece[0]));
+        // The "King" mobility attribute follows the piece that is actually
+        // royal, so a custom royal (king = <symbol>:<Betza>) stops writing the
+        // unused KING slot. Variants that keep a physical KING (xiangqi,
+        // knightmate) resolve to KING and are unchanged.
+        PieceType regionType = pt;
+        if (pt == KING)
+        {
+            const PieceType royal = royal_piece_slot(v);
+            if (royal != NO_PIECE_TYPE)
+                regionType = royal;
+        }
         for (Color c : {WHITE, BLACK})
         {
             std::string color = c == WHITE ? "White" : "Black";
-            parse_attribute("mobilityRegion" + color + capitalizedPiece, v->mobilityRegion[c][pt]);
+            parse_attribute("mobilityRegion" + color + capitalizedPiece, v->mobilityRegion[c][regionType]);
         }
     }
     return true;
@@ -2632,8 +2655,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
     const bool wrapsTopology = v->cylindrical || v->toroidal;
     v->rebuild_piece_symbol_maps();
     const bool hasRoyalKing = v->checking != CheckingRule::FORBIDDEN
-                           && v->kingType != NO_PIECE_TYPE
-                           && bool(v->pieceTypes & piece_set(v->kingType));
+                           && royal_piece_slot(v) != NO_PIECE_TYPE;
 
     // pieces
     if (DoCheck)

@@ -406,6 +406,21 @@ laserEmitters = piece:k
 [bad-laser-topology:fairy]
 laserGame = true
 cylindrical = true
+
+[flip-xiangqi-royal:xiangqi]
+flipEnclosedPieces = quadwrangle
+
+[flip-knightmate-royal:knightmate]
+flipEnclosedPieces = quadwrangle
+
+[royal-mobility-custom:chess]
+king = g:R
+startFen = g7/8/8/8/8/8/8/4G3 w - - 0 1
+mobilityRegionWhiteKing = *1
+
+[royal-mobility-custom-free:chess]
+king = g:R
+startFen = g7/8/8/8/8/8/8/4G3 w - - 0 1
 INI
 
 printf '%s
@@ -798,6 +813,25 @@ assert_contains_literal "${initial_capture_output}" "connectNxN must be -1, 0, o
 assert_contains_literal "${initial_capture_output}" "laser_notapiece - Unknown piece symbol: notapiece"
 assert_contains_literal "${initial_capture_output}" "laser_p - Too many laser outcome faces: expected 4."
 assert_contains_literal "${initial_capture_output}" "laserPortalFallback must be a non-portal laser outcome."
+
+# Royal detection: xiangqi (kingType = WAZIR) and knightmate (kingType = KNIGHT,
+# knights removed) must be validated as royal-bearing like any other king.
+assert_contains_literal "${initial_capture_output}" "Can not use kings with flipEnclosedPieces."
+[[ $(grep -c "Can not use kings with flipEnclosedPieces." <<<"${initial_capture_output}") -ge 2 ]]
+
+# mobilityRegion<Color>King follows the piece that is actually royal, so a
+# custom royal honours it instead of writing the unused KING slot.
+royal_free_nodes=$(run_uci "${ENGINE}" "${tmp_ini}" royal-mobility-custom-free <<'UCI' | sed -n 's/^Nodes searched: //p'
+position startpos
+go perft 1
+UCI
+)
+royal_region_nodes=$(run_uci "${ENGINE}" "${tmp_ini}" royal-mobility-custom <<'UCI' | sed -n 's/^Nodes searched: //p'
+position startpos
+go perft 1
+UCI
+)
+[[ "${royal_free_nodes}" == "12" && "${royal_region_nodes}" == "6" ]]
 assert_contains_literal "${initial_capture_output}" "laserAutoFire = false requires a piece laser emitter."
 assert_contains_literal "${initial_capture_output}" "laserFireSelectedEmitter is incompatible with static laser emitters."
 assert_contains_literal "${initial_capture_output}" "orientationCounts - Invalid orientation count: 0"
