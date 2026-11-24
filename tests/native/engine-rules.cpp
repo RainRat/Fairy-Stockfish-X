@@ -1755,7 +1755,11 @@ void royal() {
         Move beam = parse_move(hand, "a5a5f");
         StateInfo handNext;
         hand.do_move(beam, handNext);
-        check(hand.piece_on(SQ_A9) == NO_PIECE, "laser fire did not destroy the a9 rook");
+        // The fixture only runs on large-board engines, but this file is also
+        // compiled for 8x8, where SQ_A9 does not exist: check the piece type
+        // instead of naming the square.
+        check(hand.pieces(BLACK, ROOK) == Bitboard(0), "laser fire did not destroy the a9 rook");
+        check(hand.pieces(BLACK) == hand.pieces(BLACK, KING), "laser fire left more than the black king");
         check(hand.count_in_hand(WHITE, ROOK) == 1,
               "laser kill did not transfer the captured rook into the capturing side's hand");
         check(!(hand.castling_rights(BLACK) & BLACK_OOO),
