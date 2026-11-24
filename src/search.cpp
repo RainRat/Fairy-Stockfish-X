@@ -155,7 +155,7 @@ namespace {
   Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = 0);
 
   Value value_to_tt(Value v, int ply);
-  Value value_from_tt(Value v, int ply, int r50c);
+  Value value_from_tt(Value v, int ply, int r50c, int nMoveRule);
   void update_pv(Move* pv, Move move, Move* childPv);
   void update_continuation_histories(Stack* ss, Piece pc, Square to, int bonus);
   void update_quiet_stats(const Position& pos, Stack* ss, Move move, int bonus, int depth);
@@ -897,7 +897,7 @@ namespace {
     excludedMove = ss->excludedMove;
     posKey = excludedMove == MOVE_NONE ? pos.key() : pos.key() ^ make_key(excludedMove);
     tte = TT.probe(posKey, ss->ttHit);
-    ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
+    ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count(), pos.n_move_rule()) : VALUE_NONE;
     ttMove =  rootNode ? thisThread->rootMoves[thisThread->pvIdx].pv[0]
             : ss->ttHit    ? tte->move() : MOVE_NONE;
     if (!excludedMove)
@@ -948,9 +948,12 @@ namespace {
             }
         }
 
-        // Partial workaround for the graph history interaction problem
+        // Partial workaround for the graph history interaction problem.
         // For high rule50 counts don't produce transposition table cutoffs.
-        if (pos.rule50_count() < 90)
+        // The n-move rule is measured in plies (two per move) and a rule of 0
+        // means there is none, so the hazard only exists for a positive rule.
+        const int rulePlies = 2 * pos.n_move_rule();
+        if (rulePlies == 0 || pos.rule50_count() < std::max(rulePlies - 10, 0))
             return ttValue;
     }
 
@@ -1808,7 +1811,7 @@ moves_loop: // When in check, search starts from here
     // Transposition table lookup
     posKey = pos.key();
     tte = TT.probe(posKey, ss->ttHit);
-    ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
+    ttValue = ss->ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count(), pos.n_move_rule()) : VALUE_NONE;
     ttMove = ss->ttHit ? tte->move() : MOVE_NONE;
     pvHit = ss->ttHit && tte->is_pv();
 
@@ -2020,14 +2023,18 @@ moves_loop: // When in check, search starts from here
   // for mate scores, to avoid potentially false mate scores related to the 50 moves rule
   // and the graph history interaction, we return an optimal TB score instead.
 
-  Value value_from_tt(Value v, int ply, int r50c) {
+  Value value_from_tt(Value v, int ply, int r50c, int nMoveRule) {
 
     if (v == VALUE_NONE)
         return VALUE_NONE;
 
+    // Plies until the n-move rule allows a draw claim; 0 means no such rule, so
+    // no mate score can be invalidated by it.
+    const int rulePlies = 2 * nMoveRule;
+
     if (v >= VALUE_TB_WIN_IN_MAX_PLY)  // TB win or better
     {
-        if (v >= VALUE_MATE_IN_MAX_PLY && VALUE_MATE - v > 99 - r50c)
+        if (v >= VALUE_MATE_IN_MAX_PLY && rulePlies && VALUE_MATE - v > rulePlies - 1 - r50c)
             return VALUE_MATE_IN_MAX_PLY - 1; // do not return a potentially false mate score
 
         return v - ply;
@@ -2035,7 +2042,7 @@ moves_loop: // When in check, search starts from here
 
     if (v <= VALUE_TB_LOSS_IN_MAX_PLY) // TB loss or worse
     {
-        if (v <= VALUE_MATED_IN_MAX_PLY && VALUE_MATE + v > 99 - r50c)
+        if (v <= VALUE_MATED_IN_MAX_PLY && rulePlies && VALUE_MATE + v > rulePlies - 1 - r50c)
             return VALUE_MATED_IN_MAX_PLY + 1; // do not return a potentially false mate score
 
         return v + ply;
