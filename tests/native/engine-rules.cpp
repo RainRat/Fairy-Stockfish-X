@@ -1717,6 +1717,22 @@ void royal() {
     }
 
     {
+        // A child variant that does not redefine laser_<piece> must inherit the
+        // parent's per-orientation optics. dos-laser-chess-1994 redefines no
+        // laser_* key, so its ruin has to react exactly like its parent's.
+        auto fire_fen = [](const char* variant) {
+            Position p;
+            StateListPtr s;
+            set_position(p, s, variant, "r(2)3k4/9/9/9/L(0)8/9/9/9/4K4 w - - 0 1");
+            s->emplace_back();
+            p.do_move(parse_move(p, "a5a5f"), s->back());
+            return p.fen();
+        };
+        check(fire_fen("dos-laser-chess") == fire_fen("dos-laser-chess-1994"),
+              "child variant did not inherit the parent's laser orientation optics");
+    }
+
+    {
         // A destroyed castling rook loses its right and the kill makes the
         // move irreversible; the do_move() castling block only knows the
         // mover's own squares, so fire_laser() has to apply both.

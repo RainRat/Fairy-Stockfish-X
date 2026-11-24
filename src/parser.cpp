@@ -906,6 +906,11 @@ namespace {
         Bitboard parsed = 0;
         while (!ss.eof() && ss >> symbol && symbol != "-")
         {
+            if (symbol == "**")  // documented "all squares" default
+            {
+                parsed |= AllSquares;
+                continue;
+            }
             if (symbol.back() == '*') {
                 if (std::isalpha(static_cast<unsigned char>(symbol[0])) && symbol.length() == 2) {
                     char file = std::tolower(static_cast<unsigned char>(symbol[0]));
@@ -1715,6 +1720,7 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             continue;
         std::istringstream iss(it->second);
         std::string entry;
+        std::array<uint8_t, PIECE_TYPE_NB> allowed{};
         while (iss >> entry)
         {
             size_t colon = entry.find(':');
@@ -1741,9 +1747,14 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
                         std::cerr << key << " - Invalid orientation: " << value << std::endl;
                     return false;
                 }
-                v->rotationAllowedOrientations[c][base] |= uint8_t(1u << (value - '0'));
+                allowed[base] |= uint8_t(1u << (value - '0'));
             }
         }
+        // Replace, do not merge: a value that mentions a piece defines its
+        // whole allowed set, otherwise a child could only widen the parent's.
+        for (PieceType pt = PAWN; pt < PIECE_TYPE_NB; ++pt)
+            if (allowed[pt])
+                v->rotationAllowedOrientations[c][pt] = allowed[pt];
     }
 
     for (Color c : {WHITE, BLACK})
@@ -2544,12 +2555,15 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
         return true;
     };
 
-    // 1. Parse base piece optics (keys without ':')
+    // 1. Parse base piece optics (keys without ':'). A base definition covers
+    // every orientation of that piece and the orientation keys below refine it.
+    // Only pieces this config actually redefines are touched, so a child that
+    // does not mention a piece keeps the parent's per-orientation optics.
     for (auto const& [key, val] : config)
     {
         if (key.rfind("laser_", 0) == 0 && key.find(':') == std::string::npos)
         {
-            config.find(key);
+            config.find(key); // marks the key as consumed for the unknown-option report
             std::string symbol = key.substr(6);
             PieceType pt = parse_piece_type_token(v, symbol);
             if (pt == NO_PIECE_TYPE)
@@ -2560,17 +2574,12 @@ bool VariantParser<DoCheck>::parse_official_options(Variant* v) {
             }
             if (!parse_optics(key, val, v->pieceOptics[pt][0]))
                 return false;
+            for (int orientation = 1; orientation < v->orientation_count(pt); ++orientation)
+                v->pieceOptics[pt][orientation] = v->pieceOptics[pt][0];
         }
     }
 
-    // 2. A base optical definition applies to every orientation unless an
-    // orientation-specific key overrides it below.
-    for (PieceType pt = PAWN; pt <= CUSTOM_PIECES_END; ++pt)
-        if (v->orientedPieceTypes & pt)
-            for (int orientation = 1; orientation < v->orientation_count(pt); ++orientation)
-                v->pieceOptics[pt][orientation] = v->pieceOptics[pt][0];
-
-    // 3. Parse explicit orientation overrides (keys with ':')
+    // 2. Parse explicit orientation overrides (keys with ':')
     for (auto const& [key, val] : config)
     {
         if (key.rfind("laser_", 0) == 0 && key.find(':') != std::string::npos)
