@@ -260,6 +260,12 @@ pieceDrops = true
 castling = false
 startFen = 4k3/8/8/8/8/8/8/4K3[Q] w - - 0 1
 
+[freehandsync:chess]
+pieceDrops = true
+captureType = hand
+freeDrops = true
+startFen = rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR[] w KQkq - 0 1
+
 [dropsym:chess]
 pieceDrops = true
 symmetricDropTypes = r
@@ -347,6 +353,11 @@ assert_reload_key_match "${tmp_ini}" "gatehash" \
   "position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w Hh - 0 1 moves h2h4 a7a6 h1h2q"
 assert_reload_key_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
 assert_reload_perft1_match "${tmp_ini}" "dropnormal" "position startpos moves Q@e5"
+# Free drops keep no reserve: captures must not hash a hand change that never
+# happened (upstream #1091). Both the capture and a following free drop must
+# reload with identical keys.
+assert_reload_key_match "${tmp_ini}" "freehandsync" "position startpos moves e2e4 d7d5 e4d5"
+assert_reload_key_match "${tmp_ini}" "freehandsync" "position startpos moves e2e4 d7d5 e4d5 P@e4"
 # Placement drops can grant castling rights; the incremental hash must include
 # the rights from a dropped king/rook just as FEN reconstruction does.
 assert_reload_key_match "${DEFAULT_VARIANT_PATH}" "placement" \

@@ -8405,7 +8405,10 @@ bool Position::add_capture_transfer(StateInfo* state, Piece transferPiece, Key* 
         if (target.prison)
             xor_in_prison_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1,
                                 state ? &state->reserveKey : nullptr);
-        else
+        // add_to_hand() ignores freeDrops, so the count does not change and
+        // the key must not either (upstream #1091); the drop path already
+        // gates the same way.
+        else if (!variant()->freeDrops)
             xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount + 1,
                               state ? &state->reserveKey : nullptr);
     }
@@ -8425,7 +8428,7 @@ bool Position::undo_capture_transfer(StateInfo* state, Piece transferPiece, Key*
     {
         if (target.prison)
             xor_in_prison_count(*k, target.hashedPiece, target.oldCount, target.oldCount - 1);
-        else
+        else if (!variant()->freeDrops)
             xor_in_hand_count(*k, target.hashedPiece, target.oldCount, target.oldCount - 1);
     }
     return true;
@@ -8438,7 +8441,7 @@ bool Position::simulate_capture_transfer(Key& k, Piece transferPiece, bool suppr
 
     if (target.prison)
         xor_in_prison_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
-    else
+    else if (!variant()->freeDrops)
         xor_in_hand_count(k, target.hashedPiece, target.oldCount, target.oldCount + 1);
     return true;
 }
