@@ -208,6 +208,7 @@ run_royal_legality() {
     legacy kings-or-lemmings.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy stationary-castling.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy custom-royal-castling.sh 2m "${ENGINE}" "${VARIANTS}"
+    legacy atomic-nmove-mate.sh 3m "${ENGINE}" "${VARIANTS}"
 }
 
 run_captures_effects() {
@@ -256,6 +257,7 @@ run_state_transitions() {
     legacy concurrent-variant-magics.sh 2m "${ENGINE}"
     legacy touched-search-regressions.sh 3m "${ENGINE}" "${VARIANTS}"
     legacy piece-type-bitboard-regressions.sh 2m
+    legacy chasing-drop-regressions.sh 2m "${ENGINE}" "${VARIANTS}"
 }
 
 run_notation_protocol() {

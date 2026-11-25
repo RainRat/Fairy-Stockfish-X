@@ -11792,7 +11792,15 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 bool Position::is_optional_game_end(Value& result, int ply, int countStarted) const {
 
   // n-move rule
-  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!evasion_checkers() || has_legal_move_ignoring_immediate_end()))
+  if (n_move_rule() && st->rule50 > (2 * n_move_rule() - 1) && (!evasion_checkers() || has_legal_move_ignoring_immediate_end())
+      // A mated side must not escape into a move-count draw. Evasion state
+      // tracks royal checks only, so without the pseudo-royal half atomic
+      // mates on the 50th move were scored as draws (upstream #1054);
+      // stalemate_value() already reports those mates once the count draw
+      // is out of the way. checked_pseudo_royals() is only reached with no
+      // legal moves, and variants without pseudo-royals keep the exact
+      // historical behavior.
+      && (has_legal_move_ignoring_immediate_end() || !pseudo_royal_types() || !checked_pseudo_royals(sideToMove)))
   {
       int offset = 0;
       if (var->chasingRule == AXF_CHASING && st->pliesFromNull >= 20)
@@ -12949,12 +12957,21 @@ Bitboard Position::chased() const {
       if (is_pass(st->move) || (from == to && !st->captured && !st->extraCaptured))
           return b;
       Color mover = ~sideToMove;
-      Bitboard beforeOccupied = (pieces() & ~square_bb(to)) | from;
+      // Drops have no origin square (from_sq() is SQ_NONE): all attacks of
+      // the dropped piece are new and no square was vacated, so the previous
+      // occupancy is the current one minus the destination square. OR-ing the
+      // raw origin square would set a bogus bit (upstream #1092).
+      const bool drop = type_of(st->move) == DROP;
+      Bitboard beforeOccupied = pieces() & ~square_bb(to);
+      if (!drop)
+          beforeOccupied |= from;
       if (st->captured)
           beforeOccupied |= st->captured.square;
       if (st->extraCaptured)
           beforeOccupied |= st->extraCaptured.square;
-      Bitboard beforeFriendly = (pieces(mover) & ~square_bb(to)) | from;
+      Bitboard beforeFriendly = pieces(mover) & ~square_bb(to);
+      if (!drop)
+          beforeFriendly |= from;
       Bitboard targets = pieces(sideToMove);
       while (targets)
       {
@@ -12979,6 +12996,9 @@ Bitboard Position::chased() const {
   }
 
   // Direct attacks
+  // Drops have no origin square, so all their attacks are new and there are no
+  // discovered attacks from a vacated square (upstream #1092).
+  bool drop = type_of(st->move) == DROP;
   Square from = from_sq(st->move);
   Square to = to_sq(st->move);
   PieceType movedPiece = type_of(piece_on(to));
@@ -12986,23 +13006,27 @@ Bitboard Position::chased() const {
   {
       Bitboard directAttacks = attacks_from(~sideToMove, movedPiece, to) & pieces(sideToMove);
       // Only new attacks count. This avoids expensive comparison of previous and new attacks.
-      if (movedPiece == ROOK || movedPiece == CANNON)
+      if (!drop && (movedPiece == ROOK || movedPiece == CANNON))
           directAttacks &= ~Stockfish::line_bb(from, to);
       addChased(to, movedPiece, directAttacks);
   }
 
   // Discovered attacks
-  Bitboard discoveryCandidates =  (PseudoAttacks[WHITE][WAZIR][from] & pieces(~sideToMove, HORSE))
-                                | (PseudoAttacks[WHITE][FERS][from] & pieces(~sideToMove, ELEPHANT))
-                                | (PseudoAttacks[WHITE][ROOK][from] & pieces(~sideToMove, CANNON, ROOK))
-                                | (PseudoAttacks[WHITE][ROOK][to] & pieces(~sideToMove, CANNON));
+  Bitboard discoveryCandidates = PseudoAttacks[WHITE][ROOK][to] & pieces(~sideToMove, CANNON);
+  if (!drop)
+      discoveryCandidates |=  (PseudoAttacks[WHITE][WAZIR][from] & pieces(~sideToMove, HORSE))
+                            | (PseudoAttacks[WHITE][FERS][from] & pieces(~sideToMove, ELEPHANT))
+                            | (PseudoAttacks[WHITE][ROOK][from] & pieces(~sideToMove, CANNON, ROOK));
+  Bitboard previousOccupied = captured_piece() ? pieces() : pieces() ^ to;
+  if (!drop)
+      previousOccupied ^= from;
   while (discoveryCandidates)
   {
       Square s = pop_lsb(discoveryCandidates);
       PieceType discoveryPiece = type_of(piece_on(s));
       Bitboard discoveries =   pieces(sideToMove)
                             &  attacks_from(~sideToMove, discoveryPiece, s, pieces())
-                            & ~attacks_from(~sideToMove, discoveryPiece, s, (captured_piece() ? pieces() : pieces() ^ to) ^ from);
+                            & ~attacks_from(~sideToMove, discoveryPiece, s, previousOccupied);
       addChased(s, discoveryPiece, discoveries);
   }
 
