@@ -488,23 +488,25 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       // Note: time/otim are in centi-, not milliseconds
       else if (token == "time")
       {
-          if (is >> token)
+          TimePoint time = 0;
+          if (is >> token && parse_scaled_time_token(token, 10, time))
           {
               Color us = playColor != COLOR_NB ? playColor : pos.side_to_move();
-              TimePoint time = 0;
-              if (parse_scaled_time_token(token, 10, time))
-                  limits.time[us] = time;
+              limits.time[us] = time;
           }
+          else
+              sync_cout << "Error (bad time): time" << sync_endl;
       }
       else if (token == "otim")
       {
-          if (is >> token)
+          TimePoint time = 0;
+          if (is >> token && parse_scaled_time_token(token, 10, time))
           {
               Color them = playColor != COLOR_NB ? ~playColor : ~pos.side_to_move();
-              TimePoint time = 0;
-              if (parse_scaled_time_token(token, 10, time))
-                  limits.time[them] = time;
+              limits.time[them] = time;
           }
+          else
+              sync_cout << "Error (bad otim): otim" << sync_endl;
       }
   }
   else if (token == "setboard")

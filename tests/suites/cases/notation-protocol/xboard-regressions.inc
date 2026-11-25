@@ -33,6 +33,28 @@ out=$(run_xboard $'expect "feature done=1"\nsend "sd -4\\n"\nsend "perft 0\\n"\n
 echo "${out}" | grep -q "Error (bad sd): sd"
 echo "${out}" | grep -q "Error (bad perft): perft"
 
+out=$(run_xboard $'expect "feature done=1"\nsend "time garbage\\n"\n')
+echo "${out}" | grep -q "Error (bad time): time"
+
+out=$(run_xboard $'expect "feature done=1"\nsend "otim garbage\\n"\n')
+echo "${out}" | grep -q "Error (bad otim): otim"
+
+out=$(run_xboard $'expect "feature done=1"\nsend "time\\n"\n')
+echo "${out}" | grep -q "Error (bad time): time"
+
+out=$(run_xboard $'expect "feature done=1"\nsend "otim\\n"\n')
+echo "${out}" | grep -q "Error (bad otim): otim"
+
+out=$(run_xboard $'expect "feature done=1"\nsend "time 100\\n"\nsend "otim 100\\n"\n')
+if echo "${out}" | grep -q "Error (bad time)"; then
+  echo "${out}"
+  false
+fi
+if echo "${out}" | grep -q "Error (bad otim)"; then
+  echo "${out}"
+  false
+fi
+
 out=$(run_xboard $'expect "feature done=1"\nsend "option   Verbosity=2\\n"\n')
 echo "${out}" | grep -q "feature done=1"
 
