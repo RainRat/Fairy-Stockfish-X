@@ -21,6 +21,7 @@ src/-lstdc++.res
 
 # Build/test artifacts
 *.exe
+/build/
 tests/syzygy
 
 # ffishjs
