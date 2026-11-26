@@ -91,6 +91,34 @@ class TestBindings(unittest.TestCase):
             sf.validate_fen("r1q1q1r1/8/3k4/8/8/8/8/4K3 w eia - 0 1",
                             "castlingqueen-api", True), sf.FEN_OK)
 
+    def test_pseudo_royal_combination_rejected(self):
+        # gives_check() ignores pseudo-royal checks, so check-restricting
+        # settings are rejected with extinctionPseudoRoyal (upstream #1056).
+        for name, extra in (("nocheck", "checking = false\n"),
+                            ("sittu", "sittuyinPromotion = true\n")):
+            sf.load_variant_config(
+                f"[api-{name}-pseudo:chess]\n"
+                "king = -\ncommoner = k\ncastling = false\n"
+                + extra
+                + "extinctionValue = loss\nextinctionPieceTypes = k\n"
+                  "extinctionPseudoRoyal = true\n")
+            self.assertNotIn(f"api-{name}-pseudo", sf.variants())
+
+    def test_validate_fen_out_of_bounds(self):
+        # Inputs that used to write/read outside the board in upstream (#1090).
+        # FSX's guards already reject all of them; pin that behavior.
+        cases = (
+            ("shogi", "lnsgkgsnl/1r5b14ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL[-] w 0 1"),
+            ("shogi", " w 0 1"),
+            ("chess", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkqz - 0 1"),
+        )
+        for variant, fen in cases:
+            self.assertNotEqual(sf.validate_fen(fen, variant), sf.FEN_OK)
+        with open(ROOT_DIR / "src" / "variants.ini", encoding="utf-8") as f:
+            sf.load_variant_config(f.read())
+        fen = "6*3/3**3*1/2*2**1**/q2*2*3/*3*3*1/1**q*Qq*2/4*1**1*/3**1**qQ/1*Q*1*Q1*1/2*2*3* b r - 33 17"
+        self.assertNotEqual(sf.validate_fen(fen, "amazons"), sf.FEN_OK)
+
     def test_pseudo_royal_perpetual_check(self):
         # Perpetual check applies to all royal pieces, including pseudo-royals
         # (Sho-Shogi crown prince). Upstream #1056 / official rules.

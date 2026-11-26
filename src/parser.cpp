@@ -3484,6 +3484,15 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             valid = false;
         }
     }
+    if (v->extinctionPseudoRoyal
+        && (v->checking == CheckingRule::FORBIDDEN || v->sittuyinPromotion))
+    {
+        // gives_check() does not detect checks of pseudo-royal pieces, so
+        // these check restrictions would be silently ignored (upstream #1056).
+        if (DoCheck)
+            std::cerr << "Can not use pseudo-royal pieces with checking = false or sittuyinPromotion." << std::endl;
+        valid = false;
+    }
     return valid;
 }
 
