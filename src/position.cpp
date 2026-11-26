@@ -6441,6 +6441,39 @@ bool Position::legal_without_mate_only_probe(Move m) const {
   if (((!checking_permitted() && !allow_checks()) || (sittuyin_promotion() && is_promotion_move(m)) || (!drop_checks() && dropMove)) && move_gives_check())
       return false;
 
+  // gives_check() does not see checks of pseudo-royal pieces. Drops can not
+  // give discovered checks, so only the dropped piece's own attacks matter
+  // (upstream #1056, fixes pseudo-royal drop checks).
+  if (!drop_checks() && dropMove && extinction_pseudo_royal())
+  {
+      Bitboard occupied = pieces() | to;
+      Bitboard dropAttacks = attacks_bb(us, type_of(moved_piece(m)), to, occupied);
+      Bitboard pseudoRoyalsOurs = st->pseudoRoyals & pieces(us);
+      if (extinction_piece_types() & type_of(moved_piece(m)))
+          pseudoRoyalsOurs |= to;
+      // Touching pseudo-royal pieces are immune.
+      Bitboard immune = 0;
+      if (blast_on_capture())
+          for (Bitboard b = pseudoRoyalsOurs; b; )
+              immune |= attacks_bb<KING>(pop_lsb(b));
+      if (dropAttacks & st->pseudoRoyals & pieces(~us) & ~immune)
+          return false;
+      // Look for duple check.
+      if (var->dupleCheck)
+      {
+          Bitboard pseudoRoyalCandidates = st->pseudoRoyalCandidates & pieces(~us);
+          bool allCheck = bool(pseudoRoyalCandidates);
+          while (allCheck && pseudoRoyalCandidates)
+          {
+              Square sr = pop_lsb(pseudoRoyalCandidates);
+              if ((immune & sr) || !((dropAttacks & sr) || attackers_to(sr, occupied, us)))
+                  allCheck = false;
+          }
+          if (allCheck)
+              return false;
+      }
+  }
+
   // Optional rule: disallow checkmate by drops.
   // The piece-specific drop-mate ban is a stricter version of the blanket rule.
   if (   dropMove
@@ -11732,15 +11765,16 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
   StateInfo* stp = st->previous->previous;
   int cnt = 0;
-  // Per documented rule intent, perpetual-check style repetition tracks only actual
-  // evasion-required checks, not broader pseudo-royal or anti-royal danger bookkeeping.
-  bool perpetualThem = var->perpetualCheckIllegal && st->evasionCheckersBB && stp->evasionCheckersBB;
-  bool perpetualUs = var->perpetualCheckIllegal && st->previous->evasionCheckersBB && stp->previous->evasionCheckersBB;
+  // Perpetual-check repetition follows the variant's royal pieces: a check of
+  // a pseudo-royal (e.g. Sho-Shogi's crown prince) counts the same as a check
+  // of the king. Use broad check state, not only evasion-required checks.
+  bool perpetualThem = var->perpetualCheckIllegal && st->checkersBB && stp->checkersBB;
+  bool perpetualUs = var->perpetualCheckIllegal && st->previous->checkersBB && stp->previous->checkersBB;
   Bitboard chaseThem = undo_move_board(st->chased, st->previous->move) & stp->chased;
   Bitboard chaseUs = undo_move_board(st->previous->chased, stp->move) & stp->previous->chased;
   int moveRepetition = var->moveRepetitionIllegal
                         && type_of(st->move) == NORMAL
-                        && !st->previous->evasionCheckersBB && !stp->previous->evasionCheckersBB
+                        && !st->previous->checkersBB && !stp->previous->checkersBB
                         && (board_bb(~side_to_move(), type_of(piece_on(to_sq(st->move)))) & board_bb(side_to_move(), KING))
                         ? (stp->move == reverse_move(st->move) ? 2 : is_pass(stp->move) ? 1 : 0) : 0;
 
@@ -11749,7 +11783,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       // Janggi repetition rule
       if (moveRepetition > 0)
       {
-          if (i + 1 <= end && stp->previous->previous->previous->evasionCheckersBB)
+          if (i + 1 <= end && stp->previous->previous->previous->checkersBB)
               moveRepetition = 0;
           else if (moveRepetition < 4)
           {
@@ -11774,7 +11808,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
       if (i != st->pliesFromNull)
           chaseThem = undo_move_board(chaseThem, stp->previous->move) & stp->previous->previous->chased;
       stp = stp->previous->previous;
-      perpetualThem &= bool(stp->evasionCheckersBB);
+      perpetualThem &= bool(stp->checkersBB);
 
       // Return a draw score if a position repeats once earlier but strictly
       // after the root, or repeats twice before or at the root.
@@ -11791,7 +11825,7 @@ bool Position::n_fold_game_end(Value& result, int ply, int target) const {
 
       if (i + 1 <= end)
       {
-          perpetualUs &= bool(stp->previous->evasionCheckersBB);
+          perpetualUs &= bool(stp->previous->checkersBB);
           chaseUs = undo_move_board(chaseUs, stp->move) & stp->previous->chased;
       }
   }

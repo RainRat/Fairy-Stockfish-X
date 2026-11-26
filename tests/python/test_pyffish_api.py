@@ -91,6 +91,58 @@ class TestBindings(unittest.TestCase):
             sf.validate_fen("r1q1q1r1/8/3k4/8/8/8/8/4K3 w eia - 0 1",
                             "castlingqueen-api", True), sf.FEN_OK)
 
+    def test_pseudo_royal_perpetual_check(self):
+        # Perpetual check applies to all royal pieces, including pseudo-royals
+        # (Sho-Shogi crown prince). Upstream #1056 / official rules.
+        sf.load_variant_config(
+            "[api-perpetual-pseudo-royal:chess]\n"
+            "king = -\n"
+            "commoner = k\n"
+            "castlingKingPiece = k\n"
+            "extinctionValue = loss\n"
+            "extinctionPieceTypes = k\n"
+            "extinctionPseudoRoyal = true\n"
+            "perpetualCheckIllegal = true\n"
+        )
+        fen = "4k3/8/8/8/8/8/8/K2R4 w - - 0 1"
+        cycle = 2 * ["d1e1", "e8d8", "e1d1", "d8e8"]
+        self.assertEqual(
+            sf.is_optional_game_end("api-perpetual-pseudo-royal", fen, cycle),
+            (True, -sf.VALUE_MATE))
+        self.assertEqual(
+            sf.game_result("api-perpetual-pseudo-royal", fen, cycle),
+            -sf.VALUE_MATE)
+        # A single non-terminal repetition cycle remains undetermined.
+        self.assertEqual(
+            sf.game_result("api-perpetual-pseudo-royal", fen, cycle[:4]),
+            sf.VALUE_NONE)
+
+    def test_pseudo_royal_san_check_suffixes(self):
+        # gives_check() does not see pseudo-royal checks, so SAN must use the
+        # post-move broad check state (upstream #1056).
+        fen = "8/8/8/8/5R2/8/6R1/3Kn2k w - - 0 1"
+        self.assertEqual(sf.get_san("atomic", fen, "f4f1"), "Rf1#")
+        self.assertEqual(sf.get_san("atomic", fen, "g2g1"), "Rg1+")
+
+    def test_pseudo_royal_drop_checks(self):
+        # gives_check() does not see checks of pseudo-royal pieces, so
+        # dropChecks=false needs an explicit drop-attack guard (upstream #1056).
+        sf.load_variant_config(
+            "[api-atomic-nodropchecks:atomic]\n"
+            "dropChecks = false\n"
+            "pieceDrops = true\n"
+            "capturesToHand = true\n"
+            "castling = false\n"
+        )
+        fen = "4k3/8/8/8/8/8/8/4K3[R] w - - 0 1"
+        moves = sf.legal_moves("api-atomic-nodropchecks", fen, [])
+        self.assertNotIn("R@e2", moves)
+        self.assertNotIn("R@a8", moves)
+        self.assertIn("R@a1", moves)
+        # Touching pseudo-royals are immune, so a drop there is allowed.
+        fen = "8/8/8/8/8/8/4k3/4K3[R] w - - 0 1"
+        self.assertIn("R@e8", sf.legal_moves("api-atomic-nodropchecks", fen, []))
+
     def test_nmove_yields_to_pseudo_royal_mate(self):
         # The n-move rule must not declare a draw over a pseudo-royal mate
         # (upstream #1054): the mating move escapes the count, while any

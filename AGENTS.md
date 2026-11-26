@@ -217,7 +217,7 @@ The fast and full suites keep build files under `.local/build`. Do not delete th
 ## Important invariants
 * `checking` and `allowChecks` are not interchangeable.
 * No-check variants must keep their king-safety legality and state path active.
-* Preserve FSX's split between broad royal danger and evasion-required check state.
+* Preserve FSX's split between broad royal danger and evasion-required check state; perpetual-check repetition is the documented exception and reads broad check state (pseudo-royal checks count, per official rules).
 * Use cached forced-jump continuation state when preconditions are already established.
 * Spell context RAII must be nest-safe: save and restore prior context.
 * Alternate repetition keys must be updated in every state transition, including null moves.
