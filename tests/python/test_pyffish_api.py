@@ -75,6 +75,20 @@ class TestBindings(unittest.TestCase):
         self.assertTrue(sf.is_optional_game_end("api-stalemate-claim-precedence", fen, [])[0])
         self.assertEqual(sf.game_result("api-stalemate-claim-precedence", fen, []), -sf.VALUE_MATE)
 
+    def test_nmove_yields_to_pseudo_royal_mate(self):
+        # The n-move rule must not declare a draw over a pseudo-royal mate
+        # (upstream #1054): the mating move escapes the count, while any
+        # other move still ends by it. Covers atomic and coregal families.
+        self.assertEqual(
+            sf.is_optional_game_end("atomic", "8/8/8/8/5R2/8/6R1/3Kn2k w - - 99 50", ["f4f1"]),
+            (False, sf.VALUE_NONE))
+        self.assertEqual(
+            sf.is_optional_game_end("atomic", "8/8/8/8/5R2/8/6R1/3Kn2k w - - 99 50", ["g2g1"]),
+            (True, sf.VALUE_DRAW))
+        self.assertEqual(
+            sf.is_optional_game_end("coregal", "k7/5R2/8/8/5R2/6K1/6PP/7q w - - 99 80", ["f4f1"]),
+            (False, sf.VALUE_NONE))
+
     def test_jcsa_repetition_attacking_moves(self):
         sf.load_variant_config(
             "[api-jcsa-repetition:chess]\n"
