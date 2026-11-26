@@ -75,6 +75,22 @@ class TestBindings(unittest.TestCase):
         self.assertTrue(sf.is_optional_game_end("api-stalemate-claim-precedence", fen, [])[0])
         self.assertEqual(sf.game_result("api-stalemate-claim-precedence", fen, []), -sf.VALUE_MATE)
 
+    def test_castling_piece_file_disambiguation(self):
+        # A leading file letter can disambiguate a non-king castling piece
+        # (upstream #1087/#1089). Validation must accept it and FEN output
+        # must round-trip it for black; bogus flags still fail.
+        sf.load_variant_config(
+            "[castlingqueen-api:chess]\n"
+            "castlingKingPiece = q\n"
+            "startFen = rnbkqbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKQBNR w KQkq - 0 1\n"
+        )
+        fen = "r1q1q1r1/8/3k4/8/8/8/8/4K3 w ega - 0 1"
+        self.assertEqual(sf.validate_fen(fen, "castlingqueen-api", True), sf.FEN_OK)
+        self.assertEqual(sf.get_fen("castlingqueen-api", fen, [], True), fen)
+        self.assertNotEqual(
+            sf.validate_fen("r1q1q1r1/8/3k4/8/8/8/8/4K3 w eia - 0 1",
+                            "castlingqueen-api", True), sf.FEN_OK)
+
     def test_nmove_yields_to_pseudo_royal_mate(self):
         # The n-move rule must not declare a draw over a pseudo-royal mate
         # (upstream #1054): the mating move escapes the count, while any

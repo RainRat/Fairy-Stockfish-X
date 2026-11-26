@@ -1202,7 +1202,14 @@ inline Validation check_castling_rank(const std::array<std::string, 2>& castling
                     return NOK;
                 }
                 Piece boardPiece = board.get_piece(castlingRank, fileIdx);
-                if (boardPiece == NO_PIECE)
+                // With a non-king castling piece a leading file letter can
+                // disambiguate which of several such pieces may castle
+                // (upstream #1087/#1089, e.g. two queens with "ega").
+                // Position::set() reads that letter as the castling piece
+                // square, so validation must accept it too.
+                const bool castlingPieceFlag = v->castlingKingPiece[c] != KING
+                                            && boardPiece == make_piece(c, v->castlingKingPiece[c]);
+                if (boardPiece == NO_PIECE && !castlingPieceFlag)
                 {
                     if (v->castling && v->gating)
                         std::cerr << "No castling rook or gating piece on file "
@@ -1215,7 +1222,7 @@ inline Validation check_castling_rank(const std::array<std::string, 2>& castling
                                   << char('A' + fileIdx) << " for flag " << displayFlag << "." << std::endl;
                     return NOK;
                 }
-                if (v->castling && !v->gating
+                if (v->castling && !v->gating && !castlingPieceFlag
                     && (!(v->castlingRookPieces[c] & type_of(boardPiece))
                         || color_of(boardPiece) != c))
                 {
