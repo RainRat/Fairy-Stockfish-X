@@ -6757,16 +6757,23 @@ bool Position::legal_without_mate_only_probe(Move m) const {
               pseudoRoyalCandidates |= kto;
           else if (!rifleShot && is_ok(from) && (pseudoRoyalCandidates & from))
               pseudoRoyalCandidates ^= square_bb(from) ^ kto;
-          if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
+          // Piece type after promotion/demotion (shogi-style promotions
+          // have no PROMOTION move type; upstream #1094). This covers
+          // plain-PROMOTION moves as well via the first branch.
+          PieceType newRoyalType = is_promotion_move(m) ? promotion_type(m)
+                                 : type_of(m) == PIECE_PROMOTION ? promoted_piece_type(type_of(moved_piece(m)))
+                                 : type_of(m) == PIECE_DEMOTION ? type_of(unpromoted_piece_on(from))
+                                                               : NO_PIECE_TYPE;
+          if (newRoyalType != NO_PIECE_TYPE && (pseudo_royal_types() & newRoyalType))
           {
-              if (count(sideToMove, promotion_type(m)) >= pseudo_royal_count())
+              if (count(sideToMove, newRoyalType) >= pseudo_royal_count())
                   // increase in count leads to loss of pseudo-royalty
-                  pseudoRoyals &= ~pieces(sideToMove, promotion_type(m));
+                  pseudoRoyals &= ~pieces(sideToMove, newRoyalType);
               else
                   // promoted piece is pseudo-royal
                   pseudoRoyals |= kto;
           }
-          if (is_promotion_move(m) && (pseudo_royal_types() & promotion_type(m)))
+          if (newRoyalType != NO_PIECE_TYPE && (pseudo_royal_types() & newRoyalType))
               pseudoRoyalCandidates |= kto;
       }
       // Self-explosions are illegal

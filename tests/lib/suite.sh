@@ -208,6 +208,7 @@ run_royal_legality() {
     legacy kings-or-lemmings.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy stationary-castling.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy custom-royal-castling.sh 2m "${ENGINE}" "${VARIANTS}"
+    legacy pseudoroyal-promotion-resolution.sh 2m "${ENGINE}" "${VARIANTS}"
     legacy atomic-nmove-mate.sh 3m "${ENGINE}" "${VARIANTS}"
 }
 
