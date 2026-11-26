@@ -49,7 +49,7 @@ public:
   ~StateMachine();
   void go(Search::LimitsType searchLimits, bool ponder = false);
   void ponder();
-  void stop(bool abort = true);
+  bool stop(bool abort = true);
   void shutdown_ponder_worker();
   void finish_search_move(Move bestMove, Move nextPonderMove);
   void setboard(std::string fen = "");

@@ -256,6 +256,57 @@ EOF
 echo "${out}" | grep -q "Error (bad holding)"
 echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w"
 
+# XBoard option changes must not race a running search: the handler stops
+# the search first and restarts it afterwards (upstream #1093). Analysis
+# continues after the change instead of going silent.
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "new\n"
+   send "variant chess\n"
+   send "sd 30\n"
+   send "analyze\n"
+   expect -re {[0-9]+ [0-9]+ [0-9]+ [0-9]+}
+   send "option MultiPV=3\n"
+   expect -re {[0-9]+ [0-9]+ [0-9]+ [0-9]+}
+   send "exit\n"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -Eq "[0-9]+ [0-9]+ [0-9]+ [0-9]+"
+
+# A search aborted by force must not be restarted by a later holding:
+# the pending move is obsolete, so no move may be played in force mode.
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "new\n"
+   send "variant crazyhouse\n"
+   send "setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w KQkq - 0 1\n"
+   send "force\n"
+   send "sd 30\n"
+   send "go\n"
+   after 300
+   send "force\n"
+   send "sd 2\n"
+   send "holding \\[R\\] \\[r\\] bQ\n"
+   set timeout 12
+   expect {
+     -re {move [a-h][1-8][a-h][1-8]} { puts "UNEXPECTED-MOVE-IN-FORCE-MODE"; exit 1 }
+     timeout { puts "NO-MOVE-AS-EXPECTED" }
+   }
+   send "d\n"
+   expect -exact "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[Pq\\] w KQkq - 0 1"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "NO-MOVE-AS-EXPECTED"
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[Pq\\] w KQkq - 0 1"
+
 # Ponder synchronization stress: rapid hard/ponder search followed by ponder
 # miss, lift, ponderhit, and stop/new transitions must not race or desync state.
 out=$(run_expect "$ENGINE" <<EOF

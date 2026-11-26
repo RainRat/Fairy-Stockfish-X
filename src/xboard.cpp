@@ -198,9 +198,13 @@ namespace XBoard {
   }
 
   // stop() stops an ongoing search (if any)
-  // and does not print/apply a move if aborted
+  // and does not print/apply a move if aborted.
+  // Returns whether a search for the engine's move was aborted: a pending
+  // move must not be played afterwards (upstream #1093; without this the
+  // flag stayed set after e.g. force, so a later holding restarted the
+  // search and played a move in force mode).
 
-  void StateMachine::stop(bool abort) {
+  bool StateMachine::stop(bool abort) {
 
     // Cancel any pending ponder worker before touching shared state.
     // ponder() mutates pos/states/moveList, so it must be joined before
@@ -220,6 +224,11 @@ namespace XBoard {
         Threads.stop = true;
         Threads.main()->wait_for_search_finished();
     }
+    // The search did not play its move if it was aborted: a pending move
+    // is obsolete, so clear it here rather than at the next command.
+    bool aborted = abort && moveAfterSearch;
+    if (abort)
+        moveAfterSearch = false;
     // Ensure that current position does not get out of sync with GUI
     std::lock_guard<std::mutex> lk(stateMutex);
     if (Threads.main()->ponder)
@@ -228,6 +237,7 @@ namespace XBoard {
         undo_move();
         Threads.main()->ponder = false;
     }
+    return aborted;
   }
 
   // setboard() is called when engine receives the "setboard" XBoard command.
@@ -585,11 +595,11 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       std::getline(is, value);
       if (Options.count(name))
       {
-          if (   name == "Threads" || name == "Hash" || name == "Clear Hash"
-              || name == "UCI_Variant" || name == "VariantPath" || name == "UCI_Chess960"
-              || name == "EvalFile" || name == "Use NNUE" || name == "SyzygyPath"
-              || name == "DynamicMagicsByBoardSize" || name == "MultiPV")
-              stop();
+          // The search reads the options, so stop it before changing one,
+          // and restart it afterwards to continue with the new value
+          // (upstream #1093). Previously only listed options stopped the
+          // search, racing a running search for the rest.
+          bool thinking = stop();
           if (Options[name].get_type() == "check")
               value = value == "1" ? "true" : "false";
           Options[name] = value;
@@ -597,6 +607,13 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
           {
               std::lock_guard<std::mutex> lk(stateMutex);
               pos.set_thread(Threads.main());
+          }
+          if (Options["UCI_AnalyseMode"])
+              go(analysisLimits);
+          else if (thinking)
+          {
+              moveAfterSearch = true;
+              go(limits);
           }
       }
   }
@@ -658,7 +675,7 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
   }
   else if (token == "holding")
   {
-      stop();
+      bool thinking = stop();
       // holding [<white>] [<black>] <color><piece>
       std::string white_holdings, black_holdings;
       if (   std::getline(is, token, '[') && std::getline(is, white_holdings, ']')
@@ -707,8 +724,11 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
           // position and report instead of applying truncated holdings.
           sync_cout << "Error (bad holding): holding" << sync_endl;
       // restart search
-      if (moveAfterSearch)
+      if (thinking)
+      {
+          moveAfterSearch = true;
           go(limits);
+      }
   }
   // Additional custom non-XBoard commands
   else if (token == "perft")
