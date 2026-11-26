@@ -220,6 +220,42 @@ if echo "${out}" | grep -q "Error (bad holding)"; then
   false
 fi
 
+# A missing closing bracket must not silently rebuild the pocket: the
+# truncated input is rejected and the previous position is kept.
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant crazyhouse\n"
+   send "setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w KQkq - 0 1\n"
+   send "holding \\[R\\] \\[r\n"
+   expect "Error (bad holding)"
+   send "d\n"
+   expect -exact "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Error (bad holding)"
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w"
+
+out=$(run_expect "$ENGINE" <<EOF
+$(expect_engine_setup xboard)
+   send "protover 2\n"
+   expect "feature done=1"
+   send "variant crazyhouse\n"
+   send "setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w KQkq - 0 1\n"
+   send "holding \\[R \\[r\\]\n"
+   expect "Error (bad holding)"
+   send "d\n"
+   expect -exact "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w"
+   send "quit\n"
+   expect eof
+EOF
+)
+echo "${out}" | grep -q "Error (bad holding)"
+echo "${out}" | grep -q "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR\\[P\\] w"
+
 # Ponder synchronization stress: rapid hard/ponder search followed by ponder
 # miss, lift, ponderhit, and stop/new transitions must not race or desync state.
 out=$(run_expect "$ENGINE" <<EOF

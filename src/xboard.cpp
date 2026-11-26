@@ -662,7 +662,11 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
       // holding [<white>] [<black>] <color><piece>
       std::string white_holdings, black_holdings;
       if (   std::getline(is, token, '[') && std::getline(is, white_holdings, ']')
-          && std::getline(is, token, '[') && std::getline(is, black_holdings, ']'))
+          && std::getline(is, token, '[') && std::getline(is, black_holdings, ']')
+          // A missing final ']' reads to EOF instead: getline stays truthy
+          // when it extracts characters, so EOF here means the brackets
+          // never closed. Reject loudly instead of applying truncated input.
+          && !is.eof())
       {
           std::string fen;
           char color, pieceType;
@@ -698,6 +702,10 @@ void StateMachine::process_command(std::string token, std::istringstream& is) {
                   setboard(fen);
           }
       }
+      else
+          // Malformed brackets (e.g. a missing ']'). Keep the previous
+          // position and report instead of applying truncated holdings.
+          sync_cout << "Error (bad holding): holding" << sync_endl;
       // restart search
       if (moveAfterSearch)
           go(limits);
