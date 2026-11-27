@@ -14,7 +14,6 @@ pseudoRoyalCount = 99
 blastOnCapture = true
 blastCenter = true
 blastDiagonals = false
-checking = false
 
 [epext:chess]
 customPiece1 = a:W

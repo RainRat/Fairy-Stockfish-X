@@ -6444,20 +6444,46 @@ bool Position::legal_without_mate_only_probe(Move m) const {
   // gives_check() does not see checks of pseudo-royal pieces. Drops can not
   // give discovered checks, so only the dropped piece's own attacks matter
   // (upstream #1056, fixes pseudo-royal drop checks).
-  if (!drop_checks() && dropMove && extinction_pseudo_royal())
+  if (!drop_checks() && dropMove && pseudo_royal_types())
   {
       Bitboard occupied = pieces() | to;
-      Bitboard dropAttacks = attacks_bb(us, type_of(moved_piece(m)), to, occupied);
+      if (paired_drop(m))
+          occupied |= secondary_drop_square(m);
+      PieceType dropPt = type_of(moved_piece(m));
+      Bitboard dropAttacks = attacks_bb(us, dropPt, to, occupied);
+      if (paired_drop(m))
+          dropAttacks |= attacks_bb(us, dropPt, secondary_drop_square(m), occupied);
       Bitboard pseudoRoyalsOurs = st->pseudoRoyals & pieces(us);
-      if (extinction_piece_types() & type_of(moved_piece(m)))
-          pseudoRoyalsOurs |= to;
+      if (pseudo_royal_types() & dropPt)
+      {
+          if (count(us, dropPt) + (paired_drop(m) ? 2 : 1) > pseudo_royal_count())
+              pseudoRoyalsOurs &= ~pieces(us, dropPt);
+          else
+          {
+              pseudoRoyalsOurs |= to;
+              if (paired_drop(m))
+                  pseudoRoyalsOurs |= secondary_drop_square(m);
+          }
+      }
       // Touching pseudo-royal pieces are immune.
-      Bitboard immune = 0;
-      if (blast_on_capture())
-          for (Bitboard b = pseudoRoyalsOurs; b; )
-              immune |= attacks_bb<KING>(pop_lsb(b));
-      if (dropAttacks & st->pseudoRoyals & pieces(~us) & ~immune)
-          return false;
+      Bitboard vulnerablePseudoRoyalsOurs = 0;
+      if (blast_on_capture() && !blast_promotion() && pseudoRoyalsOurs)
+      {
+          vulnerablePseudoRoyalsOurs = pseudoRoyalsOurs & ~blast_immune_bb();
+          if (blast_immune_types() & dropPt)
+          {
+              vulnerablePseudoRoyalsOurs &= ~square_bb(to);
+              if (paired_drop(m))
+                  vulnerablePseudoRoyalsOurs &= ~square_bb(secondary_drop_square(m));
+          }
+      }
+      Bitboard attackedTheirs = dropAttacks & st->pseudoRoyals & pieces(~us);
+      while (attackedTheirs)
+      {
+          Square sr = pop_lsb(attackedTheirs);
+          if (!(vulnerablePseudoRoyalsOurs && (vulnerablePseudoRoyalsOurs & blast_pattern(sr))))
+              return false;
+      }
       // Look for duple check.
       if (var->dupleCheck)
       {
@@ -6466,7 +6492,8 @@ bool Position::legal_without_mate_only_probe(Move m) const {
           while (allCheck && pseudoRoyalCandidates)
           {
               Square sr = pop_lsb(pseudoRoyalCandidates);
-              if ((immune & sr) || !((dropAttacks & sr) || attackers_to(sr, occupied, us)))
+              if (   (vulnerablePseudoRoyalsOurs && (vulnerablePseudoRoyalsOurs & blast_pattern(sr)))
+                  || !((dropAttacks & sr) || attackers_to(sr, occupied, us)))
                   allCheck = false;
           }
           if (allCheck)
@@ -11841,10 +11868,10 @@ bool Position::is_optional_game_end(Value& result, int ply, int countStarted) co
       // tracks royal checks only, so without the pseudo-royal half atomic
       // mates on the 50th move were scored as draws (upstream #1054);
       // stalemate_value() already reports those mates once the count draw
-      // is out of the way. checked_pseudo_royals() is only reached with no
-      // legal moves, and variants without pseudo-royals keep the exact
-      // historical behavior.
-      && (has_legal_move_ignoring_immediate_end() || !pseudo_royal_types() || !checked_pseudo_royals(sideToMove)))
+      // is out of the way. Check !pseudo_royal_types() before calling
+      // has_legal_move_ignoring_immediate_end() so non-pseudo-royal variants
+      // short-circuit without generating legal moves.
+      && (!pseudo_royal_types() || !checked_pseudo_royals(sideToMove) || has_legal_move_ignoring_immediate_end()))
   {
       int offset = 0;
       if (var->chasingRule == AXF_CHASING && st->pliesFromNull >= 20)

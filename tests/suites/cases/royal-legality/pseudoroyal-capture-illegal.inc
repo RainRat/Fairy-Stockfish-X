@@ -10,7 +10,6 @@ cat >"$tmp_ini" <<'EOF'
 [pseudoroyal-capture-base:chess]
 king = -
 customPiece1 = a:W
-checking = false
 pseudoRoyalTypes = a
 pseudoRoyalCount = 99
 pieceToCharTable = PNBRQ............A...Kpnbrq............a...k

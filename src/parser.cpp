@@ -3484,7 +3484,7 @@ bool VariantParser<DoCheck>::check_consistency(Variant* v) {
             valid = false;
         }
     }
-    if (v->extinctionPseudoRoyal
+    if (v->pseudoRoyalTypes
         && (v->checking == CheckingRule::FORBIDDEN || v->sittuyinPromotion))
     {
         // gives_check() does not detect checks of pseudo-royal pieces, so

@@ -93,16 +93,20 @@ class TestBindings(unittest.TestCase):
 
     def test_pseudo_royal_combination_rejected(self):
         # gives_check() ignores pseudo-royal checks, so check-restricting
-        # settings are rejected with extinctionPseudoRoyal (upstream #1056).
-        for name, extra in (("nocheck", "checking = false\n"),
-                            ("sittu", "sittuyinPromotion = true\n")):
-            sf.load_variant_config(
-                f"[api-{name}-pseudo:chess]\n"
-                "king = -\ncommoner = k\ncastling = false\n"
-                + extra
-                + "extinctionValue = loss\nextinctionPieceTypes = k\n"
-                  "extinctionPseudoRoyal = true\n")
-            self.assertNotIn(f"api-{name}-pseudo", sf.variants())
+        # settings are rejected with extinctionPseudoRoyal or pseudoRoyalTypes
+        # (upstream #1056).
+        for variant_key in ("extinctionValue = loss\nextinctionPieceTypes = k\n"
+                            "extinctionPseudoRoyal = true\n",
+                            "pseudoRoyalTypes = k\n"):
+            for name, extra in (("nocheck", "checking = false\n"),
+                                ("sittu", "sittuyinPromotion = true\n")):
+                suffix = "ext" if "extinctionPseudoRoyal" in variant_key else "prt"
+                sf.load_variant_config(
+                    f"[api-{name}-{suffix}-pseudo:chess]\n"
+                    "king = -\ncommoner = k\ncastling = false\n"
+                    + extra
+                    + variant_key)
+                self.assertNotIn(f"api-{name}-{suffix}-pseudo", sf.variants())
 
     def test_validate_fen_out_of_bounds(self):
         # Inputs that used to write/read outside the board in upstream (#1090).
@@ -170,6 +174,40 @@ class TestBindings(unittest.TestCase):
         # Touching pseudo-royals are immune, so a drop there is allowed.
         fen = "8/8/8/8/8/8/4k3/4K3[R] w - - 0 1"
         self.assertIn("R@e8", sf.legal_moves("api-atomic-nodropchecks", fen, []))
+
+        # pseudoRoyalTypes without extinctionPseudoRoyal + pseudoRoyalCount
+        # overflow + non-diagonal blastDiagonals=false geometry.
+        sf.load_variant_config(
+            "[api-pseudoroyal-blast-nodropchecks:chess]\n"
+            "king = -\n"
+            "commoner = k\n"
+            "castling = false\n"
+            "pseudoRoyalTypes = k\n"
+            "blastOnCapture = true\n"
+            "dropChecks = false\n"
+            "pieceDrops = true\n"
+            "capturesToHand = true\n"
+            "[api-pseudoroyal-orthoblast-nodropchecks:api-pseudoroyal-blast-nodropchecks]\n"
+            "blastDiagonals = false\n"
+        )
+        # White already has one commoner on a1 (pseudoRoyalCount=1): dropping a
+        # second on e7 removes white's pseudo-royalty, so black's k is not
+        # blast-immune and K@e7 is an illegal drop check.
+        self.assertNotIn(
+            "K@e7",
+            sf.legal_moves("api-pseudoroyal-blast-nodropchecks",
+                            "4k3/8/8/8/8/8/8/K7[K] w - - 0 1", []))
+        # With no commoner on board, K@e7 becomes white's sole pseudo-royal so
+        # black's touching k is blast-immune and K@e7 is allowed.
+        self.assertIn(
+            "K@e7",
+            sf.legal_moves("api-pseudoroyal-blast-nodropchecks",
+                            "4k3/8/8/8/8/8/8/8[K] w - - 0 1", []))
+        # Diagonally touching pseudo-royals are blast-immune with
+        # blastDiagonals=true, but NOT with blastDiagonals=false.
+        diag_fen = "4k3/3K4/8/8/8/8/8/8[R] w - - 0 1"
+        self.assertIn("R@e2", sf.legal_moves("api-pseudoroyal-blast-nodropchecks", diag_fen, []))
+        self.assertNotIn("R@e2", sf.legal_moves("api-pseudoroyal-orthoblast-nodropchecks", diag_fen, []))
 
     def test_nmove_yields_to_pseudo_royal_mate(self):
         # The n-move rule must not declare a draw over a pseudo-royal mate
