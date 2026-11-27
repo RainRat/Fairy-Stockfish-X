@@ -143,6 +143,94 @@ EOF
 
 }
 
+test_wrapped_push() {
+  load_inline_variants <<'INI'
+[wrapped-push-file:chess]
+maxRank = 5
+maxFile = e
+pieceToCharTable = -
+king = -
+castling = false
+checking = false
+nMoveRule = 0
+customPiece1 = a:mW
+pushingStrength = a:6
+pushFirstColor = either
+pushingRemoves = shove
+cylindrical = true
+startFen = 5/5/a1Aaa/5/5 w - - 0 1
+
+[wrapped-push-rank:chess]
+maxRank = 5
+maxFile = e
+pieceToCharTable = -
+king = -
+castling = false
+checking = false
+nMoveRule = 0
+customPiece1 = a:mW
+pushingStrength = a:6
+pushFirstColor = either
+pushingRemoves = shove
+toroidal = true
+startFen = 2a2/2a2/2A2/5/2a2 w - - 0 1
+INI
+
+  local tmp_ini="${FSX_TMP_INI}"
+  local out
+
+  # The pushed chain ends on file A after wrapping from file E. The reverse
+  # walk from the tail used raw file/rank subtraction and indexed a negative
+  # file in do_move(), aborting debug builds during move generation.
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-file <<'EOF'
+position fen 5/5/a1Aaa/5/5 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^c3d3: 1$" "push across the file seam is generated"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-file <<'EOF'
+position fen 5/5/a1Aaa/5/5 w - - 0 1 moves c3d3
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 5/5/aa1Aa/5/5 b - - 1 1" "file-seam push shifts the whole chain"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-file <<'EOF'
+position fen 5/5/a1Aaa/5/5 w - - 0 1
+go perft 3
+d
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 192$" "file-seam push survives recursive do/undo"
+  assert_contains_literal "$out" "Fen: 5/5/a1Aaa/5/5 w - - 0 1" "file-seam perft restores the root"
+
+  # Same seam crossing on ranks: the tail lands on rank 1, so the reverse
+  # rank step used to leave the board as well.
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-rank <<'EOF'
+position fen 2a2/2a2/2A2/5/2a2 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^c3c4: 1$" "push across the rank seam is generated"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-rank <<'EOF'
+position fen 2a2/2a2/2A2/5/2a2 w - - 0 1 moves c3c4
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 2a2/2A2/5/2a2/2a2 b - - 1 1" "rank-seam push shifts the whole chain"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-rank <<'EOF'
+position fen 2a2/2a2/2A2/5/2a2 w - - 0 1
+go perft 3
+d
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 192$" "rank-seam push survives recursive do/undo"
+  assert_contains_literal "$out" "Fen: 2a2/2a2/2A2/5/2a2 w - - 0 1" "rank-seam perft restores the root"
+}
+
 test_hole_squares() {
   load_inline_variants <<'INI'
 [hole-squares:chess]
@@ -268,4 +356,5 @@ test_toroidal_chess
 test_nightrider_evasion
 test_move_morph
 test_edge_insert
+test_wrapped_push
 test_hole_squares

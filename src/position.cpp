@@ -207,6 +207,17 @@ namespace {
     return true;
   }
 
+  // Inverse of advance_square() for push-chain walks. On wrapped boards the
+  // raw file/rank subtraction can leave the board (e.g. stepping back from
+  // file A with a positive step), so go through the same wrap-aware helper.
+  inline Square retreat_square(const Position& pos, Square from, int stepF, int stepR) {
+    Square prev = SQ_NONE;
+    const bool ok = advance_square(pos, from, -stepF, -stepR, prev);
+    assert(ok && "push chain predecessor outside board");
+    (void)ok;
+    return prev;
+  }
+
   inline int adjusted_delta(const Position& pos, int delta, int size) {
     if (!pos.topology_wraps() || size <= 1)
         return delta;
@@ -7722,7 +7733,7 @@ bool Position::pseudo_legal(const Move m) const {
                       occupied ^= square_bb(cur) ^ square_bb(next);
                       if (cur == to)
                           break;
-                      cur = make_square(File(int(file_of(cur)) - info.stepF), Rank(int(rank_of(cur)) - info.stepR));
+                      cur = retreat_square(*this, cur, info.stepF, info.stepR);
                   }
                   if (info.ejects)
                       occupied ^= square_bb(info.tail);
@@ -9137,7 +9148,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               pushRightsMask |= castlingRightsMask[cur];
               if (cur == to)
                   break;
-              cur = make_square(File(int(file_of(cur)) - pushInfo.stepF), Rank(int(rank_of(cur)) - pushInfo.stepR));
+              cur = retreat_square(*this, cur, pushInfo.stepF, pushInfo.stepR);
           }
 
           Square dest = pushInfo.tail;
@@ -9157,8 +9168,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               {
                   if (pushInfo.count > 1)
                   {
-                      cur = make_square(File(int(file_of(pushInfo.tail)) - pushInfo.stepF),
-                                        Rank(int(rank_of(pushInfo.tail)) - pushInfo.stepR));
+                      cur = retreat_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR);
                       dest = pushInfo.tail;
                   }
                   else
@@ -9167,7 +9177,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
               else
               {
                   cur = pushInfo.ejects
-                      ? make_square(File(int(file_of(pushInfo.tail)) - pushInfo.stepF), Rank(int(rank_of(pushInfo.tail)) - pushInfo.stepR))
+                      ? retreat_square(*this, pushInfo.tail, pushInfo.stepF, pushInfo.stepR)
                       : pushInfo.tail;
               }
 
@@ -9181,7 +9191,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool countNode) {
                   if (cur == to)
                       break;
                   dest = cur;
-                  cur = make_square(File(int(file_of(cur)) - pushInfo.stepF), Rank(int(rank_of(cur)) - pushInfo.stepR));
+                  cur = retreat_square(*this, cur, pushInfo.stepF, pushInfo.stepR);
               }
           }
       }
@@ -11154,8 +11164,12 @@ void Position::undo_move(Move m) {
               if (st->push.count > 1)
               {
                   source = st->push.tailSquare;
-                  finalSource = make_square(File(int(file_of(to)) + st->push.stepF),
-                                            Rank(int(rank_of(to)) + st->push.stepR));
+#ifndef NDEBUG
+                  bool advanced = advance_square(*this, to, st->push.stepF, st->push.stepR, finalSource);
+                  assert(advanced && "blocked capture push has no forward square");
+#else
+                  advance_square(*this, to, st->push.stepF, st->push.stepR, finalSource);
+#endif
               }
           }
           else if (advance_square(*this, to, st->push.stepF, st->push.stepR, source))
@@ -11176,8 +11190,7 @@ void Position::undo_move(Move m) {
           {
               while (true)
               {
-                  Square dest = make_square(File(int(file_of(source)) - st->push.stepF),
-                                            Rank(int(rank_of(source)) - st->push.stepR));
+                  Square dest = retreat_square(*this, source, st->push.stepF, st->push.stepR);
                   move_piece(source, dest);
                   if (source == finalSource)
                       break;
