@@ -401,11 +401,12 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     // Check and checkmate
     // gives_check() does not detect pseudo-royal checks, so in those variants
     // test the post-move broad check state instead (upstream #1056).
-    if ((pos.gives_check(m) || pos.extinction_pseudo_royal()) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
+    const bool givesCheck = pos.gives_check(m);
+    if ((givesCheck || pos.pseudo_royal_types()) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
     {
         StateInfo st;
         pos.do_move(m, st);
-        if (pos.checkers())
+        if (givesCheck || pos.checkers())
             san += MoveList<LEGAL>(pos).size() ? "+" : "#";
         pos.undo_move(m);
     }

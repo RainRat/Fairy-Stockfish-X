@@ -155,6 +155,19 @@ class TestBindings(unittest.TestCase):
         fen = "8/8/8/8/5R2/8/6R1/3Kn2k w - - 0 1"
         self.assertEqual(sf.get_san("atomic", fen, "f4f1"), "Rf1#")
         self.assertEqual(sf.get_san("atomic", fen, "g2g1"), "Rg1+")
+        self.assertEqual(
+            sf.get_san("atomic", "rnbqkbnr/ppp2ppp/8/8/8/8/PPP2PPP/RNBQKBNR w KQkq - 0 4", "d1d7"),
+            "Qd7#")
+        # allowChecks=true leaves pos.checkers() empty, so SAN must still use
+        # gives_check(m).
+        sf.load_variant_config(
+            "[api-allowchecks-san:chess]\n"
+            "castling = false\n"
+            "allowChecks = true\n"
+        )
+        self.assertEqual(
+            sf.get_san("api-allowchecks-san", "7k/6R1/8/8/8/8/8/K7 w - - 0 1", "g7g8"),
+            "Rg8+")
 
     def test_pseudo_royal_drop_checks(self):
         # gives_check() does not see checks of pseudo-royal pieces, so
