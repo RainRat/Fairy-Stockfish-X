@@ -142,10 +142,10 @@ Run large-board tests against a `largeboards=yes` binary. For Python-facing chan
 | capture effects, blast, rifle, pulling, or swapping | `tests/run.sh suite captures-effects state-transitions src/stockfish-allvars` |
 | promotions, hands, prisons, gating, or drops | `tests/run.sh suite promotion-drops state-transitions src/stockfish-allvars` |
 | `StateInfo`, keys, do/undo, or repetition | `tests/run.sh suite state-transitions src/stockfish-allvars` |
-| notation, FEN, UCI, or XBoard | `tests/run.sh suite notation-protocol src/stockfish-allvars` |
+| notation, FEN, UCI, or XBoard | `tests/run.sh suite notation-protocol src/stockfish-allvars`; also `cd src && JOBS=2 bash ../tests/dll-board-size.sh` and JS tests (`cd src && make -f Makefile_js build && cd ../tests/js && npm test`) when `SAN`, `apiutil.h`, or check-suffix formatting changes |
 | search or evaluation | `tests/run.sh suite search-evaluation src/stockfish-allvars` |
 | spell chess | `tests/run.sh suite spells src/stockfish-allvars` |
-| `src/pyffish.cpp`, `apiutil`, or Python signatures | build the extension, then run `tests/python/test_pyffish_api.py` |
+| `src/pyffish.cpp`, `apiutil`, or Python/DLL bindings | build the extension, then run `tests/python/test_pyffish_api.py` and `cd src && JOBS=2 bash ../tests/dll-board-size.sh` (plus JS tests when shared `apiutil` / `SAN` formatting changes) |
 | broad/shared change before submission | `tests/run.sh fast`, followed by the detached full regression when warranted |
 
 For JavaScript/wasm-facing changes, including `src/variants.ini` changes that affect `startFen`, pockets, `freeDrops`, or serialized FENs:
