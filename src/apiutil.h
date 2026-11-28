@@ -402,7 +402,11 @@ inline const std::string move_to_san(Position& pos, Move m, Notation n) {
     // gives_check() does not detect pseudo-royal checks, so in those variants
     // test the post-move broad check state instead (upstream #1056).
     const bool givesCheck = pos.gives_check(m);
-    if ((givesCheck || pos.pseudo_royal_types()) && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
+    // Under allowChecks the post-move checkers() mask is empty, so the probe
+    // cannot add a suffix. Skip it for pseudo-royal variants in those games
+    // (chu/dai-style) where gives_check() is also blind.
+    if ((givesCheck || (!pos.allow_checks() && pos.pseudo_royal_types()))
+        && !is_shogi(n) && n != NOTATION_XIANGQI_WXF)
     {
         StateInfo st;
         pos.do_move(m, st);

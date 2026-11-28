@@ -168,6 +168,16 @@ class TestBindings(unittest.TestCase):
         self.assertEqual(
             sf.get_san("api-allowchecks-san", "7k/6R1/8/8/8/8/8/K7 w - - 0 1", "g7g8"),
             "Rg8+")
+        # allowChecks pseudo-royal games keep checkers() empty, so a pseudo-royal
+        # threat gets no suffix and the post-move probe can be skipped.
+        sf.load_variant_config(
+            "[api-allowchecks-pseudoroyal:chess]\n"
+            "king = -\ncommoner = k\ncastling = false\n"
+            "allowChecks = true\npseudoRoyalTypes = k\npseudoRoyalCount = 1\n"
+        )
+        self.assertEqual(
+            sf.get_san("api-allowchecks-pseudoroyal", "7k/8/8/8/8/8/7R/K7 w - - 0 1", "h2h7"),
+            "Rh7")
 
     def test_pseudo_royal_drop_checks(self):
         # gives_check() does not see checks of pseudo-royal pieces, so

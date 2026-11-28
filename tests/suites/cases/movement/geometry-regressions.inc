@@ -231,6 +231,57 @@ EOF
   assert_contains_literal "$out" "Fen: 2a2/2a2/2A2/5/2a2 w - - 0 1" "rank-seam perft restores the root"
 }
 
+test_wrapped_push_blocked_capture() {
+  load_inline_variants <<'INI'
+[wrapped-push-blocked:chess]
+maxRank = 5
+maxFile = e
+pieceToCharTable = -
+king = -
+castling = false
+checking = false
+nMoveRule = 0
+customPiece1 = a:W
+pushingStrength = a:6
+pushFirstColor = them
+pushChainEnemyOnly = true
+pushCaptureAgainstFriendlyBlocker = true
+pushingRemoves = shove
+cylindrical = true
+startFen = 5/5/aaA1A/5/5 w - - 0 1
+INI
+
+  local tmp_ini="${FSX_TMP_INI}"
+  local out
+
+  # The chain starts on file A after wrapping from file E and ends in a
+  # blocked capture against a friendly piece. undo_move() advances from the
+  # destination to find the final source; raw file addition used to leave the
+  # board on the file seam.
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-blocked <<'EOF'
+position fen 5/5/aaA1A/5/5 w - - 0 1
+go perft 1
+EOF
+)
+  assert_contains "$out" "^e3a3: 1$" "blocked push across the file seam is generated"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-blocked <<'EOF'
+position fen 5/5/aaA1A/5/5 w - - 0 1 moves e3a3
+d
+EOF
+)
+  assert_contains_literal "$out" "Fen: 5/5/AaA2/5/5 b - - 0 1" "blocked push captures across the seam"
+
+  out=$(run_uci "$ENGINE" "$tmp_ini" wrapped-push-blocked <<'EOF'
+position fen 5/5/aaA1A/5/5 w - - 0 1
+go perft 4
+d
+EOF
+)
+  assert_contains "$out" "^Nodes searched: 2304$" "blocked push survives recursive do/undo"
+  assert_contains_literal "$out" "Fen: 5/5/aaA1A/5/5 w - - 0 1" "blocked push perft restores the root"
+}
+
 test_hole_squares() {
   load_inline_variants <<'INI'
 [hole-squares:chess]
@@ -357,4 +408,5 @@ test_nightrider_evasion
 test_move_morph
 test_edge_insert
 test_wrapped_push
+test_wrapped_push_blocked_capture
 test_hole_squares
